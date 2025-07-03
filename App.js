@@ -364,7 +364,7 @@ export default function App() {
         <ScrollView style={styles.scrollView}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Podknowledge</Text>
+            <Text style={styles.title}>Audio2</Text>
             <Text style={styles.subtitle}>Create social clips from podcasts</Text>
           </View>
 
