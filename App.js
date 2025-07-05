@@ -364,7 +364,11 @@ export default function App() {
         <ScrollView style={styles.scrollView}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Audio2</Text>
+            <Image 
+              source={require('./assets/logo1.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.subtitle}>Create social clips from podcasts</Text>
           </View>
 
@@ -685,6 +689,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
     marginTop: 20,
+  },
+  logo: {
+    width: 339,
+    height: 135,
+    marginBottom: 0,
   },
   title: {
     fontSize: 32,

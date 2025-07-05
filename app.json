@@ -24,6 +24,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Audio2 to access your photos to save waveform images",
+          "savePhotosPermission": "Allow Audio2 to save waveform images to your photo library"
+        }
+      ]
+    ]
   }
 }
