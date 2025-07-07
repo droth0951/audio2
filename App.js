@@ -50,80 +50,151 @@ export default function App() {
   // URL input state
   const [urlInput, setUrlInput] = useState('');
 
-  useEffect(() => {
-    loadTheTownFeed();
-    return sound ? () => { sound.unloadAsync(); } : undefined;
-  }, [sound]);
+  const [currentRssFeed, setCurrentRssFeed] = useState(THE_TOWN_RSS);
 
-  // RSS parsing and episode loading
-  const loadTheTownFeed = async () => {
+  // NOW define loadPodcastFeed INSIDE the component where it can access state:
+  const loadPodcastFeed = async (feedUrl) => {
+    console.log('🎙️ loadPodcastFeed called with:', feedUrl);
     setLoading(true);
+    
     try {
-      const response = await fetch(THE_TOWN_RSS);
+      console.log('📡 Starting fetch...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(feedUrl, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        }
+      }).catch(err => {
+        console.error('🔥 Fetch error:', err);
+        throw err;
+      });
+      
+      clearTimeout(timeoutId);
+      
+      console.log('📡 Response received! Status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      console.log('📄 Getting text...');
       const xmlText = await response.text();
+      console.log('📄 XML length:', xmlText.length);
+      console.log('📄 First 200 chars:', xmlText.substring(0, 200));
+      
+      console.log('🔧 Calling parseRSSFeed...');
       const episodes = parseRSSFeed(xmlText);
+      console.log('🎧 Parsed episodes:', episodes.length);
+      
+      if (episodes.length === 0) {
+        throw new Error('No episodes found in feed');
+      }
+      
+      console.log('💾 Setting episodes...');
       setEpisodes(episodes.slice(0, 10));
+      setCurrentRssFeed(feedUrl);
+      console.log('✅ Feed loaded successfully!');
+      
+      Alert.alert('Success', `Loaded ${episodes.length} episodes`);
+      
     } catch (error) {
-      Alert.alert('Error', 'Failed to load podcast feed');
-      console.error(error);
+      console.error('❌ loadPodcastFeed error:', error);
+      console.error('❌ Error type:', error.name);
+      console.error('❌ Error message:', error.message);
+      
+      let errorMessage = 'Failed to load podcast feed';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timed out - please try again';
+      } else if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network error - check your internet connection';
+      } else if (error.message.includes('HTTP')) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      Alert.alert('Feed Error', errorMessage);
     } finally {
+      console.log('🏁 Setting loading to false');
       setLoading(false);
     }
   };
 
+  // THEN your useEffect:
+  useEffect(() => {
+    loadPodcastFeed(currentRssFeed);
+    return sound ? () => { sound.unloadAsync(); } : undefined;
+  }, []); // Empty deps on initial load only
+
+  // RSS parsing and episode loading
   const parseRSSFeed = (xmlText) => {
-    const episodes = [];
-    const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
+    console.log('🔍 parseRSSFeed called with XML length:', xmlText.length);
     
-    const channelImageMatch = xmlText.match(/<image[^>]*>[\s\S]*?<url>(.*?)<\/url>[\s\S]*?<\/image>/) ||
-                             xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
-                             xmlText.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
-    const podcastArtwork = channelImageMatch?.[1] || null;
-    
-    if (itemMatches) {
-      itemMatches.forEach((item, index) => {
-        const title = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
-                     item.match(/<title>(.*?)<\/title>/)?.[1] || 
-                     `Episode ${index + 1}`;
-        const audioUrl = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/)?.[1];
-        const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1];
-        
-        let description = 
-          item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/)?.[1] ||
-          item.match(/<description>([\s\S]*?)<\/description>/)?.[1] ||
-          'No description available.';
-        
-        if (description && description !== 'No description available.') {
-          description = description
-            .replace(/<[^>]*>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/\s+/g, ' ')
-            .trim();
-        }
-        
-        const episodeImageMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
-                                 item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
-        const episodeArtwork = episodeImageMatch?.[1] || podcastArtwork;
-        
-        if (audioUrl) {
-          episodes.push({
-            id: index,
-            title: title.trim(),
-            audioUrl,
-            pubDate,
-            artwork: episodeArtwork,
-            description: description || 'No description available.',
-          });
-        }
-      });
+    try {
+      const episodes = [];
+      const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
+      
+      console.log('🔍 Found items:', itemMatches ? itemMatches.length : 0);
+      
+      const channelImageMatch = xmlText.match(/<image[^>]*>[\s\S]*?<url>(.*?)<\/url>[\s\S]*?<\/image>/) ||
+                               xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                               xmlText.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
+      const podcastArtwork = channelImageMatch?.[1] || null;
+      
+      if (itemMatches) {
+        itemMatches.forEach((item, index) => {
+          const title = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
+                       item.match(/<title>(.*?)<\/title>/)?.[1] || 
+                       `Episode ${index + 1}`;
+          const audioUrl = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/)?.[1];
+          const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1];
+          
+          let description = 
+            item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/)?.[1] ||
+            item.match(/<description>([\s\S]*?)<\/description>/)?.[1] ||
+            'No description available.';
+          
+          if (description && description !== 'No description available.') {
+            description = description
+              .replace(/<[^>]*>/g, '')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/\s+/g, ' ')
+              .trim();
+          }
+          
+          const episodeImageMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                   item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
+          const episodeArtwork = episodeImageMatch?.[1] || podcastArtwork;
+          
+          if (audioUrl) {
+            episodes.push({
+              id: index,
+              title: title.trim(),
+              audioUrl,
+              pubDate,
+              artwork: episodeArtwork,
+              description: description || 'No description available.',
+            });
+          }
+        });
+      }
+      
+      console.log('🔍 parseRSSFeed returning:', episodes.length, 'episodes');
+      return episodes;
+    } catch (error) {
+      console.error('❌ parseRSSFeed error:', error);
+      return []; // Return empty array instead of crashing
     }
-    
-    return episodes;
   };
 
   // Audio player functions
@@ -375,11 +446,37 @@ export default function App() {
 
   // URL input handler
   const handleUrlSubmit = () => {
-    if (urlInput.includes('podcasts.apple.com')) {
-      Alert.alert('Feature Coming Soon', 'Apple Podcasts URL parsing will be added in next update. Using The Town feed for now.');
-    } else {
-      Alert.alert('Feature Coming Soon', 'Custom RSS feeds coming in next update');
+    console.log('🔴 handleUrlSubmit called! urlInput:', urlInput);
+    
+    const trimmedUrl = urlInput.trim();
+    
+    if (!trimmedUrl) {
+      console.log('❌ Empty URL');
+      Alert.alert('Error', 'Please enter a podcast RSS feed URL');
+      return;
     }
+    
+    console.log('📍 Trimmed URL:', trimmedUrl);
+    
+    // Basic URL validation
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      console.log('❌ URL missing protocol');
+      Alert.alert('Error', 'URL must start with http:// or https://');
+      return;
+    }
+    
+    // Apple Podcasts message
+    if (trimmedUrl.includes('podcasts.apple.com')) {
+      console.log('🍎 Apple Podcasts URL detected');
+      Alert.alert('Feature Coming Soon', 'Apple Podcasts URL parsing will be added in next update. Using The Town feed for now.');
+      setUrlInput('');
+      return;
+    }
+    
+    console.log('✅ About to call loadPodcastFeed with:', trimmedUrl);
+    
+    // Load the new feed!
+    loadPodcastFeed(trimmedUrl);
     setUrlInput('');
   };
 
@@ -541,10 +638,22 @@ export default function App() {
                   placeholder="Paste Apple Podcasts URL or RSS feed"
                   placeholderTextColor="#888"
                   value={urlInput}
-                  onChangeText={setUrlInput}
-                  onSubmitEditing={handleUrlSubmit}
+                  onChangeText={(text) => {
+                    console.log('📝 Input changed:', text);
+                    setUrlInput(text);
+                  }}
+                  onSubmitEditing={() => {
+                    console.log('⏎ Submit editing triggered');
+                    handleUrlSubmit();
+                  }}
                 />
-                <TouchableOpacity style={styles.submitButton} onPress={handleUrlSubmit}>
+                <TouchableOpacity 
+                  style={styles.submitButton} 
+                  onPress={() => {
+                    console.log('🔵 Add button pressed!');
+                    handleUrlSubmit();
+                  }}
+                >
                   <Text style={styles.submitButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
