@@ -588,5 +588,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
-
+Y
 export default AudioPlayer;

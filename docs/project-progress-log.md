@@ -1,9 +1,14 @@
 # 📋 Audio2 Project Progress Log
 
-**Last Updated:** July 5, 2025  
-**Current Status:** Stage 2A Complete - Ready for Stage 2B  
-**Next Session:** Start Enhanced Video Generation
+**CHANGELOG:**
+- **v2.1 (July 7, 2025)**: Added TestFlight deployment status, corrected Stage 2B technical constraints
+- **v2.0 (July 5, 2025)**: Completed Stage 2A video generation  
+- **v1.0 (July 3, 2025)**: Initial log after Stage 1 completion
 
+**Last Updated:** July 7, 2025
+**Current Version:** v2.1
+**Current Status:** Stage 2A Complete + TestFlight Deployment In Progress  
+**Next Session:** Complete TestFlight Beta Testing Setup
 ---
 
 ## 🎯 Project Overview
