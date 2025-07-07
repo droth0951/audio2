@@ -14,9 +14,7 @@ import {
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import AudioPlayer from './src/components/AudioPlayer';
-
-// Import your existing video modal component (we'll extract this next)
-// import VideoCreationModal from './src/components/VideoCreationModal';
+import VideoCreationModal from './src/components/VideoCreationModal';
 
 // Hardcoded The Town RSS feed for Stage 1
 const THE_TOWN_RSS = 'https://feeds.megaphone.fm/the-town-with-matthew-belloni';
@@ -38,10 +36,8 @@ export default function App() {
   const [previewClipStart, setPreviewClipStart] = useState(null);
   const [previewClipEnd, setPreviewClipEnd] = useState(null);
   
-  // Stage 2A: Simple Video Creation States
+  // Video Creation Modal State
   const [showVideoModal, setShowVideoModal] = useState(false);
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [videoGenerationProgress, setVideoGenerationProgress] = useState(0);
 
   useEffect(() => {
     loadTheTownFeed();
@@ -65,7 +61,6 @@ export default function App() {
   };
 
   const parseRSSFeed = (xmlText) => {
-    // Your existing RSS parsing logic here
     const episodes = [];
     const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
     
@@ -230,8 +225,8 @@ export default function App() {
       Alert.alert('Clip Start Set', `Start: ${formatTime(position)}`);
     } else if (!clipEnd) {
       const clipLength = position - clipStart;
-      if (clipLength > 90000) {
-        Alert.alert('Clip Too Long', 'Clips must be 90 seconds or less');
+      if (clipLength > 240000) {
+        Alert.alert('Clip Too Long', 'Clips must be 4 minutes or less');
         return;
       }
       if (clipLength < 1000) {
@@ -295,6 +290,11 @@ export default function App() {
       Alert.alert('Feature Coming Soon', 'Custom RSS feeds coming in next update');
     }
     setUrlInput('');
+  };
+
+  // Video modal handlers
+  const handleCloseVideoModal = () => {
+    setShowVideoModal(false);
   };
 
   // Utility functions
@@ -409,16 +409,15 @@ export default function App() {
         </ScrollView>
       </LinearGradient>
 
-      {/* Video Creation Modal - You can extract this next! */}
-      {/* For now, keeping the existing modal code here */}
-      {/* <VideoCreationModal 
+      {/* Video Creation Modal */}
+      <VideoCreationModal
         visible={showVideoModal}
-        onClose={() => setShowVideoModal(false)}
+        onClose={handleCloseVideoModal}
         clipStart={clipStart}
         clipEnd={clipEnd}
         selectedEpisode={selectedEpisode}
         formatTime={formatTime}
-      /> */}
+      />
     </SafeAreaView>
   );
 }

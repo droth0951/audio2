@@ -39,6 +39,7 @@ const AudioPlayer = ({
   onScrubEnd,
 }) => {
   const formatTime = (millis) => {
+    if (!millis || isNaN(millis)) return '0:00';
     const minutes = Math.floor(millis / 60000);
     const seconds = Math.floor((millis % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -90,13 +91,14 @@ const AudioPlayer = ({
           />
         )}
         <Text style={styles.episodeTitle} numberOfLines={3}>
-          {selectedEpisode.title}
+          {selectedEpisode?.title || 'Untitled Episode'}
         </Text>
       </View>
 
       {/* Loading State */}
       {isLoading && (
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#d97706" />
           <Text style={styles.loadingText}>Loading episode...</Text>
           <Text style={styles.loadingSubtext}>Preparing audio playback</Text>
         </View>
@@ -190,7 +192,7 @@ const AudioPlayer = ({
             <TouchableOpacity style={styles.clipButton} onPress={onSetClipPoint}>
               <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
               <Text style={styles.clipButtonText}>
-                {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                {!clipStart ? 'Start' : (!clipEnd ? 'End' : 'New')}
               </Text>
             </TouchableOpacity>
             
@@ -266,7 +268,7 @@ const AudioPlayer = ({
           )}
 
           {/* Clip Info */}
-          {(clipStart !== null && clipEnd !== null) && (
+          {(clipStart !== null && clipEnd !== null && clipEnd > clipStart) && (
             <Text style={styles.clipInfo}>
               Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
             </Text>
@@ -276,7 +278,7 @@ const AudioPlayer = ({
           <View style={styles.episodeNotes}>
             <Text style={styles.notesTitle}>Episode Notes</Text>
             <Text style={styles.notesText}>
-              {selectedEpisode.description}
+              {selectedEpisode?.description || 'No description available.'}
             </Text>
           </View>
         </>
@@ -340,11 +342,13 @@ const styles = StyleSheet.create({
   loadingText: {
     color: '#b4b4b4',
     textAlign: 'center',
-    marginTop: 40,
+    marginTop: 16,
+    fontSize: 16,
   },
   loadingSubtext: {
     color: '#b4b4b4',
     fontSize: 14,
+    marginTop: 4,
   },
   mainTimelineSection: {
     marginBottom: 30,
