@@ -1,6 +1,9 @@
 # TODO / Open Questions
 
-- [ ] Test screen/audio recording on real iOS and Android devices
+allow user to put in his own URL — move away from hardcoded The Town
+fix UI -- right now it says it's recording all over it.
+
+- [x ] Test screen/audio recording on real iOS and Android devices
 - [ ] Integrate successful recording flow into main UI
 - [ ] Add server-side video/audio composition fallback
 - [ ] Polish UI for video frame preview
