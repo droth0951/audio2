@@ -52,6 +52,9 @@ export default function App() {
 
   const [currentRssFeed, setCurrentRssFeed] = useState(THE_TOWN_RSS);
 
+  // Add podcastTitle state
+  const [podcastTitle, setPodcastTitle] = useState('');
+
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
     console.log('🎙️ loadPodcastFeed called with:', feedUrl);
@@ -136,6 +139,13 @@ export default function App() {
     console.log('🔍 parseRSSFeed called with XML length:', xmlText.length);
     
     try {
+      // Extract <channel> section
+      const channelMatch = xmlText.match(/<channel[\s\S]*?<\/channel>/);
+      let channelXml = channelMatch ? channelMatch[0] : xmlText;
+      // Extract podcast title from <channel>
+      const channelTitleMatch = channelXml.match(/<title>(.*?)<\/title>/);
+      if (channelTitleMatch) setPodcastTitle(channelTitleMatch[1].trim());
+      
       const episodes = [];
       const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
       
@@ -660,8 +670,7 @@ export default function App() {
 
               {/* Current Feed Info */}
               <View style={styles.feedInfo}>
-                <Text style={styles.feedTitle}>The Town with Matthew Belloni</Text>
-                <Text style={styles.feedSubtitle}>Latest Episodes</Text>
+                <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
               </View>
 
               {/* Episodes List */}
@@ -926,10 +935,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#f4f4f4',
     marginBottom: 4,
-  },
-  feedSubtitle: {
-    fontSize: 14,
-    color: '#b4b4b4',
   },
   
   // Episode list
