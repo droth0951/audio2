@@ -128,6 +128,58 @@ export default function App() {
     }
   };
 
+  // Apple Podcasts URL to RSS converter
+  const getApplePodcastsRssUrl = async (appleUrl) => {
+    try {
+      // Extract podcast ID from Apple Podcasts URL
+      const idMatch = appleUrl.match(/id(\d+)/);
+      
+      if (!idMatch) {
+        console.error('Could not extract podcast ID from URL:', appleUrl);
+        return null;
+      }
+      
+      const podcastId = idMatch[1];
+      console.log('🍎 Extracted podcast ID:', podcastId);
+      
+      // Use Apple's iTunes lookup API to get RSS feed URL
+      const lookupUrl = `https://itunes.apple.com/lookup?id=${podcastId}`;
+      console.log('📡 Querying Apple API:', lookupUrl);
+      
+      const response = await fetch(lookupUrl);
+      
+      if (!response.ok) {
+        console.error('Apple API request failed:', response.status);
+        return null;
+      }
+      
+      const data = await response.json();
+      console.log('📡 Apple API response received');
+      
+      if (data.results && data.results.length > 0) {
+        const podcast = data.results[0];
+        const rssUrl = podcast.feedUrl;
+        
+        if (rssUrl) {
+          console.log('✅ Found RSS URL:', rssUrl);
+          console.log('📝 Podcast name:', podcast.collectionName);
+          
+          // Update podcast title for display
+          setPodcastTitle(podcast.collectionName || 'Podcast');
+          
+          return rssUrl;
+        }
+      }
+      
+      console.error('❌ No RSS feed found in Apple API response');
+      return null;
+      
+    } catch (error) {
+      console.error('❌ Error converting Apple Podcasts URL:', error);
+      return null;
+    }
+  };
+
   // THEN your useEffect:
   useEffect(() => {
     loadPodcastFeed(currentRssFeed);
@@ -454,15 +506,15 @@ export default function App() {
     }
   };
 
-  // URL input handler
-  const handleUrlSubmit = () => {
+  // Enhanced URL input handler with Apple Podcasts support
+  const handleUrlSubmit = async () => {
     console.log('🔴 handleUrlSubmit called! urlInput:', urlInput);
     
     const trimmedUrl = urlInput.trim();
     
     if (!trimmedUrl) {
       console.log('❌ Empty URL');
-      Alert.alert('Error', 'Please enter a podcast RSS feed URL');
+      Alert.alert('Error', 'Please enter a podcast URL');
       return;
     }
     
@@ -475,19 +527,43 @@ export default function App() {
       return;
     }
     
-    // Apple Podcasts message
-    if (trimmedUrl.includes('podcasts.apple.com')) {
-      console.log('🍎 Apple Podcasts URL detected');
-      Alert.alert('Feature Coming Soon', 'Apple Podcasts URL parsing will be added in next update. Using The Town feed for now.');
+    setLoading(true);
+    
+    try {
+      let rssUrl = trimmedUrl;
+      
+      // Handle Apple Podcasts URLs
+      if (trimmedUrl.includes('podcasts.apple.com')) {
+        console.log('🍎 Apple Podcasts URL detected, converting...');
+        
+        rssUrl = await getApplePodcastsRssUrl(trimmedUrl);
+        
+        if (!rssUrl) {
+          Alert.alert(
+            'RSS Feed Not Found', 
+            'Could not find RSS feed for this Apple Podcasts URL. Please try a different podcast.'
+          );
+          setLoading(false);
+          setUrlInput('');
+          return;
+        }
+        
+        console.log('✅ Converted to RSS URL:', rssUrl);
+      }
+      
+      // Load the RSS feed
+      console.log('📡 Loading RSS feed:', rssUrl);
+      await loadPodcastFeed(rssUrl);
       setUrlInput('');
-      return;
+      
+    } catch (error) {
+      console.error('❌ Error in handleUrlSubmit:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to load podcast. Please check the URL and try again.'
+      );
+      setLoading(false);
     }
-    
-    console.log('✅ About to call loadPodcastFeed with:', trimmedUrl);
-    
-    // Load the new feed!
-    loadPodcastFeed(trimmedUrl);
-    setUrlInput('');
   };
 
   // Utility functions
