@@ -506,7 +506,7 @@ export default function App() {
     }
   };
 
-  // Recording view component
+  // Recording view component - UPDATED to hide controls during recording
   const RecordingView = () => (
     <View style={styles.recordingContainer}>
       <StatusBar hidden />
@@ -563,24 +563,15 @@ export default function App() {
             {selectedEpisode?.title}
           </Text>
           <Text style={styles.recordingPodcastName}>
-            The Town with Matthew Belloni
+            {podcastTitle || 'The Town with Matthew Belloni'}
           </Text>
         </View>
         
-        {/* Recording status overlay */}
-        {isRecording && (
-          <View style={styles.recordingStatusOverlay}>
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording</Text>
-            </View>
-          </View>
-        )}
-        
-        {/* Control buttons */}
-        <View style={styles.recordingControls}>
-          {!isRecording ? (
-            <>
+        {/* ONLY show controls when NOT actively recording */}
+        {!isRecording && (
+          <>
+            {/* Control buttons */}
+            <View style={styles.recordingControls}>
               <TouchableOpacity 
                 style={styles.recordingButton}
                 onPress={startVideoRecording}
@@ -595,22 +586,14 @@ export default function App() {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity 
-              style={styles.stopButton}
-              onPress={stopVideoRecording}
-            >
-              <MaterialCommunityIcons name="stop" size={24} color="#f4f4f4" />
-              <Text style={styles.stopButtonText}>Stop Recording</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Status text */}
-        {recordingStatus ? (
-          <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
-        ) : null}
+            </View>
+            
+            {/* Status text */}
+            {recordingStatus ? (
+              <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
+            ) : null}
+          </>
+        )}
       </LinearGradient>
     </View>
   );
@@ -1260,31 +1243,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  recordingStatusOverlay: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-  },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-    marginRight: 8,
-  },
-  recordingText: {
-    color: '#f4f4f4',
-    fontSize: 14,
-    fontWeight: '500',
-  },
   recordingControls: {
     alignItems: 'center',
     gap: 20,
@@ -1300,22 +1258,6 @@ const styles = StyleSheet.create({
     minWidth: 180,
   },
   recordingButtonText: {
-    color: '#f4f4f4',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  stopButton: {
-    backgroundColor: '#ef4444',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 180,
-  },
-  stopButtonText: {
     color: '#f4f4f4',
     fontSize: 16,
     fontWeight: '600',
