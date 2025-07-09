@@ -9,11 +9,14 @@ import {
   Dimensions,
   Image,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
+import * as ScreenRecorder from 'expo-screen-recorder';
+import { Audio } from 'expo-av';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -23,7 +26,9 @@ const VideoCreationModal = ({
   clipStart, 
   clipEnd, 
   selectedEpisode, 
-  formatTime 
+  formatTime,
+  onSeekToPosition,
+  onTogglePlayback
 }) => {
   const [selectedFormat, setSelectedFormat] = useState('9:16');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -31,8 +36,13 @@ const VideoCreationModal = ({
   const [progress, setProgress] = useState(0);
   const [generatedImageUri, setGeneratedImageUri] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showRecordingView, setShowRecordingView] = useState(false);
+  const [showWarning, setShowWarning] = useState(true); // User preference for warning
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingProgress, setRecordingProgress] = useState(0);
   
   const videoFrameRef = useRef();
+  const recordingViewRef = useRef();
 
   const formats = [
     { id: '9:16', label: 'Vertical', width: 1080, height: 1920 },
@@ -42,9 +52,134 @@ const VideoCreationModal = ({
   const handleClose = () => {
     setGeneratedImageUri(null);
     setShowPreview(false);
+    setShowRecordingView(false);
     setProgress(0);
     setGenerationStep('');
+    setIsRecording(false);
+    setRecordingProgress(0);
     onClose();
+  };
+
+  const showRecordingWarning = () => {
+    Alert.alert(
+      'Create Video Clip',
+      'This will record your screen with audio for the clip duration. Please:\n\n• Keep the app open and visible\n• Avoid touching the screen during recording\n• Audio will play at normal volume\n\nThe recording will start automatically and stop when complete.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: "Don't Show Again", 
+          onPress: () => {
+            setShowWarning(false);
+            startVideoRecording();
+          }
+        },
+        { 
+          text: 'Start Recording', 
+          onPress: startVideoRecording,
+          style: 'default'
+        }
+      ]
+    );
+  };
+
+  const startVideoRecording = async () => {
+    try {
+      // Set up audio mode for recording (prevent ducking)
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Start screen recording
+      await ScreenRecorder.startRecording(false); // false = no microphone
+      setIsRecording(true);
+      setShowRecordingView(true);
+      
+      // Seek to clip start and play using existing handlers
+      if (onSeekToPosition) {
+        await onSeekToPosition(clipStart);
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for seek
+        if (onTogglePlayback) {
+          await onTogglePlayback(); // Start playback
+        }
+      }
+
+      // Calculate clip duration and set up progress tracking
+      const clipDuration = clipEnd - clipStart;
+      let elapsed = 0;
+      const interval = setInterval(() => {
+        elapsed += 100;
+        const progress = Math.min((elapsed / clipDuration) * 100, 100);
+        setRecordingProgress(progress);
+        
+        if (elapsed >= clipDuration) {
+          clearInterval(interval);
+          stopVideoRecording();
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('Recording start error:', error);
+      Alert.alert('Recording Error', `Failed to start recording: ${error.message}`);
+      setIsRecording(false);
+      setShowRecordingView(false);
+    }
+  };
+
+  const stopVideoRecording = async () => {
+    try {
+      // Stop audio playback using existing handler
+      if (onTogglePlayback) {
+        await onTogglePlayback(); // This will pause if currently playing
+      }
+
+      // Stop screen recording
+      const outputUrl = await ScreenRecorder.stopRecording();
+      setIsRecording(false);
+      setShowRecordingView(false);
+
+      // Save to Photos
+      if (outputUrl) {
+        await saveVideoToPhotos(outputUrl);
+      }
+
+    } catch (error) {
+      console.error('Recording stop error:', error);
+      Alert.alert('Recording Error', `Failed to complete recording: ${error.message}`);
+      setIsRecording(false);
+      setShowRecordingView(false);
+    }
+  };
+
+  const saveVideoToPhotos = async (videoUri) => {
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to save to Photos');
+        return;
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(videoUri);
+      
+      // Try to get existing album or create new one
+      let album = await MediaLibrary.getAlbumAsync('Audio2 Clips');
+      if (!album) {
+        album = await MediaLibrary.createAlbumAsync('Audio2 Clips', asset, false);
+      } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      }
+
+      Alert.alert(
+        'Video Saved! 🎬', 
+        'Your podcast clip has been saved to the "Audio2 Clips" album in Photos. Ready to share on social media!',
+        [{ text: 'Done', onPress: handleClose }]
+      );
+
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Save Failed', `Error saving video: ${error.message}`);
+    }
   };
 
   const generateVideoFrame = async () => {
@@ -100,7 +235,7 @@ const VideoCreationModal = ({
     }
   };
 
-  const saveToPhotos = async () => {
+  const saveFrameToPhotos = async () => {
     if (!generatedImageUri) return;
 
     try {
@@ -121,7 +256,7 @@ const VideoCreationModal = ({
       }
 
       Alert.alert(
-        'Saved Successfully!', 
+        'Frame Saved!', 
         'Your clip frame has been saved to the "Audio2 Clips" album in Photos.',
         [{ text: 'OK', onPress: handleClose }]
       );
@@ -136,7 +271,7 @@ const VideoCreationModal = ({
     const barCount = 15;
     for (let i = 0; i < barCount; i++) {
       const height = Math.random() * 30 + 10;
-      const isActive = i < (barCount * 0.3);
+      const isActive = isRecording ? i < (barCount * (recordingProgress / 100)) : i < (barCount * 0.3);
       bars.push(
         <View
           key={i}
@@ -152,6 +287,64 @@ const VideoCreationModal = ({
       );
     }
     return bars;
+  };
+
+  const renderCleanRecordingView = () => {
+    return (
+      <View style={styles.fullScreenRecordingView}>
+        <StatusBar hidden />
+        <LinearGradient
+          colors={['#1c1c1c', '#2d2d2d']}
+          style={styles.fullScreenBackground}
+        >
+          <View style={styles.fullScreenContent}>
+            <View style={styles.artworkContainer}>
+              {selectedEpisode?.artwork ? (
+                <Image 
+                  source={{ uri: selectedEpisode.artwork }}
+                  style={styles.recordingArtwork}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.recordingArtwork, styles.placeholderArtwork]}>
+                  <Text style={styles.placeholderText}>Podcast</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.timelineContainer}>
+              <View style={styles.timelineBar}>
+                <View style={[styles.timelineProgress, { width: `${recordingProgress}%` }]} />
+              </View>
+              <View style={styles.timeLabels}>
+                <Text style={styles.timeLabel}>{formatTime(clipStart || 0)}</Text>
+                <Text style={styles.timeLabel}>{formatTime(clipEnd || 0)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.waveformContainer}>
+              {generateWaveformBars()}
+            </View>
+
+            <View style={styles.episodeInfoContainer}>
+              <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
+                {selectedEpisode?.title || 'Episode Title'}
+              </Text>
+              <Text style={styles.recordingPodcastName}>
+                The Town with Matthew Belloni
+              </Text>
+            </View>
+
+            {/* Only show minimal recording indicator when actually recording */}
+            {isRecording && (
+              <View style={styles.recordingMinimalIndicator}>
+                <View style={styles.recordingDot} />
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+      </View>
+    );
   };
 
   const renderVideoFrame = () => {
@@ -215,6 +408,11 @@ const VideoCreationModal = ({
 
   if (!visible) return null;
 
+  // Show full-screen recording view (CLEAN - no controls during recording)
+  if (showRecordingView) {
+    return renderCleanRecordingView();
+  }
+
   return (
     <Modal
       visible={visible}
@@ -268,16 +466,26 @@ const VideoCreationModal = ({
                 </View>
               </View>
 
-              {/* Generate Button */}
+              {/* Action Buttons */}
               <View style={styles.actionSection}>
                 {!isGenerating ? (
-                  <TouchableOpacity 
-                    style={styles.generateButton} 
-                    onPress={generateVideoFrame}
-                  >
-                    <MaterialCommunityIcons name="video-plus" size={20} color="#f4f4f4" />
-                    <Text style={styles.generateButtonText}>Generate Video Frame</Text>
-                  </TouchableOpacity>
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity 
+                      style={styles.frameButton} 
+                      onPress={generateVideoFrame}
+                    >
+                      <MaterialCommunityIcons name="image" size={18} color="#f4f4f4" />
+                      <Text style={styles.frameButtonText}>Save Frame</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.videoButton} 
+                      onPress={showWarning ? showRecordingWarning : startVideoRecording}
+                    >
+                      <MaterialCommunityIcons name="video" size={18} color="#f4f4f4" />
+                      <Text style={styles.videoButtonText}>Create Video</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View style={styles.generatingContainer}>
                     <ActivityIndicator size="large" color="#d97706" />
@@ -314,7 +522,7 @@ const VideoCreationModal = ({
                 
                 <TouchableOpacity 
                   style={styles.saveButton} 
-                  onPress={saveToPhotos}
+                  onPress={saveFrameToPhotos}
                 >
                   <MaterialCommunityIcons name="download" size={18} color="#f4f4f4" />
                   <Text style={styles.saveButtonText}>Save to Photos</Text>
@@ -356,6 +564,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#f4f4f4',
   },
+
+  // Full-screen recording view (CLEAN - no recording UI during recording)
+  fullScreenRecordingView: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+  },
+  fullScreenBackground: {
+    flex: 1,
+  },
+  fullScreenContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  recordingArtwork: {
+    width: 160,
+    height: 160,
+    borderRadius: 20,
+    marginBottom: 40,
+  },
+  recordingEpisodeTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#f4f4f4',
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 28,
+  },
+  recordingPodcastName: {
+    fontSize: 18,
+    color: '#b4b4b4',
+    textAlign: 'center',
+  },
+  // Minimal recording indicator (optional - can remove if you want completely clean)
+  recordingMinimalIndicator: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  recordingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ef4444',
+  },
+
+  // Format selection
   formatSection: {
     marginHorizontal: 20,
     marginBottom: 15,
@@ -401,6 +669,8 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
   },
+
+  // Preview section
   previewSection: {
     marginHorizontal: 20,
     marginBottom: 15,
@@ -495,23 +765,46 @@ const styles = StyleSheet.create({
     color: '#b4b4b4',
     textAlign: 'center',
   },
+
+  // Action buttons
   actionSection: {
     marginHorizontal: 20,
     marginBottom: 20,
   },
-  generateButton: {
-    backgroundColor: '#d97706',
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  frameButton: {
+    flex: 1,
+    backgroundColor: '#404040',
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  generateButtonText: {
+  frameButtonText: {
     color: '#f4f4f4',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoButton: {
+    flex: 1,
+    backgroundColor: '#d97706',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  videoButtonText: {
+    color: '#f4f4f4',
+    fontSize: 14,
     fontWeight: '600',
   },
   generatingContainer: {
@@ -540,6 +833,8 @@ const styles = StyleSheet.create({
     color: '#b4b4b4',
     fontSize: 12,
   },
+
+  // Generated preview section
   previewGeneratedSection: {
     flex: 1,
     paddingHorizontal: 20,

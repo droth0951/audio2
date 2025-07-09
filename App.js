@@ -55,6 +55,10 @@ export default function App() {
   // Add podcastTitle state
   const [podcastTitle, setPodcastTitle] = useState('');
 
+  // 1. Add state variables
+  const [showRecordingGuidance, setShowRecordingGuidance] = useState(false);
+  const [dontShowGuidanceAgain, setDontShowGuidanceAgain] = useState(false);
+
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
     console.log('🎙️ loadPodcastFeed called with:', feedUrl);
@@ -397,7 +401,131 @@ export default function App() {
     }
   };
 
-  // Video recording functions
+  // 1. FINAL WORKING MODAL
+  const RecordingGuidanceModal = () => (
+    <View style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 99999,
+    }}>
+      <View style={{
+        backgroundColor: '#2d2d2d',
+        borderRadius: 16,
+        padding: 24,
+        marginHorizontal: 20,
+        borderWidth: 2,
+        borderColor: '#d97706',
+        minWidth: 300,
+      }}>
+        <Text style={{
+          color: '#f4f4f4',
+          fontSize: 18,
+          fontWeight: '600',
+          textAlign: 'center',
+          marginBottom: 16,
+        }}>
+          Recording Instructions
+        </Text>
+        
+        <Text style={{
+          color: '#b4b4b4',
+          fontSize: 14,
+          lineHeight: 20,
+          marginBottom: 20,
+        }}>
+          • Keep your screen on during recording{`\n`}
+          • Don't switch apps or lock your phone{`\n`}
+          • The recording will start automatically{`\n`}
+          • Your clip will be saved to Photos when complete
+        </Text>
+        
+        <TouchableOpacity 
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 24,
+          }}
+          onPress={() => setDontShowGuidanceAgain(!dontShowGuidanceAgain)}
+        >
+          <View style={{
+            width: 20,
+            height: 20,
+            borderWidth: 2,
+            borderColor: dontShowGuidanceAgain ? '#d97706' : '#404040',
+            backgroundColor: dontShowGuidanceAgain ? '#d97706' : 'transparent',
+            borderRadius: 4,
+            marginRight: 8,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            {dontShowGuidanceAgain && (
+              <MaterialCommunityIcons name="check" size={16} color="#f4f4f4" />
+            )}
+          </View>
+          <Text style={{
+            color: '#b4b4b4',
+            fontSize: 14,
+          }}>
+            Don't show this again
+          </Text>
+        </TouchableOpacity>
+        
+        <View style={{
+          flexDirection: 'row',
+          gap: 12,
+        }}>
+          <TouchableOpacity 
+            style={{
+              flex: 1,
+              backgroundColor: '#404040',
+              paddingVertical: 12,
+              borderRadius: 8,
+              alignItems: 'center',
+            }}
+            onPress={() => setShowRecordingGuidance(false)}
+          >
+            <Text style={{
+              color: '#f4f4f4',
+              fontSize: 14,
+              fontWeight: '500',
+            }}>
+              Cancel
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={{
+              flex: 1,
+              backgroundColor: '#d97706',
+              paddingVertical: 12,
+              borderRadius: 8,
+              alignItems: 'center',
+            }}
+            onPress={() => {
+              setShowRecordingGuidance(false);
+              setShowRecordingView(true);
+            }}
+          >
+            <Text style={{
+              color: '#f4f4f4',
+              fontSize: 14,
+              fontWeight: '600',
+            }}>
+              Continue
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
+  // 2. Clean up handleCreateVideo (remove debug logs)
   const handleCreateVideo = async () => {
     if (!clipStart || !clipEnd) {
       Alert.alert('No Clip Selected', 'Please select start and end points first');
@@ -409,7 +537,12 @@ export default function App() {
       return;
     }
     
-    setShowRecordingView(true);
+    // Show guidance modal if user hasn't disabled it
+    if (!dontShowGuidanceAgain) {
+      setShowRecordingGuidance(true);
+    } else {
+      setShowRecordingView(true);
+    }
   };
 
   const startVideoRecording = async () => {
@@ -518,6 +651,8 @@ export default function App() {
       return;
     }
     
+    // REMOVED: if (loading) return;
+    
     console.log('📍 Trimmed URL:', trimmedUrl);
     
     // Basic URL validation
@@ -526,8 +661,6 @@ export default function App() {
       Alert.alert('Error', 'URL must start with http:// or https://');
       return;
     }
-    
-    setLoading(true);
     
     try {
       let rssUrl = trimmedUrl;
@@ -543,7 +676,6 @@ export default function App() {
             'RSS Feed Not Found', 
             'Could not find RSS feed for this Apple Podcasts URL. Please try a different podcast.'
           );
-          setLoading(false);
           setUrlInput('');
           return;
         }
@@ -551,7 +683,7 @@ export default function App() {
         console.log('✅ Converted to RSS URL:', rssUrl);
       }
       
-      // Load the RSS feed
+      // Load the RSS feed - loadPodcastFeed handles its own loading state
       console.log('📡 Loading RSS feed:', rssUrl);
       await loadPodcastFeed(rssUrl);
       setUrlInput('');
@@ -562,7 +694,6 @@ export default function App() {
         'Error', 
         'Failed to load podcast. Please check the URL and try again.'
       );
-      setLoading(false);
     }
   };
 
@@ -679,6 +810,7 @@ export default function App() {
     return <RecordingView />;
   }
 
+  // 3. Clean up the render conditional (remove debug wrapper)
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -718,10 +850,7 @@ export default function App() {
                 />
                 <TouchableOpacity 
                   style={styles.submitButton} 
-                  onPress={() => {
-                    console.log('🔵 Add button pressed!');
-                    handleUrlSubmit();
-                  }}
+                  onPress={handleUrlSubmit}
                 >
                   <Text style={styles.submitButtonText}>Add</Text>
                 </TouchableOpacity>
@@ -924,6 +1053,7 @@ export default function App() {
           )}
         </ScrollView>
       </LinearGradient>
+      {showRecordingGuidance && <RecordingGuidanceModal />}
     </SafeAreaView>
   );
 }
@@ -1355,5 +1485,89 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginTop: 20,
+  },
+  // 5. Add styles to StyleSheet.create()
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)', // Changed from 0.8 to 0.9
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999, // Changed from 1000 to 9999
+  },
+  modalContent: {
+    backgroundColor: '#2d2d2d',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  modalTitle: {
+    color: '#f4f4f4',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalText: {
+    color: '#b4b4b4',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#404040',
+    borderRadius: 4,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#d97706',
+    borderColor: '#d97706',
+  },
+  checkboxText: {
+    color: '#b4b4b4',
+    fontSize: 14,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: '#404040',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#f4f4f4',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalContinueButton: {
+    flex: 1,
+    backgroundColor: '#d97706',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalContinueText: {
+    color: '#f4f4f4',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

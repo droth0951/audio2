@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "podknowledge",
-    "slug": "podknowledge",
+    "name": "Audio2",
+    "icon": "./assets/appicon.png",
+    "slug": "audio2",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
