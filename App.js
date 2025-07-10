@@ -1077,8 +1077,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   logo: {
-    width: 339,
-    height: 135,
+    width: 552,  // Increased by another 15% from 480
+    height: 221, // Increased by another 15% from 192
     marginBottom: 0,
   },
   subtitle: {
@@ -1185,8 +1185,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   smallLogo: {
-    width: 120,
-    height: 48,
+    width: 180,  // Increased by 50% from 120
+    height: 72,  // Increased by 50% from 48
   },
   episodeHeader: {
     alignItems: 'center',
