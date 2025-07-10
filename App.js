@@ -18,6 +18,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ScreenRecorder from 'expo-screen-recorder';
 import * as MediaLibrary from 'expo-media-library';
+import { Slider } from 'react-native-awesome-slider';
+import { useSharedValue } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -58,6 +61,12 @@ export default function App() {
   // 1. Add state variables
   const [showRecordingGuidance, setShowRecordingGuidance] = useState(false);
   const [dontShowGuidanceAgain, setDontShowGuidanceAgain] = useState(false);
+
+  // Add these shared values for the new scrubber
+  const progressSharedValue = useSharedValue(0);
+  const minValue = useSharedValue(0);
+  const maxValue = useSharedValue(100);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
@@ -190,6 +199,25 @@ export default function App() {
     return sound ? () => { sound.unloadAsync(); } : undefined;
   }, []); // Empty deps on initial load only
 
+  // Set up duration and shared values
+  useEffect(() => {
+    if (duration > 0) {
+      maxValue.value = duration;
+      // Only update progress when NOT scrubbing AND position actually changed from audio playback
+      if (!isScrubbing) {
+        progressSharedValue.value = position;
+      }
+    }
+  }, [duration]); // Remove position from dependencies!
+
+  // Separate useEffect for audio playback updates
+  useEffect(() => {
+    // Only update shared value if we're not actively scrubbing
+    if (!isScrubbing && duration > 0) {
+      progressSharedValue.value = position;
+    }
+  }, [position, isScrubbing]);
+
   // RSS parsing and episode loading
   const parseRSSFeed = (xmlText) => {
     console.log('🔍 parseRSSFeed called with XML length:', xmlText.length);
@@ -290,7 +318,7 @@ export default function App() {
       setIsLoading(false);
       
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
+        if (status.isLoaded && !isScrubbing) {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
@@ -812,152 +840,172 @@ export default function App() {
 
   // 3. Clean up the render conditional (remove debug wrapper)
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={['#1c1c1c', '#2d2d2d']}
-        style={styles.gradient}
-      >
-        <ScrollView style={styles.scrollView}>
-          {/* Show Episode List when no episode is selected */}
-          {!selectedEpisode && (
-            <>
-              {/* Header */}
-              <View style={styles.header}>
-                <Image 
-                  source={require('./assets/logo1.png')} 
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
-                <Text style={styles.subtitle}>Create social clips from podcasts</Text>
-              </View>
-
-              {/* URL Input */}
-              <View style={styles.inputSection}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Paste Apple Podcasts URL or RSS feed"
-                  placeholderTextColor="#888"
-                  value={urlInput}
-                  onChangeText={(text) => {
-                    console.log('📝 Input changed:', text);
-                    setUrlInput(text);
-                  }}
-                  onSubmitEditing={() => {
-                    console.log('⏎ Submit editing triggered');
-                    handleUrlSubmit();
-                  }}
-                />
-                <TouchableOpacity 
-                  style={styles.submitButton} 
-                  onPress={handleUrlSubmit}
-                >
-                  <Text style={styles.submitButtonText}>Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Current Feed Info */}
-              <View style={styles.feedInfo}>
-                <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
-              </View>
-
-              {/* Episodes List */}
-              {loading ? (
-                <Text style={styles.loadingText}>Loading episodes...</Text>
-              ) : (
-                episodes.map((episode) => (
-                  <TouchableOpacity
-                    key={episode.id}
-                    style={styles.episodeItem}
-                    onPress={() => playEpisode(episode)}
-                  >
-                    {episode.artwork && (
-                      <Image 
-                        source={{ uri: episode.artwork }} 
-                        style={styles.episodeArtwork}
-                        resizeMode="cover"
-                      />
-                    )}
-                    <View style={styles.episodeInfo}>
-                      <Text style={styles.episodeTitle} numberOfLines={2}>
-                        {episode.title}
-                      </Text>
-                      <Text style={styles.episodeDate}>
-                        {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </>
-          )}
-
-          {/* Show Audio Player when episode is selected */}
-          {selectedEpisode && (
-            <>
-              {/* Navigation Header */}
-              <View style={styles.navigationHeader}>
-                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                  <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
-                  <Text style={styles.backButtonText}>Episodes</Text>
-                </TouchableOpacity>
-
-                <Image 
-                  source={require('./assets/logo1.png')} 
-                  style={styles.smallLogo}
-                  resizeMode="contain"
-                />
-              </View>
-
-              {/* Episode Header */}
-              <View style={styles.episodeHeader}>
-                {selectedEpisode.artwork && (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <LinearGradient
+          colors={['#1c1c1c', '#2d2d2d']}
+          style={styles.gradient}
+        >
+          <ScrollView style={styles.scrollView}>
+            {/* Show Episode List when no episode is selected */}
+            {!selectedEpisode && (
+              <>
+                {/* Header */}
+                <View style={styles.header}>
                   <Image 
-                    source={{ uri: selectedEpisode.artwork }} 
-                    style={styles.episodeArtworkLarge}
-                    resizeMode="cover"
+                    source={require('./assets/logo1.png')} 
+                    style={styles.logo}
+                    resizeMode="contain"
                   />
-                )}
-                <Text style={styles.episodeTitleLarge} numberOfLines={3}>
-                  {selectedEpisode.title}
-                </Text>
-              </View>
-
-              {/* Loading State */}
-              {isLoading && (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#d97706" />
-                  <Text style={styles.loadingText}>Loading episode...</Text>
+                  <Text style={styles.subtitle}>Create social clips from podcasts</Text>
                 </View>
-              )}
 
-              {/* Player Controls - Show when loaded */}
-              {!isLoading && (
-                <>
-                  {/* MAIN TIMELINE */}
-                  <View style={styles.mainTimelineSection}>
-                    <TouchableOpacity 
-                      style={styles.mainProgressBarContainer}
-                      onPress={handleProgressBarPress}
+                {/* URL Input */}
+                <View style={styles.inputSection}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Paste Apple Podcasts URL or RSS feed"
+                    placeholderTextColor="#888"
+                    value={urlInput}
+                    onChangeText={(text) => {
+                      console.log('📝 Input changed:', text);
+                      setUrlInput(text);
+                    }}
+                    onSubmitEditing={() => {
+                      console.log('⏎ Submit editing triggered');
+                      handleUrlSubmit();
+                    }}
+                  />
+                  <TouchableOpacity 
+                    style={styles.submitButton} 
+                    onPress={handleUrlSubmit}
+                  >
+                    <Text style={styles.submitButtonText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Current Feed Info */}
+                <View style={styles.feedInfo}>
+                  <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
+                </View>
+
+                {/* Episodes List */}
+                {loading ? (
+                  <Text style={styles.loadingText}>Loading episodes...</Text>
+                ) : (
+                  episodes.map((episode) => (
+                    <TouchableOpacity
+                      key={episode.id}
+                      style={styles.episodeItem}
+                      onPress={() => playEpisode(episode)}
                     >
-                      <View style={styles.mainProgressBar}>
-                        <View 
-                          style={[
-                            styles.mainProgressFill, 
-                            { width: `${duration ? (position / duration) * 100 : 0}%` }
-                          ]} 
+                      {episode.artwork && (
+                        <Image 
+                          source={{ uri: episode.artwork }} 
+                          style={styles.episodeArtwork}
+                          resizeMode="cover"
                         />
-                        <View 
-                          style={[
-                            styles.mainProgressHandle, 
-                            { left: `${duration ? (position / duration) * 100 : 0}%` }
-                          ]} 
+                      )}
+                      <View style={styles.episodeInfo}>
+                        <Text style={styles.episodeTitle} numberOfLines={2}>
+                          {episode.title}
+                        </Text>
+                        <Text style={styles.episodeDate}>
+                          {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </>
+            )}
+
+            {/* Show Audio Player when episode is selected */}
+            {selectedEpisode && (
+              <>
+                {/* Navigation Header */}
+                <View style={styles.navigationHeader}>
+                  <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                    <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
+                    <Text style={styles.backButtonText}>Episodes</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Episode Header */}
+                <View style={styles.episodeHeader}>
+                  {selectedEpisode.artwork && (
+                    <Image 
+                      source={{ uri: selectedEpisode.artwork }} 
+                      style={styles.episodeArtworkLarge}
+                      resizeMode="cover"
+                    />
+                  )}
+                  <Text style={styles.episodeTitleLarge} numberOfLines={3}>
+                    {selectedEpisode.title}
+                  </Text>
+                </View>
+
+                {/* Loading State */}
+                {isLoading && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#d97706" />
+                    <Text style={styles.loadingText}>Loading episode...</Text>
+                  </View>
+                )}
+
+                {/* Player Controls - Show when loaded */}
+                {!isLoading && (
+                  <>
+                    {/* MAIN TIMELINE - NEW AWESOME SLIDER */}
+                    <View style={styles.mainTimelineSection}>
+                      <View style={styles.sliderContainer}>
+                        <Slider
+                          style={styles.slider}
+                          progress={progressSharedValue}
+                          minimumValue={minValue}
+                          maximumValue={maxValue}
+                          thumbWidth={20}
+                          thumbHeight={20}
+                          trackHeight={8}
+                          theme={{
+                            disableMinTrackTintColor: true,
+                            maximumTrackTintColor: '#404040',
+                            minimumTrackTintColor: '#d97706',
+                            cacheTrackTintColor: '#404040',
+                            bubbleBackgroundColor: '#d97706',
+                          }}
+                          renderBubble={() => null}
+                          onSlidingStart={() => {
+                            console.log('Scrubbing started');
+                            setIsScrubbing(true);
+                          }}
+                          onValueChange={(value) => {
+                            // ONLY update shared value during scrubbing - don't update state yet
+                            if (isScrubbing) {
+                              progressSharedValue.value = value;
+                              // Optionally update position state for real-time feedback (remove if still jittery)
+                              setPosition(value);
+                            }
+                          }}
+                          onSlidingComplete={(value) => {
+                            console.log('Scrubbing complete:', value);
+                            // Update audio position and state
+                            setPosition(value);
+                            if (sound) {
+                              sound.setPositionAsync(Math.max(0, Math.min(value, duration)));
+                            }
+                            // Small delay before allowing updates again to prevent conflict
+                            setTimeout(() => {
+                              setIsScrubbing(false);
+                            }, 100);
+                          }}
                         />
-                        {/* Clip Markers */}
+                        {/* Clip Markers Overlay */}
                         {clipStart && duration && (
                           <View 
                             style={[
-                              styles.mainClipMarker, 
+                              styles.clipMarkerOverlay, 
                               { left: `${(clipStart / duration) * 100}%` }
                             ]} 
                           />
@@ -965,96 +1013,96 @@ export default function App() {
                         {clipEnd && duration && (
                           <View 
                             style={[
-                              styles.mainClipMarker, 
+                              styles.clipMarkerOverlay, 
                               { left: `${(clipEnd / duration) * 100}%` }
                             ]} 
                           />
                         )}
                       </View>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.mainTimeContainer}>
-                      <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
-                      <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+                      {/* Time Display Below Main Timeline */}
+                      <View style={styles.mainTimeContainer}>
+                        <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
+                        <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+                      </View>
                     </View>
-                  </View>
 
-                  {/* Fine Skip Controls */}
-                  <View style={styles.fineControls}>
-                    <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
-                      <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
-                      <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
-                    </TouchableOpacity>
-                  </View>
+                    {/* Fine Skip Controls */}
+                    <View style={styles.fineControls}>
+                      <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
+                        <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
+                        <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Main Skip Controls */}
-                  <View style={styles.skipControls}>
-                    <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
-                      <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
-                      <MaterialCommunityIcons 
-                        name={isPlaying ? "pause" : "play"} 
-                        size={40} 
-                        color="#f4f4f4" 
-                      />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
-                      <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
-                    </TouchableOpacity>
-                  </View>
+                    {/* Main Skip Controls */}
+                    <View style={styles.skipControls}>
+                      <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
+                        <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
+                        <MaterialCommunityIcons 
+                          name={isPlaying ? "pause" : "play"} 
+                          size={40} 
+                          color="#f4f4f4" 
+                        />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
+                        <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Clip Controls */}
-                  <View style={styles.clipControls}>
-                    <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
-                      <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
-                      <Text style={styles.clipButtonText}>
-                        {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                    {/* Clip Controls */}
+                    <View style={styles.clipControls}>
+                      <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
+                        <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
+                        <Text style={styles.clipButtonText}>
+                          {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      {clipStart && clipEnd && (
+                        <>
+                          <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
+                            <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
+                            <Text style={styles.clipButtonText}>Preview</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
+                            <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
+                            <Text style={styles.saveButtonText}>Create Video</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+
+                    {/* Clip Info */}
+                    {(clipStart !== null && clipEnd !== null) && (
+                      <Text style={styles.clipInfo}>
+                        Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
                       </Text>
-                    </TouchableOpacity>
-                    
-                    {clipStart && clipEnd && (
-                      <>
-                        <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
-                          <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
-                          <Text style={styles.clipButtonText}>Preview</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
-                          <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
-                          <Text style={styles.saveButtonText}>Create Video</Text>
-                        </TouchableOpacity>
-                      </>
                     )}
-                  </View>
 
-                  {/* Clip Info */}
-                  {(clipStart !== null && clipEnd !== null) && (
-                    <Text style={styles.clipInfo}>
-                      Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
-                    </Text>
-                  )}
-
-                  {/* Episode Notes */}
-                  <View style={styles.episodeNotes}>
-                    <Text style={styles.notesTitle}>Episode Notes</Text>
-                    <Text style={styles.notesText}>
-                      {selectedEpisode.description}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </>
-          )}
-        </ScrollView>
-      </LinearGradient>
-      {showRecordingGuidance && <RecordingGuidanceModal />}
-    </SafeAreaView>
+                    {/* Episode Notes */}
+                    <View style={styles.episodeNotes}>
+                      <Text style={styles.notesTitle}>Episode Notes</Text>
+                      <Text style={styles.notesText}>
+                        {selectedEpisode.description}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </LinearGradient>
+        {showRecordingGuidance && <RecordingGuidanceModal />}
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -1073,18 +1121,19 @@ const styles = StyleSheet.create({
   // Header styles
   header: {
     alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 20,
+    marginBottom: 20, // Reduced from 30
+    marginTop: 10,    // Reduced from 20
   },
   logo: {
-    width: 552,  // Increased by another 15% from 480
-    height: 221, // Increased by another 15% from 192
-    marginBottom: 0,
+    width: 460,  // Reduced from 552 
+    height: 184, // Reduced from 221
+    marginBottom: -10, // Negative margin to pull subtitle closer
   },
   subtitle: {
     fontSize: 16,
     color: '#b4b4b4',
     textAlign: 'center',
+    marginTop: 0, // Remove any top margin
   },
   
   // Input section
@@ -1175,8 +1224,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#2d2d2d',
-    borderRadius: 20,
+    // Removed backgroundColor and borderRadius to remove the box
   },
   backButtonText: {
     color: '#d97706',
@@ -1185,12 +1233,13 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   smallLogo: {
-    width: 180,  // Increased by 50% from 120
-    height: 72,  // Increased by 50% from 48
+    width: 240, // Increased from 180
+    height: 96,  // Increased from 72
+    alignSelf: 'flex-end', // Justify to the right
   },
   episodeHeader: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 30, // Reverted back to original
   },
   episodeArtworkLarge: {
     width: 120,
@@ -1217,40 +1266,23 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingHorizontal: 10,
   },
-  mainProgressBarContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 0,
-    marginHorizontal: 0,
-  },
-  mainProgressBar: {
-    height: 8,
-    backgroundColor: '#404040',
-    borderRadius: 4,
+  sliderContainer: {
     position: 'relative',
+    paddingVertical: 20,
+    paddingHorizontal: 10,
   },
-  mainProgressFill: {
-    height: '100%',
-    backgroundColor: '#d97706',
-    borderRadius: 4,
+  slider: {
+    width: '100%',
+    height: 40,
   },
-  mainProgressHandle: {
+  clipMarkerOverlay: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    backgroundColor: '#d97706',
-    borderRadius: 10,
-    top: -6,
-    marginLeft: -10,
-    borderWidth: 3,
-    borderColor: '#f4f4f4',
-  },
-  mainClipMarker: {
-    position: 'absolute',
+    top: 26, // Center on the track
     width: 4,
     height: 16,
     backgroundColor: '#ef4444',
-    top: -4,
     borderRadius: 2,
+    marginLeft: -2, // Center the marker
   },
   mainTimeContainer: {
     flexDirection: 'row',
