@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +27,231 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Hardcoded The Town RSS feed
 const THE_TOWN_RSS = 'https://feeds.megaphone.fm/the-town-with-matthew-belloni';
+
+const AnimatedWaveform = ({ 
+  isPlaying = false,
+  size = 'large',
+  color = '#d97706',
+  style 
+}) => {
+  const animatedValues = useRef([
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+  ]).current;
+
+  const sizeConfig = {
+    small: {
+      barWidth: 3,
+      barGap: 2,
+      baseHeights: [12, 20, 16, 28, 18, 24, 16, 20, 12],
+      containerHeight: 30,
+    },
+    medium: {
+      barWidth: 4,
+      barGap: 3,
+      baseHeights: [16, 28, 22, 38, 24, 32, 22, 28, 16],
+      containerHeight: 40,
+    },
+    large: {
+      barWidth: 5,
+      barGap: 4,
+      baseHeights: [20, 35, 28, 48, 30, 40, 28, 35, 20],
+      containerHeight: 50,
+    }
+  };
+
+  const config = sizeConfig[size];
+
+  useEffect(() => {
+    if (isPlaying) {
+      const animations = animatedValues.map((animValue, index) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 400 + (index * 50),
+              useNativeDriver: false,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0.3,
+              duration: 400 + (index * 50),
+              useNativeDriver: false,
+            }),
+          ])
+        );
+      });
+
+      animations.forEach((animation, index) => {
+        setTimeout(() => {
+          animation.start();
+        }, index * 100);
+      });
+
+      return () => {
+        animatedValues.forEach(animValue => animValue.stopAnimation());
+      };
+    } else {
+      const restAnimations = animatedValues.map(animValue =>
+        Animated.timing(animValue, {
+          toValue: 0.4,
+          duration: 300,
+          useNativeDriver: false,
+        })
+      );
+
+      Animated.parallel(restAnimations).start();
+    }
+  }, [isPlaying]);
+
+  return (
+    <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
+      <View style={waveformStyles.waveform}>
+        {animatedValues.map((animValue, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              waveformStyles.bar,
+              {
+                width: config.barWidth,
+                marginHorizontal: config.barGap / 2,
+                backgroundColor: color,
+                height: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [config.baseHeights[index] * 0.3, config.baseHeights[index]],
+                }),
+                opacity: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.4, 0.9],
+                }),
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const HomeAnimatedWaveform = ({ 
+  isPlaying = false,
+  size = 'large',
+  color = '#d97706',
+  style 
+}) => {
+  const animatedValues = useRef([
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+  ]).current;
+
+  const sizeConfig = {
+    small: {
+      barWidth: 3,
+      barGap: 2,
+      baseHeights: [12, 20, 16, 28, 18, 24, 16, 20, 12],
+      containerHeight: 30,
+    },
+    medium: {
+      barWidth: 4,
+      barGap: 3,
+      baseHeights: [16, 28, 22, 38, 24, 32, 22, 28, 16],
+      containerHeight: 40,
+    },
+    large: {
+      barWidth: 5,
+      barGap: 4,
+      baseHeights: [20, 35, 28, 48, 30, 40, 28, 35, 20],
+      containerHeight: 50,
+    }
+  };
+
+  const config = sizeConfig[size];
+
+  useEffect(() => {
+    if (isPlaying) {
+      const animations = animatedValues.map((animValue, index) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 400 + (index * 50),
+              useNativeDriver: false,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0.3,
+              duration: 400 + (index * 50),
+              useNativeDriver: false,
+            }),
+          ]),
+          { iterations: 10 } // Stop after 10 cycles
+        );
+      });
+
+      animations.forEach((animation, index) => {
+        setTimeout(() => {
+          animation.start();
+        }, index * 100);
+      });
+
+      return () => {
+        animatedValues.forEach(animValue => animValue.stopAnimation());
+      };
+    } else {
+      const restAnimations = animatedValues.map(animValue =>
+        Animated.timing(animValue, {
+          toValue: 0.4,
+          duration: 300,
+          useNativeDriver: false,
+        })
+      );
+
+      Animated.parallel(restAnimations).start();
+    }
+  }, [isPlaying]);
+
+  return (
+    <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
+      <View style={waveformStyles.waveform}>
+        {animatedValues.map((animValue, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              waveformStyles.bar,
+              {
+                width: config.barWidth,
+                marginHorizontal: config.barGap / 2,
+                backgroundColor: color,
+                height: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [config.baseHeights[index] * 0.3, config.baseHeights[index]],
+                }),
+                opacity: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.4, 0.9],
+                }),
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+
 
 export default function App() {
   // Main app state
@@ -853,12 +1079,15 @@ export default function App() {
               <>
                 {/* Header */}
                 <View style={styles.header}>
-                  <Image 
-                    source={require('./assets/logo1.png')} 
-                    style={styles.logo}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.subtitle}>Create social clips from podcasts</Text>
+                  <View style={styles.logoContainer}>
+                    <HomeAnimatedWaveform 
+                      isPlaying={isPlaying} 
+                      size="large"
+                      style={{ width: 200, height: 80, marginBottom: 20 }}
+                    />
+                    <Text style={styles.appTitle}>Audio2</Text>
+                    <Text style={styles.subtitle}>Turn audio to clips for social</Text>
+                  </View>
                 </View>
 
                 {/* URL Input */}
@@ -930,6 +1159,12 @@ export default function App() {
                     <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
                     <Text style={styles.backButtonText}>Episodes</Text>
                   </TouchableOpacity>
+
+                  <AnimatedWaveform 
+                    isPlaying={isPlaying} 
+                    size="medium"
+                    style={{ width: 120, height: 48 }}
+                  />
                 </View>
 
                 {/* Episode Header */}
@@ -1130,10 +1365,27 @@ const styles = StyleSheet.create({
     marginBottom: -10, // Negative margin to pull subtitle closer
   },
   subtitle: {
-    fontSize: 16,
     color: '#b4b4b4',
+    fontSize: 16,
+    fontWeight: '400',
+    marginTop: 8,
     textAlign: 'center',
-    marginTop: 0, // Remove any top margin
+    paddingHorizontal: 20,
+  },
+  
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+    paddingVertical: 20,
+  },
+  
+  appTitle: {
+    color: '#f4f4f4',
+    fontSize: 44,
+    fontWeight: '400',
+    marginTop: -15,
+    letterSpacing: -1,
   },
   
   // Input section
@@ -1601,5 +1853,20 @@ const styles = StyleSheet.create({
     color: '#f4f4f4',
     fontSize: 14,
     fontWeight: '600',
+  },
+});
+
+const waveformStyles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bar: {
+    borderRadius: 2.5,
   },
 });

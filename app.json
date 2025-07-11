@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1.1.1"
+      "buildNumber": "1.1.2"
     },
     "android": {
       "adaptiveIcon": {
