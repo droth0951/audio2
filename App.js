@@ -8,7 +8,6 @@ import {
   TextInput,
   Alert,
   SafeAreaView,
-  StatusBar,
   Image,
   Dimensions,
   ActivityIndicator,
@@ -22,6 +21,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { Slider } from 'react-native-awesome-slider';
 import { useSharedValue } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -140,7 +140,6 @@ const AnimatedWaveform = ({
 };
 
 const HomeAnimatedWaveform = ({ 
-  isPlaying = false,
   size = 'large',
   color = '#d97706',
   style 
@@ -181,46 +180,37 @@ const HomeAnimatedWaveform = ({
   const config = sizeConfig[size];
 
   useEffect(() => {
-    if (isPlaying) {
-      const animations = animatedValues.map((animValue, index) => {
-        return Animated.loop(
-          Animated.sequence([
-            Animated.timing(animValue, {
-              toValue: 1,
-              duration: 400 + (index * 50),
-              useNativeDriver: false,
-            }),
-            Animated.timing(animValue, {
-              toValue: 0.3,
-              duration: 400 + (index * 50),
-              useNativeDriver: false,
-            }),
-          ]),
-          { iterations: 10 } // Stop after 10 cycles
-        );
-      });
-
-      animations.forEach((animation, index) => {
-        setTimeout(() => {
-          animation.start();
-        }, index * 100);
-      });
-
-      return () => {
-        animatedValues.forEach(animValue => animValue.stopAnimation());
-      };
-    } else {
-      const restAnimations = animatedValues.map(animValue =>
-        Animated.timing(animValue, {
-          toValue: 0.4,
-          duration: 300,
-          useNativeDriver: false,
-        })
+    // Always animate on mount for home screen
+    const animations = animatedValues.map((animValue, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: 800 + (index * 100), // Slower, more elegant animation
+            useNativeDriver: false,
+          }),
+          Animated.timing(animValue, {
+            toValue: 0.3,
+            duration: 800 + (index * 100),
+            useNativeDriver: false,
+          }),
+        ]),
+        { iterations: -1 } // Infinite loop
       );
+    });
 
-      Animated.parallel(restAnimations).start();
-    }
-  }, [isPlaying]);
+    // Start animations with staggered timing
+    animations.forEach((animation, index) => {
+      setTimeout(() => {
+        animation.start();
+      }, index * 150);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      animatedValues.forEach(animValue => animValue.stopAnimation());
+    };
+  }, []); // Empty dependency array - only run on mount
 
   return (
     <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
@@ -970,7 +960,7 @@ export default function App() {
   // Recording view component - UPDATED to hide controls during recording
   const RecordingView = () => (
     <View style={styles.recordingContainer}>
-      <StatusBar hidden />
+      <StatusBar style="light" hidden={true} />
       
       {/* Full-screen wireframe design */}
       <LinearGradient
@@ -1068,7 +1058,11 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar 
+          style="light" 
+          backgroundColor="#1c1c1c" 
+          translucent={false}
+        />
         <LinearGradient
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.gradient}
@@ -1086,7 +1080,7 @@ export default function App() {
                       style={{ width: 200, height: 80, marginBottom: 20 }}
                     />
                     <Text style={styles.appTitle}>Audio2</Text>
-                    <Text style={styles.subtitle}>Turn audio to clips for social</Text>
+                    <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
                   </View>
                 </View>
 
@@ -1216,44 +1210,63 @@ export default function App() {
                             setIsScrubbing(true);
                           }}
                           onValueChange={(value) => {
-                            // ONLY update shared value during scrubbing - don't update state yet
                             if (isScrubbing) {
                               progressSharedValue.value = value;
-                              // Optionally update position state for real-time feedback (remove if still jittery)
                               setPosition(value);
                             }
                           }}
                           onSlidingComplete={(value) => {
                             console.log('Scrubbing complete:', value);
-                            // Update audio position and state
                             setPosition(value);
                             if (sound) {
                               sound.setPositionAsync(Math.max(0, Math.min(value, duration)));
                             }
-                            // Small delay before allowing updates again to prevent conflict
                             setTimeout(() => {
                               setIsScrubbing(false);
                             }, 100);
                           }}
                         />
-                        {/* Clip Markers Overlay */}
-                        {clipStart && duration && (
-                          <View 
-                            style={[
-                              styles.clipMarkerOverlay, 
-                              { left: `${(clipStart / duration) * 100}%` }
-                            ]} 
-                          />
-                        )}
-                        {clipEnd && duration && (
-                          <View 
-                            style={[
-                              styles.clipMarkerOverlay, 
-                              { left: `${(clipEnd / duration) * 100}%` }
-                            ]} 
-                          />
-                        )}
+                        
+                        {/* Clip Markers Overlay - Fixed positioning */}
+                        <View style={styles.clipMarkersContainer}>
+                          {clipStart && duration && (
+                            <View 
+                              style={[
+                                styles.clipMarkerOverlay, 
+                                { 
+                                  left: `${(clipStart / duration) * 100}%`,
+                                  backgroundColor: '#ef4444',
+                                }
+                              ]} 
+                            />
+                          )}
+                          {clipEnd && duration && (
+                            <View 
+                              style={[
+                                styles.clipMarkerOverlay, 
+                                { 
+                                  left: `${(clipEnd / duration) * 100}%`,
+                                  backgroundColor: '#ef4444',
+                                }
+                              ]} 
+                            />
+                          )}
+                          
+                          {/* Clip Range Highlight */}
+                          {clipStart && clipEnd && duration && (
+                            <View 
+                              style={[
+                                styles.clipRangeHighlight,
+                                {
+                                  left: `${(clipStart / duration) * 100}%`,
+                                  width: `${((clipEnd - clipStart) / duration) * 100}%`,
+                                }
+                              ]}
+                            />
+                          )}
+                        </View>
                       </View>
+                      
                       {/* Time Display Below Main Timeline */}
                       <View style={styles.mainTimeContainer}>
                         <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
@@ -1344,6 +1357,8 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#1c1c1c',
+    paddingTop: 0, // Remove any manual padding
   },
   gradient: {
     flex: 1,
@@ -1527,14 +1542,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 40,
   },
+  clipMarkersContainer: {
+    position: 'absolute',
+    top: 20, // Match the paddingVertical of sliderContainer
+    left: 20, // Account for thumb width (20px / 2 = 10px) + container padding
+    right: 20,
+    height: 40,
+    pointerEvents: 'none', // Allow touches to pass through to slider
+  },
   clipMarkerOverlay: {
     position: 'absolute',
-    top: 26, // Center on the track
+    top: 12, // Center on the track (40px height / 2 - 8px track height / 2 - 4px marker height / 2)
     width: 4,
     height: 16,
-    backgroundColor: '#ef4444',
     borderRadius: 2,
     marginLeft: -2, // Center the marker
+    zIndex: 10,
+  },
+  clipRangeHighlight: {
+    position: 'absolute',
+    top: 14, // Slightly below track center
+    height: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.3)', // Semi-transparent red
+    borderRadius: 6,
+    zIndex: 5,
   },
   mainTimeContainer: {
     flexDirection: 'row',
