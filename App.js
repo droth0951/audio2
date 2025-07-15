@@ -284,6 +284,16 @@ export default function App() {
   const maxValue = useSharedValue(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
 
+  // Add these new state variables after your existing state declarations (around line 102)
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [recentPodcasts, setRecentPodcasts] = useState([]);
+
+  // Add a ref to keep track of the current AbortController
+  const searchAbortController = useRef(null);
+
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
     console.log('🎙️ loadPodcastFeed called with:', feedUrl);
@@ -941,6 +951,89 @@ export default function App() {
     }
   };
 
+
+  // Add the iTunes Search API function after your existing functions (around line 180)
+  const searchPodcasts = async (searchTerm) => {
+    if (!searchTerm.trim()) return [];
+    
+    // Abort any previous search
+    if (searchAbortController.current) {
+      searchAbortController.current.abort();
+    }
+    const controller = new AbortController();
+    searchAbortController.current = controller;
+
+    try {
+      const response = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm.trim())}&media=podcast&limit=20&country=US`,
+        { signal: controller.signal }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      
+      const data = await response.json();
+      return data.results.map(podcast => ({
+        id: podcast.collectionId,
+        name: podcast.collectionName,
+        artist: podcast.artistName,
+        artwork: podcast.artworkUrl100?.replace('100x100', '600x600') || podcast.artworkUrl100,
+        feedUrl: podcast.feedUrl,
+        description: podcast.description || '',
+        genres: podcast.genres || []
+      }));
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Search was cancelled
+        return [];
+      }
+      console.error('Podcast search error:', error);
+      Alert.alert('Search Error', 'Unable to search podcasts. Please check your connection.');
+      return [];
+    }
+  };
+
+  // Add search handler function
+  const handlePodcastSearch = async (term) => {
+    const query = (typeof term === 'string' ? term : searchTerm).trim();
+    if (!query) return;
+    
+    setIsSearching(true);
+    const results = await searchPodcasts(query);
+    setSearchResults(results);
+    setIsSearching(false);
+    searchAbortController.current = null;
+  };
+
+  // Add function to handle selecting a podcast from search
+  const handleSelectPodcast = async (podcast) => {
+    try {
+      // Add to recent podcasts (keep last 5)
+      const updatedRecents = [podcast, ...recentPodcasts.filter(p => p.id !== podcast.id)].slice(0, 5);
+      setRecentPodcasts(updatedRecents);
+      
+      // Load the podcast feed using existing function
+      await loadPodcastFeed(podcast.feedUrl);
+      
+      // Exit search mode
+      setSearchMode(false);
+      setSearchTerm('');
+      setSearchResults([]);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to load this podcast. Please try another.');
+    }
+  };
+
+  // Add a cancel handler
+  const handleCancelSearch = () => {
+    if (searchAbortController.current) {
+      searchAbortController.current.abort();
+      searchAbortController.current = null;
+    }
+    setIsSearching(false);
+  };
+
   // Utility functions
   const formatTime = (millis) => {
     const minutes = Math.floor(millis / 60000);
@@ -1084,29 +1177,190 @@ export default function App() {
                   </View>
                 </View>
 
-                {/* URL Input */}
+                {/* Enhanced Input Section with Search Toggle */}
                 <View style={styles.inputSection}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Paste Apple Podcasts URL or RSS feed"
-                    placeholderTextColor="#888"
-                    value={urlInput}
-                    onChangeText={(text) => {
-                      console.log('📝 Input changed:', text);
-                      setUrlInput(text);
-                    }}
-                    onSubmitEditing={() => {
-                      console.log('⏎ Submit editing triggered');
-                      handleUrlSubmit();
-                    }}
-                  />
+                  {!searchMode ? (
+                    // Current URL input mode
+                    <>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Paste Apple Podcasts URL or RSS feed"
+                        placeholderTextColor="#888"
+                        value={urlInput}
+                        onChangeText={(text) => {
+                          console.log('📝 Input changed:', text);
+                          setUrlInput(text);
+                        }}
+                        onSubmitEditing={() => {
+                          console.log('⏎ Submit editing triggered');
+                          handleUrlSubmit();
+                        }}
+                      />
+                      <TouchableOpacity 
+                        style={styles.submitButton} 
+                        onPress={handleUrlSubmit}
+                      >
+                        <Text style={styles.submitButtonText}>Add</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    // Search mode
+                    <>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Search for any podcast..."
+                        placeholderTextColor="#888"
+                        value={searchTerm}
+                        onChangeText={setSearchTerm}
+                        onSubmitEditing={handlePodcastSearch}
+                        returnKeyType="search"
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        autoFocus={true}
+                      />
+                      <TouchableOpacity 
+                        style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
+                        onPress={handlePodcastSearch}
+                        disabled={isSearching || !searchTerm.trim()}
+                      >
+                        {isSearching ? (
+                          <ActivityIndicator size="small" color="#f4f4f4" />
+                        ) : (
+                          <Text style={styles.submitButtonText}>Search</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+
+                {/* Search/URL Mode Toggle */}
+                <View style={styles.modeToggle}>
                   <TouchableOpacity 
-                    style={styles.submitButton} 
-                    onPress={handleUrlSubmit}
+                    style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
+                    onPress={() => {
+                      setSearchMode(false);
+                      setSearchTerm('');
+                      setSearchResults([]);
+                    }}
                   >
-                    <Text style={styles.submitButtonText}>Add</Text>
+                    <MaterialCommunityIcons 
+                      name="link" 
+                      size={16} 
+                      color={!searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                    />
+                    <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
+                      URL
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.modeButton, searchMode && styles.modeButtonActive]}
+                    onPress={() => {
+                      setSearchMode(true);
+                      setUrlInput('');
+                    }}
+                  >
+                    <MaterialCommunityIcons 
+                      name="magnify" 
+                      size={16} 
+                      color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                    />
+                    <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
+                      Search
+                    </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Recent Podcasts (show when in search mode and no results) */}
+                {searchMode && recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
+                  <View style={styles.recentSection}>
+                    <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.recentScrollView}
+                    >
+                      {recentPodcasts.map((podcast) => (
+                        <TouchableOpacity
+                          key={podcast.id}
+                          style={styles.recentPodcastItem}
+                          onPress={() => handleSelectPodcast(podcast)}
+                        >
+                          <Image 
+                            source={{ uri: podcast.artwork }} 
+                            style={styles.recentPodcastArtwork}
+                            defaultSource={require('./assets/logo1.png')}
+                          />
+                          <Text style={styles.recentPodcastName} numberOfLines={2}>
+                            {podcast.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Search Results */}
+                {searchMode && searchResults.length > 0 && (
+                  <View style={styles.searchResultsSection}>
+                    <Text style={styles.sectionTitle}>
+                      Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
+                    </Text>
+                    {searchResults.map((podcast) => (
+                      <TouchableOpacity
+                        key={podcast.id}
+                        style={styles.searchResultItem}
+                        onPress={() => handleSelectPodcast(podcast)}
+                      >
+                        <Image 
+                          source={{ uri: podcast.artwork }} 
+                          style={styles.searchResultArtwork}
+                          defaultSource={require('./assets/logo1.png')}
+                        />
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultName} numberOfLines={2}>
+                            {podcast.name}
+                          </Text>
+                          <Text style={styles.searchResultArtist} numberOfLines={1}>
+                            {podcast.artist}
+                          </Text>
+                          {podcast.genres.length > 0 && (
+                            <Text style={styles.searchResultGenre} numberOfLines={1}>
+                              {podcast.genres[0]}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Popular Suggestions (show in search mode when no search term) */}
+                {searchMode && searchResults.length === 0 && !isSearching && searchTerm === '' && (
+                  <View style={styles.suggestionsSection}>
+                    <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                    <View style={styles.suggestionTags}>
+                      {[
+                        'The Indicator from Planet Money',
+                        'How I Built This with Guy Raz',
+                        'This Is Working with Daniel Roth',
+                        'WorkLife with Adam Grant',
+                        'Masters of Scale'
+                      ].map((suggestion) => (
+                        <TouchableOpacity
+                          key={suggestion}
+                          style={styles.suggestionTag}
+                          onPress={() => {
+                            setSearchTerm(suggestion);
+                            handlePodcastSearch(suggestion);
+                          }}
+                        >
+                          <Text style={styles.suggestionTagText}>{suggestion}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
 
                 {/* Current Feed Info */}
                 <View style={styles.feedInfo}>
@@ -1883,6 +2137,178 @@ const styles = StyleSheet.create({
   modalContinueText: {
     color: '#f4f4f4',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  // Mode toggle styles
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#2d2d2d',
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: '#d97706',
+  },
+  modeButtonText: {
+    color: '#b4b4b4',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modeButtonTextActive: {
+    color: '#f4f4f4',
+    fontWeight: '600',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#666666',
+    opacity: 0.6,
+  },
+  // Search results styles
+  sectionTitle: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  searchResultsSection: {
+    marginBottom: 20,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    backgroundColor: '#2d2d2d',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  searchResultArtwork: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#404040',
+  },
+  searchResultInfo: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  searchResultName: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  searchResultArtist: {
+    color: '#b4b4b4',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  searchResultGenre: {
+    color: '#888888',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  // Recent podcasts styles
+  recentSection: {
+    marginBottom: 20,
+  },
+  recentScrollView: {
+    paddingLeft: 0,
+  },
+  recentPodcastItem: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 80,
+  },
+  recentPodcastArtwork: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#404040',
+    marginBottom: 8,
+  },
+  recentPodcastName: {
+    color: '#b4b4b4',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  // Suggestions styles
+  suggestionsSection: {
+    marginBottom: 20,
+  },
+  suggestionTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionTag: {
+    backgroundColor: '#404040',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  suggestionTagText: {
+    color: '#b4b4b4',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // Add these styles to StyleSheet.create()
+  searchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(28,28,28,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  searchOverlayContent: {
+    backgroundColor: '#222',
+    padding: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  searchOverlayText: {
+    color: '#f4f4f4',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  cancelSearchButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  cancelSearchButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
