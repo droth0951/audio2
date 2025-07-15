@@ -1130,7 +1130,7 @@ export default function App() {
             {selectedEpisode?.title}
           </Text>
           <Text style={styles.recordingPodcastName}>
-            {podcastTitle || 'The Town with Matthew Belloni'}
+            {podcastTitle || 'Podcast'}
           </Text>
         </View>
         
