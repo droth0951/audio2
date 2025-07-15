@@ -22,6 +22,7 @@ import { Slider } from 'react-native-awesome-slider';
 import { useSharedValue } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -285,7 +286,7 @@ export default function App() {
   const [isScrubbing, setIsScrubbing] = useState(false);
 
   // Add these new state variables after your existing state declarations (around line 102)
-  const [searchMode, setSearchMode] = useState(false);
+  const [searchMode, setSearchMode] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -293,6 +294,28 @@ export default function App() {
 
   // Add a ref to keep track of the current AbortController
   const searchAbortController = useRef(null);
+
+  // Add a new state variable for the currently loading podcast
+  const [loadingPodcastId, setLoadingPodcastId] = useState(null);
+
+  // Add state for popular business podcasts
+  const popularBusinessPodcasts = [
+    'The Indicator from Planet Money',
+    'How I Built This with Guy Raz',
+    'This Is Working with Daniel Roth',
+    'The Town with Matthew Belloni',
+    'Acquired',
+    'WorkLife with Adam Grant',
+    'Masters of Scale',
+    'The Ed Mylett Show',
+    'The Tony Robbins Podcast',
+    'The GaryVee Audio Experience',
+    'The Dave Ramsey Show',
+    'Marketplace',
+    'Freakonomics Radio',
+    'Planet Money',
+    'Business Wars'
+  ];
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
@@ -1216,7 +1239,6 @@ export default function App() {
                         returnKeyType="search"
                         autoCapitalize="words"
                         autoCorrect={false}
-                        autoFocus={true}
                       />
                       <TouchableOpacity 
                         style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
@@ -1236,6 +1258,23 @@ export default function App() {
                 {/* Search/URL Mode Toggle */}
                 <View style={styles.modeToggle}>
                   <TouchableOpacity 
+                    style={[styles.modeButton, searchMode && styles.modeButtonActive]}
+                    onPress={() => {
+                      setSearchMode(true);
+                      setUrlInput('');
+                    }}
+                  >
+                    <MaterialCommunityIcons 
+                      name="magnify" 
+                      size={16} 
+                      color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                    />
+                    <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
+                      Search
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
                     style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
                     onPress={() => {
                       setSearchMode(false);
@@ -1250,23 +1289,6 @@ export default function App() {
                     />
                     <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
                       URL
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.modeButton, searchMode && styles.modeButtonActive]}
-                    onPress={() => {
-                      setSearchMode(true);
-                      setUrlInput('');
-                    }}
-                  >
-                    <MaterialCommunityIcons 
-                      name="magnify" 
-                      size={16} 
-                      color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
-                    />
-                    <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
-                      Search
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1340,21 +1362,21 @@ export default function App() {
                   <View style={styles.suggestionsSection}>
                     <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
                     <View style={styles.suggestionTags}>
-                      {[
-                        'The Indicator from Planet Money',
-                        'How I Built This with Guy Raz',
-                        'This Is Working with Daniel Roth',
-                        'WorkLife with Adam Grant',
-                        'Masters of Scale'
-                      ].map((suggestion) => (
+                      {popularBusinessPodcasts.map((suggestion) => (
                         <TouchableOpacity
                           key={suggestion}
                           style={styles.suggestionTag}
-                          onPress={() => {
+                          onPress={async () => {
                             setSearchTerm(suggestion);
-                            handlePodcastSearch(suggestion);
+                            setLoadingPodcastId(suggestion);
+                            await handlePodcastSearch(suggestion);
+                            setLoadingPodcastId(null);
                           }}
+                          disabled={!!loadingPodcastId}
                         >
+                          {loadingPodcastId === suggestion ? (
+                            <ActivityIndicator size="small" color="#f4f4f4" style={{ marginRight: 6 }} />
+                          ) : null}
                           <Text style={styles.suggestionTagText}>{suggestion}</Text>
                         </TouchableOpacity>
                       ))}
@@ -2260,16 +2282,21 @@ const styles = StyleSheet.create({
   suggestionTag: {
     backgroundColor: '#404040',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16, // increased for better appearance
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#555555',
-  },
-  suggestionTagText: {
-    color: '#b4b4b4',
-    fontSize: 13,
-    fontWeight: '500',
-  },
+    maxWidth: 160, // limit pill width
+    marginBottom: 8,
+},
+suggestionTagText: {
+  color: '#b4b4b4',
+  fontSize: 13,
+  fontWeight: '500',
+  textAlign: 'center',
+  numberOfLines: 1,
+  ellipsizeMode: 'tail',
+},
   // Add these styles to StyleSheet.create()
   searchOverlay: {
     position: 'absolute',
