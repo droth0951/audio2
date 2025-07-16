@@ -24,6 +24,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
+import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -1255,6 +1256,11 @@ export default function App() {
   // Compose the gestures
   const composedGesture = Gesture.Race(swipeBackGesture, scrollGesture);
 
+  const [fontsLoaded] = useFonts({
+    'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
+  });
+  if (!fontsLoaded) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
@@ -1285,9 +1291,20 @@ export default function App() {
                         <HomeAnimatedWaveform 
                           isPlaying={isPlaying} 
                           size="large"
-                          style={{ width: 200, height: 80, marginBottom: 20 }}
+                          style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
                         />
-                        <Text style={styles.appTitle}>Audio2</Text>
+                        <Text
+                          style={{
+                            fontFamily: 'Lobster',
+                            fontSize: 48,
+                            color: '#f4f4f4',
+                            marginTop: -20, // Overlap: more negative margin
+                            textAlign: 'center',
+                            letterSpacing: 1,
+                          }}
+                        >
+                          Audio2
+                        </Text>
                         <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
                       </View>
                     </View>
