@@ -27,8 +27,6 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTi
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Hardcoded The Town RSS feed
-const THE_TOWN_RSS = 'https://feeds.megaphone.fm/the-town-with-matthew-belloni';
 
 const AnimatedWaveform = ({ 
   isPlaying = false,
@@ -271,7 +269,7 @@ export default function App() {
   // URL input state
   const [urlInput, setUrlInput] = useState('');
 
-  const [currentRssFeed, setCurrentRssFeed] = useState(THE_TOWN_RSS);
+  const [currentRssFeed, setCurrentRssFeed] = useState('');
 
   // Add podcastTitle state
   const [podcastTitle, setPodcastTitle] = useState('');
@@ -304,7 +302,6 @@ export default function App() {
     'The Indicator from Planet Money',
     'How I Built This with Guy Raz',
     'This Is Working with Daniel Roth',
-    'The Town with Matthew Belloni',
     'Acquired',
     'WorkLife with Adam Grant',
     'Masters of Scale',
@@ -452,9 +449,11 @@ export default function App() {
 
   // THEN your useEffect:
   useEffect(() => {
-    loadPodcastFeed(currentRssFeed);
+    if (currentRssFeed) {
+      loadPodcastFeed(currentRssFeed);
+    }
     return sound ? () => { sound.unloadAsync(); } : undefined;
-  }, []); // Empty deps on initial load only
+  }, [currentRssFeed]);
 
   // Set up duration and shared values
   useEffect(() => {
@@ -1034,7 +1033,11 @@ export default function App() {
     const results = await searchPodcasts(query);
     setSearchResults(results);
     setIsSearching(false);
-    searchAbortController.current = null;
+
+    // If only one result, auto-select it and load its feed
+    if (results.length === 1) {
+      await handleSelectPodcast(results[0]);
+    }
   };
 
   // Add function to handle selecting a podcast from search
@@ -1138,7 +1141,7 @@ export default function App() {
             {selectedEpisode?.title}
           </Text>
           <Text style={styles.recordingPodcastName}>
-            {podcastTitle || 'Podcast'}
+            {selectedEpisode?.podcastName || 'Podcast'}
           </Text>
         </View>
         
