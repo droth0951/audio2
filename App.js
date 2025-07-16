@@ -322,6 +322,7 @@ export default function App() {
   const translateX = useSharedValue(0);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
+    opacity: 1 - translateX.value / screenWidth,
   }));
   
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
@@ -1222,17 +1223,17 @@ export default function App() {
 
       const threshold = 80;
       if (canGoBack && event.translationX > threshold) {
-        // Animate off-screen, then navigate back
-        translateX.value = withTiming(screenWidth, { duration: 120 }, () => {
+        // Animate off-screen, then navigate
+        translateX.value = withTiming(screenWidth, { duration: 180 }, () => {
           runOnJS(handleSwipeBack)();
-          translateX.value = 0;
+          translateX.value = 0; // Reset for next time
         });
       } else {
         // Animate back to original position
         translateX.value = withSpring(0, {
-          damping: 12,
-          stiffness: 300,
-          mass: 0.7,
+          damping: 14,
+          stiffness: 250,
+          mass: 0.8,
         });
       }
     });
