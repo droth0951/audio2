@@ -360,19 +360,18 @@ export default function App() {
       console.log('📄 First 200 chars:', xmlText.substring(0, 200));
       
       console.log('🔧 Calling parseRSSFeed...');
-      const episodes = parseRSSFeed(xmlText);
+      // Parse only first 10 episodes for faster loading
+      const episodes = parseRSSFeed(xmlText, 10);
       console.log('🎧 Parsed episodes:', episodes.length);
       
       if (episodes.length === 0) {
         throw new Error('No episodes found in feed');
       }
       
-      setAllEpisodes(episodes); // Store all episodes
+      setAllEpisodes(episodes); // Store the limited episodes
       setEpisodes(episodes.slice(0, 7)); // Show only 7 by default
       setCurrentRssFeed(feedUrl);
       console.log('✅ Feed loaded successfully!');
-      
-      Alert.alert('Success', `Loaded ${episodes.length} episodes`);
       
     } catch (error) {
       console.error('❌ loadPodcastFeed error:', error);
@@ -478,7 +477,7 @@ export default function App() {
   }, [position, isScrubbing]);
 
   // RSS parsing and episode loading
-  const parseRSSFeed = (xmlText) => {
+  const parseRSSFeed = (xmlText, limit = null) => {
     console.log('🔍 parseRSSFeed called with XML length:', xmlText.length);
     
     try {
@@ -501,6 +500,9 @@ export default function App() {
       
       if (itemMatches) {
         itemMatches.forEach((item, index) => {
+          // Stop parsing after limit
+          if (limit && episodes.length >= limit) return;
+          
           const title = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
                        item.match(/<title>(.*?)<\/title>/)?.[1] || 
                        `Episode ${index + 1}`;
@@ -1208,7 +1210,6 @@ export default function App() {
       setEpisodes([]);
       setAllEpisodes([]);
       setSearchResults([]);
-      setRecentPodcasts([]);
       setCurrentRssFeed('');
     }
   };
@@ -1261,6 +1262,41 @@ export default function App() {
   });
   if (!fontsLoaded) return null;
 
+  // Add a new function to load the complete RSS feed
+  const loadCompleteFeed = async () => {
+    if (!currentRssFeed) return;
+    
+    try {
+      setLoading(true);
+      console.log('📡 Loading complete RSS feed...');
+      
+      const response = await fetch(currentRssFeed, {
+        headers: {
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const xmlText = await response.text();
+      // Parse the complete feed without limit
+      const completeEpisodes = parseRSSFeed(xmlText);
+      
+      setAllEpisodes(completeEpisodes);
+      setEpisodes(completeEpisodes);
+      
+      console.log('✅ Complete feed loaded:', completeEpisodes.length, 'episodes');
+      
+    } catch (error) {
+      console.error('❌ Error loading complete feed:', error);
+      Alert.alert('Error', 'Failed to load complete feed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
@@ -1278,7 +1314,7 @@ export default function App() {
               {loading && episodes.length === 0 && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#d97706" />
-                  <Text style={styles.loadingOverlayText}>Loading podcast feed…</Text>
+                  <Text style={styles.loadingOverlayText}>Loading the 10 most recent episodes…</Text>
                 </View>
               )}
               <ScrollView style={styles.scrollView}>
@@ -1333,8 +1369,8 @@ export default function App() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Recent Podcasts (show when in search mode and no results) */}
-                    {recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
+                    {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
+                    {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
                       <View style={styles.recentSection}>
                         <Text style={styles.sectionTitle}>Recent Podcasts</Text>
                         <ScrollView 
@@ -1362,8 +1398,8 @@ export default function App() {
                       </View>
                     )}
 
-                    {/* Popular Business Podcasts */}
-                    {episodes.length === 0 && searchResults.length === 0 && recentPodcasts.length === 0 && !loading && !isSearching && (
+                    {/* Popular Business Podcasts (show when no episodes and no search results) */}
+                    {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
                       <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
                         <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
                         <View style={styles.pillRow}>
@@ -1452,7 +1488,7 @@ export default function App() {
                         {allEpisodes.length > episodes.length && (
                           <TouchableOpacity
                             style={styles.submitButton}
-                            onPress={() => setEpisodes(allEpisodes)}
+                            onPress={loadCompleteFeed}
                           >
                             <Text style={styles.submitButtonText}>Show All Episodes</Text>
                           </TouchableOpacity>
