@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
@@ -293,6 +294,9 @@ export default function App() {
 
   // Add a ref to keep track of the current AbortController
   const searchAbortController = useRef(null);
+
+  // Add a ref for the TextInput
+  const textInputRef = useRef(null);
 
   // Add a new state variable for the currently loading podcast
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
@@ -1314,7 +1318,7 @@ export default function App() {
               {loading && episodes.length === 0 && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#d97706" />
-                  <Text style={styles.loadingOverlayText}>Loading the 10 most recent episodes…</Text>
+                  <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
                 </View>
               )}
               <ScrollView style={styles.scrollView}>
@@ -1347,26 +1351,38 @@ export default function App() {
 
                     {/* Enhanced Input Section with Search Toggle */}
                     <View style={styles.inputSection}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Paste Apple Podcasts URL or RSS feed"
-                        placeholderTextColor="#888"
-                        value={urlInput}
-                        onChangeText={(text) => {
-                          console.log('📝 Input changed:', text);
-                          setUrlInput(text);
-                        }}
-                        onSubmitEditing={() => {
-                          console.log('⏎ Submit editing triggered');
-                          handleUrlSubmit();
-                        }}
-                      />
-                      <TouchableOpacity 
-                        style={styles.submitButton} 
-                        onPress={handleUrlSubmit}
-                      >
-                        <Text style={styles.submitButtonText}>Add</Text>
-                      </TouchableOpacity>
+                      <View style={styles.inputContainer}>
+                        <TextInput
+                          ref={textInputRef}
+                          style={styles.input}
+                          placeholder="Search podcasts or paste RSS feed URL"
+                          placeholderTextColor="#888"
+                          value={urlInput}
+                          blurOnSubmit={false}
+                          onChangeText={(text) => {
+                            console.log('📝 Input changed:', text);
+                            setUrlInput(text);
+                          }}
+                          onSubmitEditing={() => {
+                            console.log('⏎ Submit editing triggered');
+                            handlePodcastSearch(urlInput);
+                          }}
+                        />
+                      </View>
+                      <View style={styles.buttonContainer}>
+                        <Pressable 
+                          style={styles.submitButton} 
+                          onPress={() => {
+                            const query = urlInput.trim();
+                            if (query) {
+                              handlePodcastSearch(query);
+                            }
+                          }}
+                        >
+                          <Text style={styles.submitButtonText}>Search</Text>
+                        </Pressable>
+                        <Text style={styles.searchHintText}>may need to 2x tap</Text>
+                      </View>
                     </View>
 
                     {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
@@ -1764,13 +1780,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 30,
   },
-  input: {
+  inputContainer: {
     flex: 1,
+    marginRight: 10,
+  },
+  buttonContainer: {
+    justifyContent: 'center',
+  },
+  input: {
     backgroundColor: '#2d2d2d',
     color: '#f4f4f4',
     padding: 15,
     borderRadius: 12,
-    marginRight: 10,
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#404040',
@@ -1785,6 +1806,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#f4f4f4',
     fontWeight: '600',
+    textAlign: 'center',
   },
   
   // Feed info
@@ -2487,6 +2509,12 @@ suggestionTagText: {
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
+  },
+  searchHintText: {
+    color: '#b4b4b4',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 10,
   },
 });
 
