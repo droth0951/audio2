@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
@@ -19,10 +18,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ScreenRecorder from 'expo-screen-recorder';
 import * as MediaLibrary from 'expo-media-library';
 import { Slider } from 'react-native-awesome-slider';
-import { useSharedValue } from 'react-native-reanimated';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useSharedValue } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -1171,6 +1173,58 @@ export default function App() {
   }
 
   // 3. Clean up the render conditional (remove debug wrapper)
+  // Simple swipe back handler
+  const handleSwipeBack = () => {
+    if (selectedEpisode) {
+      handleBack();
+    } else if (showRecordingView) {
+      setShowRecordingView(false);
+    } else if (searchMode && (searchResults.length > 0 || searchTerm)) {
+      setSearchResults([]);
+      setSearchTerm('');
+    } else if (!searchMode && !selectedEpisode) {
+      // On podcast results page, go back to search
+      setSearchMode(true);
+      setSearchResults([]);
+      setSearchTerm('');
+      setPodcastTitle('');
+      setEpisodes([]);
+    }
+  };
+
+  // Create native gesture for ScrollView
+  const scrollGesture = Gesture.Native();
+
+  // Create swipe gesture that coordinates with ScrollView
+  const swipeBackGesture = Gesture.Pan()
+    .simultaneousWithExternalGesture(scrollGesture)
+    .activeOffsetX([50, 999]) // More forgiving activation threshold
+    .failOffsetY([-30, 30])
+    .onBegin((event) => {
+      // (debug log removed)
+    })
+    .onUpdate((event) => {
+      // (debug log removed)
+    })
+    .onEnd((event) => {
+      const canGoBack =
+        selectedEpisode ||
+        showRecordingView ||
+        (searchMode && (searchResults.length > 0 || searchTerm)) ||
+        (!searchMode && !selectedEpisode); // allow back on podcast results page
+      
+      // (debug log removed)
+      
+      // More forgiving conditions
+      if (canGoBack && event.translationX > 80) {
+        // (debug log removed)
+        runOnJS(handleSwipeBack)();
+      }
+    });
+
+  // Compose the gestures
+  const composedGesture = Gesture.Race(swipeBackGesture, scrollGesture);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
@@ -1183,446 +1237,448 @@ export default function App() {
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.gradient}
         >
-          <ScrollView style={styles.scrollView}>
-            {/* Show Episode List when no episode is selected */}
-            {!selectedEpisode && (
-              <>
-                {/* Header */}
-                <View style={styles.header}>
-                  <View style={styles.logoContainer}>
-                    <HomeAnimatedWaveform 
-                      isPlaying={isPlaying} 
-                      size="large"
-                      style={{ width: 200, height: 80, marginBottom: 20 }}
-                    />
-                    <Text style={styles.appTitle}>Audio2</Text>
-                    <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+          <GestureDetector gesture={composedGesture}>
+            <ScrollView style={styles.scrollView}>
+              {/* Show Episode List when no episode is selected */}
+              {!selectedEpisode && (
+                <>
+                  {/* Header */}
+                  <View style={styles.header}>
+                    <View style={styles.logoContainer}>
+                      <HomeAnimatedWaveform 
+                        isPlaying={isPlaying} 
+                        size="large"
+                        style={{ width: 200, height: 80, marginBottom: 20 }}
+                      />
+                      <Text style={styles.appTitle}>Audio2</Text>
+                      <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+                    </View>
                   </View>
-                </View>
 
-                {/* Enhanced Input Section with Search Toggle */}
-                <View style={styles.inputSection}>
-                  {!searchMode ? (
-                    // Current URL input mode
-                    <>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Paste Apple Podcasts URL or RSS feed"
-                        placeholderTextColor="#888"
-                        value={urlInput}
-                        onChangeText={(text) => {
-                          console.log('📝 Input changed:', text);
-                          setUrlInput(text);
-                        }}
-                        onSubmitEditing={() => {
-                          console.log('⏎ Submit editing triggered');
-                          handleUrlSubmit();
-                        }}
-                      />
-                      <TouchableOpacity 
-                        style={styles.submitButton} 
-                        onPress={handleUrlSubmit}
-                      >
-                        <Text style={styles.submitButtonText}>Add</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    // Search mode
-                    <>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Search for any podcast..."
-                        placeholderTextColor="#888"
-                        value={searchTerm}
-                        onChangeText={setSearchTerm}
-                        onSubmitEditing={handlePodcastSearch}
-                        returnKeyType="search"
-                        autoCapitalize="words"
-                        autoCorrect={false}
-                      />
-                      <TouchableOpacity 
-                        style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
-                        onPress={handlePodcastSearch}
-                        disabled={isSearching || !searchTerm.trim()}
-                      >
-                        {isSearching ? (
-                          <ActivityIndicator size="small" color="#f4f4f4" />
-                        ) : (
-                          <Text style={styles.submitButtonText}>Search</Text>
-                        )}
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
+                  {/* Enhanced Input Section with Search Toggle */}
+                  <View style={styles.inputSection}>
+                    {!searchMode ? (
+                      // Current URL input mode
+                      <>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Paste Apple Podcasts URL or RSS feed"
+                          placeholderTextColor="#888"
+                          value={urlInput}
+                          onChangeText={(text) => {
+                            console.log('📝 Input changed:', text);
+                            setUrlInput(text);
+                          }}
+                          onSubmitEditing={() => {
+                            console.log('⏎ Submit editing triggered');
+                            handleUrlSubmit();
+                          }}
+                        />
+                        <TouchableOpacity 
+                          style={styles.submitButton} 
+                          onPress={handleUrlSubmit}
+                        >
+                          <Text style={styles.submitButtonText}>Add</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      // Search mode
+                      <>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Search for any podcast..."
+                          placeholderTextColor="#888"
+                          value={searchTerm}
+                          onChangeText={setSearchTerm}
+                          onSubmitEditing={handlePodcastSearch}
+                          returnKeyType="search"
+                          autoCapitalize="words"
+                          autoCorrect={false}
+                        />
+                        <TouchableOpacity 
+                          style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
+                          onPress={handlePodcastSearch}
+                          disabled={isSearching || !searchTerm.trim()}
+                        >
+                          {isSearching ? (
+                            <ActivityIndicator size="small" color="#f4f4f4" />
+                          ) : (
+                            <Text style={styles.submitButtonText}>Search</Text>
+                          )}
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
 
-                {/* Search/URL Mode Toggle */}
-                <View style={styles.modeToggle}>
-                  <TouchableOpacity 
-                    style={[styles.modeButton, searchMode && styles.modeButtonActive]}
-                    onPress={() => {
-                      setSearchMode(true);
-                      setUrlInput('');
-                    }}
-                  >
-                    <MaterialCommunityIcons 
-                      name="magnify" 
-                      size={16} 
-                      color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
-                    />
-                    <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
-                      Search
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
-                    onPress={() => {
-                      setSearchMode(false);
-                      setSearchTerm('');
-                      setSearchResults([]);
-                    }}
-                  >
-                    <MaterialCommunityIcons 
-                      name="link" 
-                      size={16} 
-                      color={!searchMode ? "#f4f4f4" : "#b4b4b4"} 
-                    />
-                    <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
-                      URL
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Recent Podcasts (show when in search mode and no results) */}
-                {searchMode && recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
-                  <View style={styles.recentSection}>
-                    <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                    <ScrollView 
-                      horizontal 
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.recentScrollView}
+                  {/* Search/URL Mode Toggle */}
+                  <View style={styles.modeToggle}>
+                    <TouchableOpacity 
+                      style={[styles.modeButton, searchMode && styles.modeButtonActive]}
+                      onPress={() => {
+                        setSearchMode(true);
+                        setUrlInput('');
+                      }}
                     >
-                      {recentPodcasts.map((podcast) => (
+                      <MaterialCommunityIcons 
+                        name="magnify" 
+                        size={16} 
+                        color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                      />
+                      <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
+                        Search
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
+                      onPress={() => {
+                        setSearchMode(false);
+                        setSearchTerm('');
+                        setSearchResults([]);
+                      }}
+                    >
+                      <MaterialCommunityIcons 
+                        name="link" 
+                        size={16} 
+                        color={!searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                      />
+                      <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
+                        URL
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Recent Podcasts (show when in search mode and no results) */}
+                  {searchMode && recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
+                    <View style={styles.recentSection}>
+                      <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.recentScrollView}
+                      >
+                        {recentPodcasts.map((podcast) => (
+                          <TouchableOpacity
+                            key={podcast.id}
+                            style={styles.recentPodcastItem}
+                            onPress={() => handleSelectPodcast(podcast)}
+                          >
+                            <Image 
+                              source={{ uri: podcast.artwork }} 
+                              style={styles.recentPodcastArtwork}
+                              defaultSource={require('./assets/logo1.png')}
+                            />
+                            <Text style={styles.recentPodcastName} numberOfLines={2}>
+                              {podcast.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Search Results */}
+                  {searchMode && searchResults.length > 0 && (
+                    <View style={styles.searchResultsSection}>
+                      <Text style={styles.sectionTitle}>
+                        Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
+                      </Text>
+                      {searchResults.map((podcast) => (
                         <TouchableOpacity
                           key={podcast.id}
-                          style={styles.recentPodcastItem}
+                          style={styles.searchResultItem}
                           onPress={() => handleSelectPodcast(podcast)}
                         >
                           <Image 
                             source={{ uri: podcast.artwork }} 
-                            style={styles.recentPodcastArtwork}
+                            style={styles.searchResultArtwork}
                             defaultSource={require('./assets/logo1.png')}
                           />
-                          <Text style={styles.recentPodcastName} numberOfLines={2}>
-                            {podcast.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Search Results */}
-                {searchMode && searchResults.length > 0 && (
-                  <View style={styles.searchResultsSection}>
-                    <Text style={styles.sectionTitle}>
-                      Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
-                    </Text>
-                    {searchResults.map((podcast) => (
-                      <TouchableOpacity
-                        key={podcast.id}
-                        style={styles.searchResultItem}
-                        onPress={() => handleSelectPodcast(podcast)}
-                      >
-                        <Image 
-                          source={{ uri: podcast.artwork }} 
-                          style={styles.searchResultArtwork}
-                          defaultSource={require('./assets/logo1.png')}
-                        />
-                        <View style={styles.searchResultInfo}>
-                          <Text style={styles.searchResultName} numberOfLines={2}>
-                            {podcast.name}
-                          </Text>
-                          <Text style={styles.searchResultArtist} numberOfLines={1}>
-                            {podcast.artist}
-                          </Text>
-                          {podcast.genres.length > 0 && (
-                            <Text style={styles.searchResultGenre} numberOfLines={1}>
-                              {podcast.genres[0]}
+                          <View style={styles.searchResultInfo}>
+                            <Text style={styles.searchResultName} numberOfLines={2}>
+                              {podcast.name}
                             </Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Popular Suggestions (show in search mode when no search term) */}
-                {searchMode && searchResults.length === 0 && !isSearching && searchTerm === '' && (
-                  <View style={styles.suggestionsSection}>
-                    <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                    <View style={styles.suggestionTags}>
-                      {popularBusinessPodcasts.map((suggestion) => (
-                        <TouchableOpacity
-                          key={suggestion}
-                          style={styles.suggestionTag}
-                          onPress={async () => {
-                            setSearchTerm(suggestion);
-                            setLoadingPodcastId(suggestion);
-                            await handlePodcastSearch(suggestion);
-                            setLoadingPodcastId(null);
-                          }}
-                          disabled={!!loadingPodcastId}
-                        >
-                          {loadingPodcastId === suggestion ? (
-                            <ActivityIndicator size="small" color="#f4f4f4" style={{ marginRight: 6 }} />
-                          ) : null}
-                          <Text style={styles.suggestionTagText}>{suggestion}</Text>
+                            <Text style={styles.searchResultArtist} numberOfLines={1}>
+                              {podcast.artist}
+                            </Text>
+                            {podcast.genres.length > 0 && (
+                              <Text style={styles.searchResultGenre} numberOfLines={1}>
+                                {podcast.genres[0]}
+                              </Text>
+                            )}
+                          </View>
                         </TouchableOpacity>
                       ))}
                     </View>
-                  </View>
-                )}
-
-                {/* Current Feed Info */}
-                <View style={styles.feedInfo}>
-                  <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
-                </View>
-
-                {/* Episodes List */}
-                {loading ? (
-                  <Text style={styles.loadingText}>Loading episodes...</Text>
-                ) : (
-                  episodes.map((episode) => (
-                    <TouchableOpacity
-                      key={episode.id}
-                      style={styles.episodeItem}
-                      onPress={() => playEpisode(episode)}
-                    >
-                      {episode.artwork && (
-                        <Image 
-                          source={{ uri: episode.artwork }} 
-                          style={styles.episodeArtwork}
-                          resizeMode="cover"
-                        />
-                      )}
-                      <View style={styles.episodeInfo}>
-                        <Text style={styles.episodeTitle} numberOfLines={2}>
-                          {episode.title}
-                        </Text>
-                        <Text style={styles.episodeDate}>
-                          {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </>
-            )}
-
-            {/* Show Audio Player when episode is selected */}
-            {selectedEpisode && (
-              <>
-                {/* Navigation Header */}
-                <View style={styles.navigationHeader}>
-                  <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                    <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
-                    <Text style={styles.backButtonText}>Episodes</Text>
-                  </TouchableOpacity>
-
-                  <AnimatedWaveform 
-                    isPlaying={isPlaying} 
-                    size="medium"
-                    style={{ width: 120, height: 48 }}
-                  />
-                </View>
-
-                {/* Episode Header */}
-                <View style={styles.episodeHeader}>
-                  {selectedEpisode.artwork && (
-                    <Image 
-                      source={{ uri: selectedEpisode.artwork }} 
-                      style={styles.episodeArtworkLarge}
-                      resizeMode="cover"
-                    />
                   )}
-                  <Text style={styles.episodeTitleLarge} numberOfLines={3}>
-                    {selectedEpisode.title}
-                  </Text>
-                </View>
 
-                {/* Loading State */}
-                {isLoading && (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#d97706" />
-                    <Text style={styles.loadingText}>Loading episode...</Text>
+                  {/* Popular Suggestions (show in search mode when no search term) */}
+                  {searchMode && searchResults.length === 0 && !isSearching && searchTerm === '' && (
+                    <View style={styles.suggestionsSection}>
+                      <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                      <View style={styles.suggestionTags}>
+                        {popularBusinessPodcasts.map((suggestion) => (
+                          <TouchableOpacity
+                            key={suggestion}
+                            style={styles.suggestionTag}
+                            onPress={async () => {
+                              setSearchTerm(suggestion);
+                              setLoadingPodcastId(suggestion);
+                              await handlePodcastSearch(suggestion);
+                              setLoadingPodcastId(null);
+                            }}
+                            disabled={!!loadingPodcastId}
+                          >
+                            {loadingPodcastId === suggestion ? (
+                              <ActivityIndicator size="small" color="#f4f4f4" style={{ marginRight: 6 }} />
+                            ) : null}
+                            <Text style={styles.suggestionTagText}>{suggestion}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Current Feed Info */}
+                  <View style={styles.feedInfo}>
+                    <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
                   </View>
-                )}
 
-                {/* Player Controls - Show when loaded */}
-                {!isLoading && (
-                  <>
-                    {/* MAIN TIMELINE - NEW AWESOME SLIDER */}
-                    <View style={styles.mainTimelineSection}>
-                      <View style={styles.sliderContainer}>
-                        <Slider
-                          style={styles.slider}
-                          progress={progressSharedValue}
-                          minimumValue={minValue}
-                          maximumValue={maxValue}
-                          thumbWidth={20}
-                          thumbHeight={20}
-                          trackHeight={8}
-                          theme={{
-                            disableMinTrackTintColor: true,
-                            maximumTrackTintColor: '#404040',
-                            minimumTrackTintColor: '#d97706',
-                            cacheTrackTintColor: '#404040',
-                            bubbleBackgroundColor: '#d97706',
-                          }}
-                          renderBubble={() => null}
-                          onSlidingStart={() => {
-                            console.log('Scrubbing started');
-                            setIsScrubbing(true);
-                          }}
-                          onValueChange={(value) => {
-                            if (isScrubbing) {
-                              progressSharedValue.value = value;
+                  {/* Episodes List */}
+                  {loading ? (
+                    <Text style={styles.loadingText}>Loading episodes...</Text>
+                  ) : (
+                    episodes.map((episode) => (
+                      <TouchableOpacity
+                        key={episode.id}
+                        style={styles.episodeItem}
+                        onPress={() => playEpisode(episode)}
+                      >
+                        {episode.artwork && (
+                          <Image 
+                            source={{ uri: episode.artwork }} 
+                            style={styles.episodeArtwork}
+                            resizeMode="cover"
+                          />
+                        )}
+                        <View style={styles.episodeInfo}>
+                          <Text style={styles.episodeTitle} numberOfLines={2}>
+                            {episode.title}
+                          </Text>
+                          <Text style={styles.episodeDate}>
+                            {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </>
+              )}
+
+              {/* Show Audio Player when episode is selected */}
+              {selectedEpisode && (
+                <>
+                  {/* Navigation Header */}
+                  <View style={styles.navigationHeader}>
+                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                      <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
+                      <Text style={styles.backButtonText}>Episodes</Text>
+                    </TouchableOpacity>
+
+                    <AnimatedWaveform 
+                      isPlaying={isPlaying} 
+                      size="medium"
+                      style={{ width: 120, height: 48 }}
+                    />
+                  </View>
+
+                  {/* Episode Header */}
+                  <View style={styles.episodeHeader}>
+                    {selectedEpisode.artwork && (
+                      <Image 
+                        source={{ uri: selectedEpisode.artwork }} 
+                        style={styles.episodeArtworkLarge}
+                        resizeMode="cover"
+                      />
+                    )}
+                    <Text style={styles.episodeTitleLarge} numberOfLines={3}>
+                      {selectedEpisode.title}
+                    </Text>
+                  </View>
+
+                  {/* Loading State */}
+                  {isLoading && (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color="#d97706" />
+                      <Text style={styles.loadingText}>Loading episode...</Text>
+                    </View>
+                  )}
+
+                  {/* Player Controls - Show when loaded */}
+                  {!isLoading && (
+                    <>
+                      {/* MAIN TIMELINE - NEW AWESOME SLIDER */}
+                      <View style={styles.mainTimelineSection}>
+                        <View style={styles.sliderContainer}>
+                          <Slider
+                            style={styles.slider}
+                            progress={progressSharedValue}
+                            minimumValue={minValue}
+                            maximumValue={maxValue}
+                            thumbWidth={20}
+                            thumbHeight={20}
+                            trackHeight={8}
+                            theme={{
+                              disableMinTrackTintColor: true,
+                              maximumTrackTintColor: '#404040',
+                              minimumTrackTintColor: '#d97706',
+                              cacheTrackTintColor: '#404040',
+                              bubbleBackgroundColor: '#d97706',
+                            }}
+                            renderBubble={() => null}
+                            onSlidingStart={() => {
+                              console.log('Scrubbing started');
+                              setIsScrubbing(true);
+                            }}
+                            onValueChange={(value) => {
+                              if (isScrubbing) {
+                                progressSharedValue.value = value;
+                                setPosition(value);
+                              }
+                            }}
+                            onSlidingComplete={(value) => {
+                              console.log('Scrubbing complete:', value);
                               setPosition(value);
-                            }
-                          }}
-                          onSlidingComplete={(value) => {
-                            console.log('Scrubbing complete:', value);
-                            setPosition(value);
-                            if (sound) {
-                              sound.setPositionAsync(Math.max(0, Math.min(value, duration)));
-                            }
-                            setTimeout(() => {
-                              setIsScrubbing(false);
-                            }, 100);
-                          }}
-                        />
-                        
-                        {/* Clip Markers Overlay - Fixed positioning */}
-                        <View style={styles.clipMarkersContainer}>
-                          {clipStart && duration && (
-                            <View 
-                              style={[
-                                styles.clipMarkerOverlay, 
-                                { 
-                                  left: `${(clipStart / duration) * 100}%`,
-                                  backgroundColor: '#ef4444',
-                                }
-                              ]} 
-                            />
-                          )}
-                          {clipEnd && duration && (
-                            <View 
-                              style={[
-                                styles.clipMarkerOverlay, 
-                                { 
-                                  left: `${(clipEnd / duration) * 100}%`,
-                                  backgroundColor: '#ef4444',
-                                }
-                              ]} 
-                            />
-                          )}
+                              if (sound) {
+                                sound.setPositionAsync(Math.max(0, Math.min(value, duration)));
+                              }
+                              setTimeout(() => {
+                                setIsScrubbing(false);
+                              }, 100);
+                            }}
+                          />
                           
-                          {/* Clip Range Highlight */}
-                          {clipStart && clipEnd && duration && (
-                            <View 
-                              style={[
-                                styles.clipRangeHighlight,
-                                {
-                                  left: `${(clipStart / duration) * 100}%`,
-                                  width: `${((clipEnd - clipStart) / duration) * 100}%`,
-                                }
-                              ]}
-                            />
-                          )}
+                          {/* Clip Markers Overlay - Fixed positioning */}
+                          <View style={styles.clipMarkersContainer}>
+                            {clipStart && duration && (
+                              <View 
+                                style={[
+                                  styles.clipMarkerOverlay, 
+                                  { 
+                                    left: `${(clipStart / duration) * 100}%`,
+                                    backgroundColor: '#ef4444',
+                                  }
+                                ]} 
+                              />
+                            )}
+                            {clipEnd && duration && (
+                              <View 
+                                style={[
+                                  styles.clipMarkerOverlay, 
+                                  { 
+                                    left: `${(clipEnd / duration) * 100}%`,
+                                    backgroundColor: '#ef4444',
+                                  }
+                                ]} 
+                              />
+                            )}
+                            
+                            {/* Clip Range Highlight */}
+                            {clipStart && clipEnd && duration && (
+                              <View 
+                                style={[
+                                  styles.clipRangeHighlight,
+                                  {
+                                    left: `${(clipStart / duration) * 100}%`,
+                                    width: `${((clipEnd - clipStart) / duration) * 100}%`,
+                                  }
+                                ]}
+                              />
+                            )}
+                          </View>
+                        </View>
+                        
+                        {/* Time Display Below Main Timeline */}
+                        <View style={styles.mainTimeContainer}>
+                          <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
+                          <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
                         </View>
                       </View>
-                      
-                      {/* Time Display Below Main Timeline */}
-                      <View style={styles.mainTimeContainer}>
-                        <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
-                        <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+
+                      {/* Fine Skip Controls */}
+                      <View style={styles.fineControls}>
+                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
+                          <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
+                          <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
+                        </TouchableOpacity>
                       </View>
-                    </View>
 
-                    {/* Fine Skip Controls */}
-                    <View style={styles.fineControls}>
-                      <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
-                        <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
-                        <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
-                      </TouchableOpacity>
-                    </View>
+                      {/* Main Skip Controls */}
+                      <View style={styles.skipControls}>
+                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
+                          <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
+                          <MaterialCommunityIcons 
+                            name={isPlaying ? "pause" : "play"} 
+                            size={40} 
+                            color="#f4f4f4" 
+                          />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
+                          <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
+                        </TouchableOpacity>
+                      </View>
 
-                    {/* Main Skip Controls */}
-                    <View style={styles.skipControls}>
-                      <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
-                        <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
-                        <MaterialCommunityIcons 
-                          name={isPlaying ? "pause" : "play"} 
-                          size={40} 
-                          color="#f4f4f4" 
-                        />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
-                        <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
-                      </TouchableOpacity>
-                    </View>
+                      {/* Clip Controls */}
+                      <View style={styles.clipControls}>
+                        <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
+                          <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
+                          <Text style={styles.clipButtonText}>
+                            {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        {clipStart && clipEnd && (
+                          <>
+                            <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
+                              <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
+                              <Text style={styles.clipButtonText}>Preview</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
+                              <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
+                              <Text style={styles.saveButtonText}>Create Video</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
 
-                    {/* Clip Controls */}
-                    <View style={styles.clipControls}>
-                      <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
-                        <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
-                        <Text style={styles.clipButtonText}>
-                          {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                      {/* Clip Info */}
+                      {(clipStart !== null && clipEnd !== null) && (
+                        <Text style={styles.clipInfo}>
+                          Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
                         </Text>
-                      </TouchableOpacity>
-                      
-                      {clipStart && clipEnd && (
-                        <>
-                          <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
-                            <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
-                            <Text style={styles.clipButtonText}>Preview</Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
-                            <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
-                            <Text style={styles.saveButtonText}>Create Video</Text>
-                          </TouchableOpacity>
-                        </>
                       )}
-                    </View>
 
-                    {/* Clip Info */}
-                    {(clipStart !== null && clipEnd !== null) && (
-                      <Text style={styles.clipInfo}>
-                        Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
-                      </Text>
-                    )}
-
-                    {/* Episode Notes */}
-                    <View style={styles.episodeNotes}>
-                      <Text style={styles.notesTitle}>Episode Notes</Text>
-                      <Text style={styles.notesText}>
-                        {selectedEpisode.description}
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </>
-            )}
-          </ScrollView>
+                      {/* Episode Notes */}
+                      <View style={styles.episodeNotes}>
+                        <Text style={styles.notesTitle}>Episode Notes</Text>
+                        <Text style={styles.notesText}>
+                          {selectedEpisode.description}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </GestureDetector>
         </LinearGradient>
         {showRecordingGuidance && <RecordingGuidanceModal />}
       </SafeAreaView>
