@@ -10,9 +10,9 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
-  Animated,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ScreenRecorder from 'expo-screen-recorder';
@@ -21,10 +21,9 @@ import { Slider } from 'react-native-awesome-slider';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ScrollView } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -38,15 +37,15 @@ const AnimatedWaveform = ({
   style 
 }) => {
   const animatedValues = useRef([
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
   ]).current;
 
   const sizeConfig = {
@@ -75,14 +74,14 @@ const AnimatedWaveform = ({
   useEffect(() => {
     if (isPlaying) {
       const animations = animatedValues.map((animValue, index) => {
-        return Animated.loop(
-          Animated.sequence([
-            Animated.timing(animValue, {
+        return RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(animValue, {
               toValue: 1,
               duration: 400 + (index * 50),
               useNativeDriver: false,
             }),
-            Animated.timing(animValue, {
+            RNAnimated.timing(animValue, {
               toValue: 0.3,
               duration: 400 + (index * 50),
               useNativeDriver: false,
@@ -102,14 +101,14 @@ const AnimatedWaveform = ({
       };
     } else {
       const restAnimations = animatedValues.map(animValue =>
-        Animated.timing(animValue, {
+        RNAnimated.timing(animValue, {
           toValue: 0.4,
           duration: 300,
           useNativeDriver: false,
         })
       );
 
-      Animated.parallel(restAnimations).start();
+      RNAnimated.parallel(restAnimations).start();
     }
   }, [isPlaying]);
 
@@ -117,7 +116,7 @@ const AnimatedWaveform = ({
     <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
       <View style={waveformStyles.waveform}>
         {animatedValues.map((animValue, index) => (
-          <Animated.View
+          <RNAnimated.View
             key={index}
             style={[
               waveformStyles.bar,
@@ -148,15 +147,15 @@ const HomeAnimatedWaveform = ({
   style 
 }) => {
   const animatedValues = useRef([
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
-    new Animated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
+    new RNAnimated.Value(0.4),
   ]).current;
 
   const sizeConfig = {
@@ -185,14 +184,14 @@ const HomeAnimatedWaveform = ({
   useEffect(() => {
     // Always animate on mount for home screen
     const animations = animatedValues.map((animValue, index) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.timing(animValue, {
+      return RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(animValue, {
             toValue: 1,
             duration: 800 + (index * 100), // Slower, more elegant animation
             useNativeDriver: false,
           }),
-          Animated.timing(animValue, {
+          RNAnimated.timing(animValue, {
             toValue: 0.3,
             duration: 800 + (index * 100),
             useNativeDriver: false,
@@ -219,7 +218,7 @@ const HomeAnimatedWaveform = ({
     <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
       <View style={waveformStyles.waveform}>
         {animatedValues.map((animValue, index) => (
-          <Animated.View
+          <RNAnimated.View
             key={index}
             style={[
               waveformStyles.bar,
@@ -319,6 +318,12 @@ export default function App() {
     'Business Wars'
   ];
 
+ // Place here:
+  const translateX = useSharedValue(0);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+  
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   const loadPodcastFeed = async (feedUrl) => {
     console.log('🎙️ loadPodcastFeed called with:', feedUrl);
@@ -1204,21 +1209,31 @@ export default function App() {
       // (debug log removed)
     })
     .onUpdate((event) => {
-      // (debug log removed)
+      if (event.translationX > 0) {
+        translateX.value = event.translationX;
+      }
     })
     .onEnd((event) => {
       const canGoBack =
         selectedEpisode ||
         showRecordingView ||
         (searchMode && (searchResults.length > 0 || searchTerm)) ||
-        (!searchMode && !selectedEpisode); // allow back on podcast results page
-      
-      // (debug log removed)
-      
-      // More forgiving conditions
-      if (canGoBack && event.translationX > 80) {
-        // (debug log removed)
-        runOnJS(handleSwipeBack)();
+        (!searchMode && !selectedEpisode);
+
+      const threshold = 80;
+      if (canGoBack && event.translationX > threshold) {
+        // Animate off-screen, then navigate back
+        translateX.value = withTiming(screenWidth, { duration: 120 }, () => {
+          runOnJS(handleSwipeBack)();
+          translateX.value = 0;
+        });
+      } else {
+        // Animate back to original position
+        translateX.value = withSpring(0, {
+          damping: 12,
+          stiffness: 300,
+          mass: 0.7,
+        });
       }
     });
 
@@ -1238,252 +1253,253 @@ export default function App() {
           style={styles.gradient}
         >
           <GestureDetector gesture={composedGesture}>
-            <ScrollView style={styles.scrollView}>
-              {/* Show Episode List when no episode is selected */}
-              {!selectedEpisode && (
-                <>
-                  {/* Header */}
-                  <View style={styles.header}>
-                    <View style={styles.logoContainer}>
-                      <HomeAnimatedWaveform 
-                        isPlaying={isPlaying} 
-                        size="large"
-                        style={{ width: 200, height: 80, marginBottom: 20 }}
-                      />
-                      <Text style={styles.appTitle}>Audio2</Text>
-                      <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+            <Animated.View style={[animatedStyle, { flex: 1 }]}>
+              <ScrollView style={styles.scrollView}>
+                {/* Show Episode List when no episode is selected */}
+                {!selectedEpisode && (
+                  <>
+                    {/* Header */}
+                    <View style={styles.header}>
+                      <View style={styles.logoContainer}>
+                        <HomeAnimatedWaveform 
+                          isPlaying={isPlaying} 
+                          size="large"
+                          style={{ width: 200, height: 80, marginBottom: 20 }}
+                        />
+                        <Text style={styles.appTitle}>Audio2</Text>
+                        <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+                      </View>
                     </View>
-                  </View>
 
-                  {/* Enhanced Input Section with Search Toggle */}
-                  <View style={styles.inputSection}>
-                    {!searchMode ? (
-                      // Current URL input mode
-                      <>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Paste Apple Podcasts URL or RSS feed"
-                          placeholderTextColor="#888"
-                          value={urlInput}
-                          onChangeText={(text) => {
-                            console.log('📝 Input changed:', text);
-                            setUrlInput(text);
-                          }}
-                          onSubmitEditing={() => {
-                            console.log('⏎ Submit editing triggered');
-                            handleUrlSubmit();
-                          }}
-                        />
-                        <TouchableOpacity 
-                          style={styles.submitButton} 
-                          onPress={handleUrlSubmit}
-                        >
-                          <Text style={styles.submitButtonText}>Add</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      // Search mode
-                      <>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Search for any podcast..."
-                          placeholderTextColor="#888"
-                          value={searchTerm}
-                          onChangeText={setSearchTerm}
-                          onSubmitEditing={handlePodcastSearch}
-                          returnKeyType="search"
-                          autoCapitalize="words"
-                          autoCorrect={false}
-                        />
-                        <TouchableOpacity 
-                          style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
-                          onPress={handlePodcastSearch}
-                          disabled={isSearching || !searchTerm.trim()}
-                        >
-                          {isSearching ? (
-                            <ActivityIndicator size="small" color="#f4f4f4" />
-                          ) : (
-                            <Text style={styles.submitButtonText}>Search</Text>
-                          )}
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
+                    {/* Enhanced Input Section with Search Toggle */}
+                    <View style={styles.inputSection}>
+                      {!searchMode ? (
+                        // Current URL input mode
+                        <>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Paste Apple Podcasts URL or RSS feed"
+                            placeholderTextColor="#888"
+                            value={urlInput}
+                            onChangeText={(text) => {
+                              console.log('📝 Input changed:', text);
+                              setUrlInput(text);
+                            }}
+                            onSubmitEditing={() => {
+                              console.log('⏎ Submit editing triggered');
+                              handleUrlSubmit();
+                            }}
+                          />
+                          <TouchableOpacity 
+                            style={styles.submitButton} 
+                            onPress={handleUrlSubmit}
+                          >
+                            <Text style={styles.submitButtonText}>Add</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        // Search mode
+                        <>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Search for any podcast..."
+                            placeholderTextColor="#888"
+                            value={searchTerm}
+                            onChangeText={setSearchTerm}
+                            onSubmitEditing={handlePodcastSearch}
+                            returnKeyType="search"
+                            autoCapitalize="words"
+                            autoCorrect={false}
+                          />
+                          <TouchableOpacity 
+                            style={[styles.submitButton, isSearching && styles.submitButtonDisabled]}
+                            onPress={handlePodcastSearch}
+                            disabled={isSearching || !searchTerm.trim()}
+                          >
+                            {isSearching ? (
+                              <ActivityIndicator size="small" color="#f4f4f4" />
+                            ) : (
+                              <Text style={styles.submitButtonText}>Search</Text>
+                            )}
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
 
-                  {/* Search/URL Mode Toggle */}
-                  <View style={styles.modeToggle}>
-                    <TouchableOpacity 
-                      style={[styles.modeButton, searchMode && styles.modeButtonActive]}
-                      onPress={() => {
-                        setSearchMode(true);
-                        setUrlInput('');
-                      }}
-                    >
-                      <MaterialCommunityIcons 
-                        name="magnify" 
-                        size={16} 
-                        color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
-                      />
-                      <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
-                        Search
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
-                      onPress={() => {
-                        setSearchMode(false);
-                        setSearchTerm('');
-                        setSearchResults([]);
-                      }}
-                    >
-                      <MaterialCommunityIcons 
-                        name="link" 
-                        size={16} 
-                        color={!searchMode ? "#f4f4f4" : "#b4b4b4"} 
-                      />
-                      <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
-                        URL
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Recent Podcasts (show when in search mode and no results) */}
-                  {searchMode && recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
-                    <View style={styles.recentSection}>
-                      <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                      <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.recentScrollView}
+                    {/* Search/URL Mode Toggle */}
+                    <View style={styles.modeToggle}>
+                      <TouchableOpacity 
+                        style={[styles.modeButton, searchMode && styles.modeButtonActive]}
+                        onPress={() => {
+                          setSearchMode(true);
+                          setUrlInput('');
+                        }}
                       >
-                        {recentPodcasts.map((podcast) => (
+                        <MaterialCommunityIcons 
+                          name="magnify" 
+                          size={16} 
+                          color={searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                        />
+                        <Text style={[styles.modeButtonText, searchMode && styles.modeButtonTextActive]}>
+                          Search
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.modeButton, !searchMode && styles.modeButtonActive]}
+                        onPress={() => {
+                          setSearchMode(false);
+                          setSearchTerm('');
+                          setSearchResults([]);
+                        }}
+                      >
+                        <MaterialCommunityIcons 
+                          name="link" 
+                          size={16} 
+                          color={!searchMode ? "#f4f4f4" : "#b4b4b4"} 
+                        />
+                        <Text style={[styles.modeButtonText, !searchMode && styles.modeButtonTextActive]}>
+                          URL
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Recent Podcasts (show when in search mode and no results) */}
+                    {searchMode && recentPodcasts.length > 0 && searchResults.length === 0 && !isSearching && (
+                      <View style={styles.recentSection}>
+                        <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                        <ScrollView 
+                          horizontal 
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.recentScrollView}
+                        >
+                          {recentPodcasts.map((podcast) => (
+                            <TouchableOpacity
+                              key={podcast.id}
+                              style={styles.recentPodcastItem}
+                              onPress={() => handleSelectPodcast(podcast)}
+                            >
+                              <Image 
+                                source={{ uri: podcast.artwork }} 
+                                style={styles.recentPodcastArtwork}
+                                defaultSource={require('./assets/logo1.png')}
+                              />
+                              <Text style={styles.recentPodcastName} numberOfLines={2}>
+                                {podcast.name}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+
+                    {/* Search Results */}
+                    {searchMode && searchResults.length > 0 && (
+                      <View style={styles.searchResultsSection}>
+                        <Text style={styles.sectionTitle}>
+                          Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
+                        </Text>
+                        {searchResults.map((podcast) => (
                           <TouchableOpacity
                             key={podcast.id}
-                            style={styles.recentPodcastItem}
+                            style={styles.searchResultItem}
                             onPress={() => handleSelectPodcast(podcast)}
                           >
                             <Image 
                               source={{ uri: podcast.artwork }} 
-                              style={styles.recentPodcastArtwork}
+                              style={styles.searchResultArtwork}
                               defaultSource={require('./assets/logo1.png')}
                             />
-                            <Text style={styles.recentPodcastName} numberOfLines={2}>
-                              {podcast.name}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Search Results */}
-                  {searchMode && searchResults.length > 0 && (
-                    <View style={styles.searchResultsSection}>
-                      <Text style={styles.sectionTitle}>
-                        Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
-                      </Text>
-                      {searchResults.map((podcast) => (
-                        <TouchableOpacity
-                          key={podcast.id}
-                          style={styles.searchResultItem}
-                          onPress={() => handleSelectPodcast(podcast)}
-                        >
-                          <Image 
-                            source={{ uri: podcast.artwork }} 
-                            style={styles.searchResultArtwork}
-                            defaultSource={require('./assets/logo1.png')}
-                          />
-                          <View style={styles.searchResultInfo}>
-                            <Text style={styles.searchResultName} numberOfLines={2}>
-                              {podcast.name}
-                            </Text>
-                            <Text style={styles.searchResultArtist} numberOfLines={1}>
-                              {podcast.artist}
-                            </Text>
-                            {podcast.genres.length > 0 && (
-                              <Text style={styles.searchResultGenre} numberOfLines={1}>
-                                {podcast.genres[0]}
+                            <View style={styles.searchResultInfo}>
+                              <Text style={styles.searchResultName} numberOfLines={2}>
+                                {podcast.name}
                               </Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-
-                  {/* Popular Suggestions (show in search mode when no search term) */}
-                  {searchMode && searchResults.length === 0 && !isSearching && searchTerm === '' && (
-                    <View style={styles.suggestionsSection}>
-                      <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                      <View style={styles.suggestionTags}>
-                        {popularBusinessPodcasts.map((suggestion) => (
-                          <TouchableOpacity
-                            key={suggestion}
-                            style={styles.suggestionTag}
-                            onPress={async () => {
-                              setSearchTerm(suggestion);
-                              setLoadingPodcastId(suggestion);
-                              await handlePodcastSearch(suggestion);
-                              setLoadingPodcastId(null);
-                            }}
-                            disabled={!!loadingPodcastId}
-                          >
-                            {loadingPodcastId === suggestion ? (
-                              <ActivityIndicator size="small" color="#f4f4f4" style={{ marginRight: 6 }} />
-                            ) : null}
-                            <Text style={styles.suggestionTagText}>{suggestion}</Text>
+                              <Text style={styles.searchResultArtist} numberOfLines={1}>
+                                {podcast.artist}
+                              </Text>
+                              {podcast.genres.length > 0 && (
+                                <Text style={styles.searchResultGenre} numberOfLines={1}>
+                                  {podcast.genres[0]}
+                                </Text>
+                              )}
+                            </View>
                           </TouchableOpacity>
                         ))}
                       </View>
-                    </View>
-                  )}
+                    )}
 
-                  {/* Current Feed Info */}
-                  <View style={styles.feedInfo}>
-                    <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
-                  </View>
-
-                  {/* Episodes List */}
-                  {loading ? (
-                    <Text style={styles.loadingText}>Loading episodes...</Text>
-                  ) : (
-                    episodes.map((episode) => (
-                      <TouchableOpacity
-                        key={episode.id}
-                        style={styles.episodeItem}
-                        onPress={() => playEpisode(episode)}
-                      >
-                        {episode.artwork && (
-                          <Image 
-                            source={{ uri: episode.artwork }} 
-                            style={styles.episodeArtwork}
-                            resizeMode="cover"
-                          />
-                        )}
-                        <View style={styles.episodeInfo}>
-                          <Text style={styles.episodeTitle} numberOfLines={2}>
-                            {episode.title}
-                          </Text>
-                          <Text style={styles.episodeDate}>
-                            {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
-                          </Text>
+                    {/* Popular Suggestions (show in search mode when no search term) */}
+                    {searchMode && searchResults.length === 0 && !isSearching && searchTerm === '' && (
+                      <View style={styles.suggestionsSection}>
+                        <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                        <View style={styles.suggestionTags}>
+                          {popularBusinessPodcasts.map((suggestion) => (
+                            <TouchableOpacity
+                              key={suggestion}
+                              style={styles.suggestionTag}
+                              onPress={async () => {
+                                setSearchTerm(suggestion);
+                                setLoadingPodcastId(suggestion);
+                                await handlePodcastSearch(suggestion);
+                                setLoadingPodcastId(null);
+                              }}
+                              disabled={!!loadingPodcastId}
+                            >
+                              {loadingPodcastId === suggestion ? (
+                                <ActivityIndicator size="small" color="#f4f4f4" style={{ marginRight: 6 }} />
+                              ) : null}
+                              <Text style={styles.suggestionTagText}>{suggestion}</Text>
+                            </TouchableOpacity>
+                          ))}
                         </View>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </>
-              )}
+                      </View>
+                    )}
 
-              {/* Show Audio Player when episode is selected */}
-              {selectedEpisode && (
-                <>
-                  {/* Navigation Header */}
-                  <View style={styles.navigationHeader}>
-                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                      <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
-                      <Text style={styles.backButtonText}>Episodes</Text>
-                    </TouchableOpacity>
+                    {/* Current Feed Info */}
+                    <View style={styles.feedInfo}>
+                      <Text style={styles.feedTitle}>{podcastTitle || 'Podcast'}</Text>
+                    </View>
+
+                    {/* Episodes List */}
+                    {loading ? (
+                      <Text style={styles.loadingText}>Loading episodes...</Text>
+                    ) : (
+                      episodes.map((episode) => (
+                        <TouchableOpacity
+                          key={episode.id}
+                          style={styles.episodeItem}
+                          onPress={() => playEpisode(episode)}
+                        >
+                          {episode.artwork && (
+                            <Image 
+                              source={{ uri: episode.artwork }} 
+                              style={styles.episodeArtwork}
+                              resizeMode="cover"
+                            />
+                          )}
+                          <View style={styles.episodeInfo}>
+                            <Text style={styles.episodeTitle} numberOfLines={2}>
+                              {episode.title}
+                            </Text>
+                            <Text style={styles.episodeDate}>
+                              {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </>
+                )}
+
+                {/* Show Audio Player when episode is selected */}
+                {selectedEpisode && (
+                  <>
+                    {/* Navigation Header */}
+                    <View style={styles.navigationHeader}>
+                      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                        <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
+                        <Text style={styles.backButtonText}>Episodes</Text>
+                      </TouchableOpacity>
 
                     <AnimatedWaveform 
                       isPlaying={isPlaying} 
@@ -1678,12 +1694,13 @@ export default function App() {
                 </>
               )}
             </ScrollView>
-          </GestureDetector>
-        </LinearGradient>
-        {showRecordingGuidance && <RecordingGuidanceModal />}
-      </SafeAreaView>
-    </GestureHandlerRootView>
-  );
+          </Animated.View>
+        </GestureDetector>
+      </LinearGradient>
+      {showRecordingGuidance && <RecordingGuidanceModal />}
+    </SafeAreaView>
+  </GestureHandlerRootView>
+);
 }
 
 const styles = StyleSheet.create({
