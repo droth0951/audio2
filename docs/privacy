@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio2 Privacy Policy</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #1c1c1c; color: #f4f4f4; }
+        h1 { color: #d97706; }
+        h2 { color: #f4f4f4; border-bottom: 1px solid #404040; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Audio2 Privacy Policy</h1>
+    <p>Last updated: January 2025</p>
+    
+    <h2>Information We Collect</h2>
+    <p>Audio2 does not collect, store, or transmit any personal information. The app operates entirely on your device.</p>
+    
+    <h2>Data Usage</h2>
+    <ul>
+        <li>Podcast content is streamed directly from public RSS feeds</li>
+        <li>Generated videos are saved locally to your iOS Photos app</li>
+        <li>No user accounts, analytics, or tracking</li>
+        <li>No data is sent to our servers</li>
+    </ul>
+    
+    <h2>Third-Party Content</h2>
+    <p>Audio2 accesses publicly available podcast RSS feeds. All podcast content belongs to the respective creators.</p>
+    
+    <h2>Contact</h2>
+    <p>Email: [your-email]@gmail.com</p>
+    
+    <h2>Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Changes will be posted on this page.</p>
+</body>
+</html>
