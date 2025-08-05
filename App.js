@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Pressable,
+  FlatList,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
@@ -29,6 +30,66 @@ import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// Cache for RSS feeds to avoid re-fetching
+const RSS_CACHE_KEY = 'rss_cache';
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+// Performance-optimized RSS parser
+const fastParseRSSFeed = (xmlText, limit = 5) => {
+  try {
+    const episodes = [];
+    
+    // Use more efficient regex patterns
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    let count = 0;
+    
+    while ((match = itemRegex.exec(xmlText)) && count < limit) {
+      const item = match[1];
+      
+      // Fast title extraction
+      const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([^<>\]]+)(?:\]\]>)?<\/title>/);
+      const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
+      
+      // Fast audio URL extraction
+      const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/);
+      const audioUrl = audioMatch ? audioMatch[1] : null;
+      
+      // Fast description extraction
+      let description = 'No description available.';
+      const descriptionMatch = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
+      if (descriptionMatch && descriptionMatch[1]) {
+        description = descriptionMatch[1]
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      if (audioUrl) {
+        episodes.push({
+          id: count,
+          title,
+          audioUrl,
+          pubDate: item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] || '',
+          artwork: null, // Skip artwork for speed
+          description: description || 'No description available.',
+        });
+        count++;
+      }
+    }
+    
+    return episodes;
+  } catch (error) {
+    console.error('Fast RSS parse error:', error);
+    return [];
+  }
+};
 
 const AnimatedWaveform = ({ 
   isPlaying = false,
@@ -328,17 +389,62 @@ export default function App() {
   
   // Add this new state after episodes state
   const [allEpisodes, setAllEpisodes] = useState([]);
+  const [showLoadMore, setShowLoadMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
+  // Cache management functions
+  const getCachedFeed = async (feedUrl) => {
+    try {
+      const cacheKey = `${RSS_CACHE_KEY}_${feedUrl}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          console.log('📦 Using cached feed');
+          return data;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Cache read error:', error);
+      return null;
+    }
+  };
+
+  const setCachedFeed = async (feedUrl, episodes) => {
+    try {
+      const cacheKey = `${RSS_CACHE_KEY}_${feedUrl}`;
+      const cacheData = {
+        data: episodes,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    } catch (error) {
+      console.error('Cache write error:', error);
+    }
+  };
+
   const loadPodcastFeed = async (feedUrl) => {
     console.log('🎙️ loadPodcastFeed called with:', feedUrl);
     setLoading(true);
     
     try {
+      // Check cache first
+      const cachedEpisodes = await getCachedFeed(feedUrl);
+      if (cachedEpisodes) {
+        setAllEpisodes(cachedEpisodes);
+        setEpisodes(cachedEpisodes.slice(0, 5)); // Show only 5 for faster rendering
+        setShowLoadMore(cachedEpisodes.length > 5);
+        setCurrentRssFeed(feedUrl);
+        console.log('✅ Feed loaded from cache!');
+        return;
+      }
+
       console.log('📡 Starting fetch...');
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduced timeout
       
       const response = await fetch(feedUrl, {
         signal: controller.signal,
@@ -361,19 +467,22 @@ export default function App() {
       console.log('📄 Getting text...');
       const xmlText = await response.text();
       console.log('📄 XML length:', xmlText.length);
-      console.log('📄 First 200 chars:', xmlText.substring(0, 200));
       
-      console.log('🔧 Calling parseRSSFeed...');
-      // Parse only first 10 episodes for faster loading
-      const episodes = parseRSSFeed(xmlText, 10);
+      console.log('🔧 Calling fastParseRSSFeed...');
+      // Use fast parser with only 5 episodes initially
+      const episodes = fastParseRSSFeed(xmlText, 5);
       console.log('🎧 Parsed episodes:', episodes.length);
       
       if (episodes.length === 0) {
         throw new Error('No episodes found in feed');
       }
       
-      setAllEpisodes(episodes); // Store the limited episodes
-      setEpisodes(episodes.slice(0, 7)); // Show only 7 by default
+      // Cache the results
+      await setCachedFeed(feedUrl, episodes);
+      
+      setAllEpisodes(episodes);
+      setEpisodes(episodes.slice(0, 5)); // Show only 5 by default
+      setShowLoadMore(episodes.length > 5); // Show load more if there are more episodes
       setCurrentRssFeed(feedUrl);
       console.log('✅ Feed loaded successfully!');
       
@@ -400,6 +509,32 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Load more episodes function
+  const loadMoreEpisodes = useCallback(async () => {
+    if (isLoadingMore || !currentRssFeed) return;
+    
+    setIsLoadingMore(true);
+    try {
+      // Parse more episodes from the same feed
+      const response = await fetch(currentRssFeed);
+      const xmlText = await response.text();
+      const allEpisodesData = fastParseRSSFeed(xmlText, 20); // Load up to 20
+      
+      setAllEpisodes(allEpisodesData);
+      setEpisodes(allEpisodesData);
+      setShowLoadMore(false);
+      
+      // Update cache with full data
+      await setCachedFeed(currentRssFeed, allEpisodesData);
+      
+    } catch (error) {
+      console.error('Load more error:', error);
+      Alert.alert('Error', 'Failed to load more episodes');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, currentRssFeed]);
 
   // Apple Podcasts URL to RSS converter
   const getApplePodcastsRssUrl = async (appleUrl) => {
@@ -565,6 +700,7 @@ export default function App() {
         await sound.unloadAsync();
       }
       
+      // Pre-configure audio mode for faster setup
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: true,
@@ -573,15 +709,24 @@ export default function App() {
         playThroughEarpieceAndroid: false,
       });
       
+      // Use streaming for faster loading
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: episode.audioUrl },
-        { shouldPlay: false }
+        { 
+          shouldPlay: false,
+          progressUpdateIntervalMillis: 1000, // Reduce update frequency
+          positionMillis: 0,
+          shouldCorrectPitch: false, // Disable for speed
+          rate: 1.0,
+          shouldRevert: false,
+        }
       );
       
       setSound(newSound);
       setSelectedEpisode(episode);
       setIsLoading(false);
       
+      // Optimized status update handler
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && !isScrubbing) {
           setPosition(status.positionMillis || 0);
@@ -1321,115 +1466,114 @@ export default function App() {
                   <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
                 </View>
               )}
-              <ScrollView style={styles.scrollView}>
-                {/* Show Episode List when no episode is selected */}
-                {!selectedEpisode && (
-                  <>
-                    {/* Header */}
-                    <View style={styles.header}>
-                      <View style={styles.logoContainer}>
-                        <HomeAnimatedWaveform 
-                          isPlaying={isPlaying} 
-                          size="large"
-                          style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
-                        />
-                        <Text
-                          style={{
-                            fontFamily: 'Lobster',
-                            fontSize: 48,
-                            color: '#f4f4f4',
-                            marginTop: -20, // Overlap: more negative margin
-                            textAlign: 'center',
-                            letterSpacing: 1,
-                          }}
-                        >
-                          Audio2
-                        </Text>
-                        <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+              {/* Show Episode List when no episode is selected */}
+              {!selectedEpisode && (
+                <>
+                  {/* Header */}
+                  <View style={styles.header}>
+                    <View style={styles.logoContainer}>
+                      <HomeAnimatedWaveform 
+                        isPlaying={isPlaying} 
+                        size="large"
+                        style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
+                      />
+                      <Text
+                        style={{
+                          fontFamily: 'Lobster',
+                          fontSize: 48,
+                          color: '#f4f4f4',
+                          marginTop: -20, // Overlap: more negative margin
+                          textAlign: 'center',
+                          letterSpacing: 1,
+                        }}
+                      >
+                        Audio2
+                      </Text>
+                      <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+                    </View>
+                  </View>
+
+                  {/* Enhanced Input Section with Search Toggle */}
+                  <View style={styles.inputSection}>
+                    <View style={styles.inputContainer}>
+                      <TextInput
+                        ref={textInputRef}
+                        style={styles.input}
+                        placeholder="Search podcasts or paste RSS feed URL"
+                        placeholderTextColor="#888"
+                        value={urlInput}
+                        blurOnSubmit={false}
+                        onChangeText={(text) => {
+                          console.log('📝 Input changed:', text);
+                          setUrlInput(text);
+                        }}
+                        onSubmitEditing={() => {
+                          console.log('⏎ Submit editing triggered');
+                          handlePodcastSearch(urlInput);
+                        }}
+                      />
+                    </View>
+                    <View style={styles.buttonContainer}>
+                      <Pressable 
+                        style={styles.submitButton} 
+                        onPress={() => {
+                          const query = urlInput.trim();
+                          if (query) {
+                            handlePodcastSearch(query);
+                          }
+                        }}
+                      >
+                        <Text style={styles.submitButtonText}>Search</Text>
+                      </Pressable>
+                      <Text style={styles.searchHintText}>may need to 2x tap</Text>
+                    </View>
+                  </View>
+
+                  {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
+                  {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
+                    <View style={styles.recentSection}>
+                      <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.recentScrollView}
+                      >
+                        {recentPodcasts.map((podcast) => (
+                          <TouchableOpacity
+                            key={podcast.id}
+                            style={styles.recentPodcastItem}
+                            onPress={() => handleSelectPodcast(podcast)}
+                          >
+                            <Image 
+                              source={{ uri: podcast.artwork }} 
+                              style={styles.recentPodcastArtwork}
+                              defaultSource={require('./assets/logo1.png')}
+                            />
+                            <Text style={styles.recentPodcastName} numberOfLines={2}>
+                              {podcast.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Popular Business Podcasts (show when no episodes and no search results) */}
+                  {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
+                    <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                      <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                      <View style={styles.pillRow}>
+                        {popularBusinessPodcasts.slice(0, 15).map((title, idx) => (
+                          <TouchableOpacity key={title + idx} onPress={async () => {
+                            setSearchTerm(title);
+                            await handlePodcastSearch(title);
+                          }} style={styles.popularPodcastPill}>
+                            <Text style={styles.popularPodcastPillText}>{title}</Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
-
-                    {/* Enhanced Input Section with Search Toggle */}
-                    <View style={styles.inputSection}>
-                      <View style={styles.inputContainer}>
-                        <TextInput
-                          ref={textInputRef}
-                          style={styles.input}
-                          placeholder="Search podcasts or paste RSS feed URL"
-                          placeholderTextColor="#888"
-                          value={urlInput}
-                          blurOnSubmit={false}
-                          onChangeText={(text) => {
-                            console.log('📝 Input changed:', text);
-                            setUrlInput(text);
-                          }}
-                          onSubmitEditing={() => {
-                            console.log('⏎ Submit editing triggered');
-                            handlePodcastSearch(urlInput);
-                          }}
-                        />
-                      </View>
-                      <View style={styles.buttonContainer}>
-                        <Pressable 
-                          style={styles.submitButton} 
-                          onPress={() => {
-                            const query = urlInput.trim();
-                            if (query) {
-                              handlePodcastSearch(query);
-                            }
-                          }}
-                        >
-                          <Text style={styles.submitButtonText}>Search</Text>
-                        </Pressable>
-                        <Text style={styles.searchHintText}>may need to 2x tap</Text>
-                      </View>
-                    </View>
-
-                    {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
-                    {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
-                      <View style={styles.recentSection}>
-                        <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                        <ScrollView 
-                          horizontal 
-                          showsHorizontalScrollIndicator={false}
-                          style={styles.recentScrollView}
-                        >
-                          {recentPodcasts.map((podcast) => (
-                            <TouchableOpacity
-                              key={podcast.id}
-                              style={styles.recentPodcastItem}
-                              onPress={() => handleSelectPodcast(podcast)}
-                            >
-                              <Image 
-                                source={{ uri: podcast.artwork }} 
-                                style={styles.recentPodcastArtwork}
-                                defaultSource={require('./assets/logo1.png')}
-                              />
-                              <Text style={styles.recentPodcastName} numberOfLines={2}>
-                                {podcast.name}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-
-                    {/* Popular Business Podcasts (show when no episodes and no search results) */}
-                    {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
-                      <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
-                        <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                        <View style={styles.pillRow}>
-                          {popularBusinessPodcasts.slice(0, 15).map((title, idx) => (
-                            <TouchableOpacity key={title + idx} onPress={async () => {
-                              setSearchTerm(title);
-                              await handlePodcastSearch(title);
-                            }} style={styles.popularPodcastPill}>
-                              <Text style={styles.popularPodcastPillText}>{title}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    )}
+                  )}
 
                    {searchResults.length > 0 && (
   <View style={styles.searchResultsSection}>
@@ -1465,21 +1609,23 @@ export default function App() {
   </View>
 )}
 
-                    {/* Current Feed Info */}
-                    {podcastTitle ? (
-                      <View style={styles.feedInfo}>
-                        <Text style={styles.feedTitle}>{podcastTitle}</Text>
-                      </View>
-                    ) : null}
+                  {/* Current Feed Info */}
+                  {podcastTitle ? (
+                    <View style={styles.feedInfo}>
+                      <Text style={styles.feedTitle}>{podcastTitle}</Text>
+                    </View>
+                  ) : null}
 
-                    {/* Episodes List */}
-                    {loading ? (
-                      <Text style={styles.loadingText}>Loading episodes...</Text>
-                    ) : (
-                      <>
-                        {episodes.map((episode) => (
+                  {/* Episodes List */}
+                  {loading ? (
+                    <Text style={styles.loadingText}>Loading episodes...</Text>
+                  ) : (
+                    <>
+                      <FlatList
+                        data={episodes}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={({ item: episode }) => (
                           <TouchableOpacity
-                            key={episode.id}
                             style={styles.episodeItem}
                             onPress={() => playEpisode(episode)}
                           >
@@ -1499,20 +1645,35 @@ export default function App() {
                               </Text>
                             </View>
                           </TouchableOpacity>
-                        ))}
-                        {/* Show All Episodes button */}
-                        {allEpisodes.length > episodes.length && (
-                          <TouchableOpacity
-                            style={styles.submitButton}
-                            onPress={loadCompleteFeed}
-                          >
-                            <Text style={styles.submitButtonText}>Show All Episodes</Text>
-                          </TouchableOpacity>
                         )}
-                      </>
-                    )}
-                  </>
-                )}
+                        showsVerticalScrollIndicator={false}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={5}
+                        windowSize={10}
+                        initialNumToRender={5}
+                        ListFooterComponent={() => (
+                          showLoadMore ? (
+                            <TouchableOpacity
+                              style={styles.submitButton}
+                              onPress={loadMoreEpisodes}
+                              disabled={isLoadingMore}
+                            >
+                              {isLoadingMore ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+                                  <Text style={styles.submitButtonText}>Loading...</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.submitButtonText}>Load More Episodes</Text>
+                              )}
+                            </TouchableOpacity>
+                          ) : null
+                        )}
+                      />
+                    </>
+                  )}
+                </>
+              )}
 
                 {/* Show Audio Player when episode is selected */}
                 {selectedEpisode && (
@@ -1716,7 +1877,6 @@ export default function App() {
                   )}
                 </>
               )}
-            </ScrollView>
           </Animated.View>
         </GestureDetector>
       </LinearGradient>
