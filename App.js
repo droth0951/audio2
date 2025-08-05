@@ -58,6 +58,7 @@ const fastParseRSSFeed = (xmlText, limit = 5) => {
       // Fast description extraction
       let description = 'No description available.';
       const descriptionMatch = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
+      console.log('🔍 Description match for episode', count + 1, ':', descriptionMatch ? 'Found' : 'Not found');
       if (descriptionMatch && descriptionMatch[1]) {
         description = descriptionMatch[1]
           .replace(/<[^>]*>/g, '') // Remove HTML tags
@@ -69,6 +70,18 @@ const fastParseRSSFeed = (xmlText, limit = 5) => {
           .replace(/&#39;/g, "'")
           .replace(/\s+/g, ' ')
           .trim();
+        console.log('📝 Parsed description length:', description.length);
+      }
+      
+      // Fast artwork extraction
+      let artwork = null;
+      const artworkMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                          item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
+      if (artworkMatch) {
+        artwork = artworkMatch[1];
+        console.log('🖼️ Artwork found for episode', count + 1, ':', artwork);
+      } else {
+        console.log('🖼️ No artwork found for episode', count + 1);
       }
       
       if (audioUrl) {
@@ -77,7 +90,7 @@ const fastParseRSSFeed = (xmlText, limit = 5) => {
           title,
           audioUrl,
           pubDate: item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] || '',
-          artwork: null, // Skip artwork for speed
+          artwork: artwork,
           description: description || 'No description available.',
         });
         count++;
@@ -307,6 +320,10 @@ const HomeAnimatedWaveform = ({
 
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
+  });
+
   // Main app state
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -434,10 +451,13 @@ export default function App() {
       const cachedEpisodes = await getCachedFeed(feedUrl);
       if (cachedEpisodes) {
         setAllEpisodes(cachedEpisodes);
-        setEpisodes(cachedEpisodes.slice(0, 5)); // Show only 5 for faster rendering
+        setEpisodes(cachedEpisodes.slice(0, 5)); // Show only first 5 episodes
         setShowLoadMore(cachedEpisodes.length > 5);
         setCurrentRssFeed(feedUrl);
         console.log('✅ Feed loaded from cache!');
+        console.log('📝 Cached first episode description:', cachedEpisodes[0]?.description?.substring(0, 100) || 'No description');
+        console.log('📊 Cached total episodes:', cachedEpisodes.length);
+        console.log('📊 Cached show load more:', cachedEpisodes.length > 5);
         return;
       }
 
@@ -469,22 +489,29 @@ export default function App() {
       console.log('📄 XML length:', xmlText.length);
       
       console.log('🔧 Calling fastParseRSSFeed...');
-      // Use fast parser with only 5 episodes initially
-      const episodes = fastParseRSSFeed(xmlText, 5);
-      console.log('🎧 Parsed episodes:', episodes.length);
+      // Parse up to 50 episodes to check if there are more available
+      const allEpisodes = fastParseRSSFeed(xmlText, 50);
+      console.log('🎧 Parsed episodes:', allEpisodes.length);
+      
+      // Show only first 5 episodes initially
+      const episodes = allEpisodes.slice(0, 5);
       
       if (episodes.length === 0) {
         throw new Error('No episodes found in feed');
       }
       
       // Cache the results
-      await setCachedFeed(feedUrl, episodes);
+      await setCachedFeed(feedUrl, allEpisodes);
       
-      setAllEpisodes(episodes);
-      setEpisodes(episodes.slice(0, 5)); // Show only 5 by default
-      setShowLoadMore(episodes.length > 5); // Show load more if there are more episodes
+      setAllEpisodes(allEpisodes);
+      setEpisodes(episodes); // Show only first 5 episodes
+      setShowLoadMore(allEpisodes.length > 5); // Show load more if there are more episodes
       setCurrentRssFeed(feedUrl);
       console.log('✅ Feed loaded successfully!');
+      console.log('📝 First episode description:', episodes[0]?.description?.substring(0, 100) || 'No description');
+      console.log('📊 Total episodes parsed:', allEpisodes.length);
+      console.log('📊 Episodes to show:', episodes.length);
+      console.log('📊 Show load more:', allEpisodes.length > 5);
       
     } catch (error) {
       console.error('❌ loadPodcastFeed error:', error);
@@ -516,17 +543,26 @@ export default function App() {
     
     setIsLoadingMore(true);
     try {
-      // Parse more episodes from the same feed
-      const response = await fetch(currentRssFeed);
-      const xmlText = await response.text();
-      const allEpisodesData = fastParseRSSFeed(xmlText, 20); // Load up to 20
-      
-      setAllEpisodes(allEpisodesData);
-      setEpisodes(allEpisodesData);
-      setShowLoadMore(false);
-      
-      // Update cache with full data
-      await setCachedFeed(currentRssFeed, allEpisodesData);
+      // If we have more episodes in allEpisodes, show them
+      if (allEpisodes.length > episodes.length) {
+        setEpisodes(allEpisodes);
+        setShowLoadMore(false);
+        console.log('📊 Loaded all', allEpisodes.length, 'episodes');
+      } else {
+        // If we need to parse more episodes, fetch and parse more
+        console.log('📊 Fetching more episodes...');
+        const response = await fetch(currentRssFeed);
+        const xmlText = await response.text();
+        const moreEpisodes = fastParseRSSFeed(xmlText, 100); // Parse up to 100 episodes
+        
+        setAllEpisodes(moreEpisodes);
+        setEpisodes(moreEpisodes);
+        setShowLoadMore(false);
+        
+        // Update cache with full data
+        await setCachedFeed(currentRssFeed, moreEpisodes);
+        console.log('📊 Loaded', moreEpisodes.length, 'episodes from full parse');
+      }
       
     } catch (error) {
       console.error('Load more error:', error);
@@ -534,7 +570,7 @@ export default function App() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, currentRssFeed]);
+  }, [isLoadingMore, currentRssFeed, allEpisodes, episodes.length]);
 
   // Apple Podcasts URL to RSS converter
   const getApplePodcastsRssUrl = async (appleUrl) => {
@@ -693,6 +729,8 @@ export default function App() {
 
   // Audio player functions
   const playEpisode = async (episode) => {
+    console.log('🎧 Playing episode:', episode.title);
+    console.log('🖼️ Episode artwork:', episode.artwork);
     try {
       setIsLoading(true);
       
@@ -1406,45 +1444,16 @@ export default function App() {
   // Compose the gestures
   const composedGesture = Gesture.Race(swipeBackGesture, scrollGesture);
 
-  const [fontsLoaded] = useFonts({
-    'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
-  });
-  if (!fontsLoaded) return null;
 
-  // Add a new function to load the complete RSS feed
-  const loadCompleteFeed = async () => {
-    if (!currentRssFeed) return;
-    
-    try {
-      setLoading(true);
-      console.log('📡 Loading complete RSS feed...');
-      
-      const response = await fetch(currentRssFeed, {
-        headers: {
-          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const xmlText = await response.text();
-      // Parse the complete feed without limit
-      const completeEpisodes = parseRSSFeed(xmlText);
-      
-      setAllEpisodes(completeEpisodes);
-      setEpisodes(completeEpisodes);
-      
-      console.log('✅ Complete feed loaded:', completeEpisodes.length, 'episodes');
-      
-    } catch (error) {
-      console.error('❌ Error loading complete feed:', error);
-      Alert.alert('Error', 'Failed to load complete feed');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1c1c1c' }}>
+        <ActivityIndicator size="large" color="#d97706" />
+        <Text style={{ color: '#f4f4f4', marginTop: 10 }}>Loading fonts...</Text>
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1651,8 +1660,9 @@ export default function App() {
                         maxToRenderPerBatch={5}
                         windowSize={10}
                         initialNumToRender={5}
-                        ListFooterComponent={() => (
-                          showLoadMore ? (
+                        ListFooterComponent={() => {
+                          console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore);
+                          return showLoadMore ? (
                             <TouchableOpacity
                               style={styles.submitButton}
                               onPress={loadMoreEpisodes}
@@ -1667,8 +1677,8 @@ export default function App() {
                                 <Text style={styles.submitButtonText}>Load More Episodes</Text>
                               )}
                             </TouchableOpacity>
-                          ) : null
-                        )}
+                          ) : null;
+                        }}
                       />
                     </>
                   )}
@@ -1694,12 +1704,16 @@ export default function App() {
 
                   {/* Episode Header */}
                   <View style={styles.episodeHeader}>
-                    {selectedEpisode.artwork && (
+                    {selectedEpisode.artwork ? (
                       <Image 
                         source={{ uri: selectedEpisode.artwork }} 
                         style={styles.episodeArtworkLarge}
                         resizeMode="cover"
                       />
+                    ) : (
+                      <View style={[styles.episodeArtworkLarge, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ color: '#888', fontSize: 12 }}>No Artwork</Text>
+                      </View>
                     )}
                     <Text style={styles.episodeTitleLarge} numberOfLines={3}>
                       {selectedEpisode.title}
@@ -1869,9 +1883,15 @@ export default function App() {
                       {/* Episode Notes */}
                       <View style={styles.episodeNotes}>
                         <Text style={styles.notesTitle}>Episode Notes</Text>
-                        <Text style={styles.notesText}>
-                          {selectedEpisode.description}
-                        </Text>
+                        <ScrollView 
+                          style={styles.notesScrollView}
+                          showsVerticalScrollIndicator={true}
+                          nestedScrollEnabled={true}
+                        >
+                          <Text style={styles.notesText}>
+                            {selectedEpisode.description}
+                          </Text>
+                        </ScrollView>
                       </View>
                     </>
                   )}
@@ -2217,6 +2237,10 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#404040',
+    flex: 1,
+  },
+  notesScrollView: {
+    maxHeight: 200,
   },
   notesTitle: {
     color: '#f4f4f4',
