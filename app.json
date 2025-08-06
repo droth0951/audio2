@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "1.1.5",
+    "version": "1.1.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -16,9 +16,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.danroth.podknowledge",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "Audio2 uses speech recognition to generate captions for your podcast clips.",
+        "NSMicrophoneUsageDescription": "Audio2 needs microphone access to listen to podcast audio for caption generation.",
+        "NSAppleMusicUsageDescription": "Audio2 needs access to your music library to save and play audio clips."
       },
-      "buildNumber": "1.1.5",
+      "buildNumber": "1.1.2",
       "splash": {
         "image": "./assets/launch-iphone14pro.png",
         "resizeMode": "cover",
@@ -33,7 +36,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "versionCode": 2
     },

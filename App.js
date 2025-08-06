@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Pressable,
   FlatList,
+  Switch,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
@@ -27,6 +28,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
 import { useFonts } from 'expo-font';
+import Voice from '@react-native-voice/voice';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -408,6 +410,13 @@ export default function App() {
   const [allEpisodes, setAllEpisodes] = useState([]);
   const [showLoadMore, setShowLoadMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Caption-related state
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [captionStyle, setCaptionStyle] = useState('black');
+  const [currentCaptionText, setCurrentCaptionText] = useState('');
+  const [captionError, setCaptionError] = useState(null);
+  const [isRecognitionActive, setIsRecognitionActive] = useState(false);
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   // Cache management functions
@@ -898,6 +907,7 @@ export default function App() {
         borderWidth: 2,
         borderColor: '#d97706',
         minWidth: 300,
+        maxHeight: '80%',
       }}>
         <Text style={{
           color: '#f4f4f4',
@@ -906,21 +916,105 @@ export default function App() {
           textAlign: 'center',
           marginBottom: 16,
         }}>
-          Recording Instructions
+          Create Video Clip{captionsEnabled ? ' with Captions' : ''}
         </Text>
         
+        {/* CAPTION SETTINGS SECTION */}
+        <View style={{
+          backgroundColor: '#1a1a1a',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 20,
+          borderWidth: 1,
+          borderColor: '#333333',
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}>
+            <View>
+              <Text style={{
+                color: '#f4f4f4',
+                fontSize: 14,
+                fontWeight: '600',
+                marginBottom: 2,
+              }}>
+                Add Live Captions
+              </Text>
+              <Text style={{
+                color: '#b4b4b4',
+                fontSize: 12,
+              }}>
+                Real-time speech recognition
+              </Text>
+            </View>
+            <Switch
+              value={captionsEnabled}
+              onValueChange={setCaptionsEnabled}
+              trackColor={{ false: '#404040', true: '#d97706' }}
+              thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
+            />
+          </View>
+          
+          {captionsEnabled && (
+            <View>
+              <Text style={{
+                color: '#f4f4f4',
+                fontSize: 12,
+                fontWeight: '500',
+                marginBottom: 8,
+              }}>
+                Caption Style
+              </Text>
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}>
+                {Object.entries(captionStyles).map(([key, style]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      backgroundColor: captionStyle === key ? '#d97706' : '#404040',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: captionStyle === key ? '#d97706' : '#555555',
+                    }}
+                    onPress={() => setCaptionStyle(key)}
+                  >
+                    <Text style={{
+                      color: '#f4f4f4',
+                      fontSize: 11,
+                      fontWeight: captionStyle === key ? '600' : '500',
+                    }}>
+                      {style.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+        
+        {/* EXISTING GUIDANCE TEXT - ENHANCED */}
         <Text style={{
           color: '#b4b4b4',
           fontSize: 14,
           lineHeight: 20,
           marginBottom: 20,
         }}>
-          • Keep your screen on during recording{`\n`}
-          • Don't switch apps or lock your phone{`\n`}
-          • The recording will start automatically{`\n`}
-          • Your clip will be saved to Photos when complete
+          Great job! You've found an insight worth sharing. We'll turn it into a file that will save to your photo library for sharing to social.{`\n`}
+          1. Keep your screen on during the clip making process{`\n`}
+          2. Don't switch apps or lock your phone{`\n`}
+          3. Hit Start Recording. The clip will play.{captionsEnabled ? `\n4. Live captions will appear automatically` : ''}{`\n`}
+          {captionsEnabled ? '5' : '4'}. Check Photos to find and share your clip.
         </Text>
         
+        {/* EXISTING CHECKBOX AND BUTTONS */}
         <TouchableOpacity 
           style={{
             flexDirection: 'row',
@@ -1041,6 +1135,11 @@ export default function App() {
         playsInSilentModeIOS: true,
       });
 
+      // START CAPTION RECOGNITION IF ENABLED (NEW)
+      if (captionsEnabled) {
+        await startCaptionRecognition();
+      }
+
       setRecordingStatus('Starting recording...');
       
       // Start screen recording with microphone disabled (we want app audio only)
@@ -1078,6 +1177,11 @@ export default function App() {
     try {
       setRecordingStatus('Stopping recording...');
       
+      // STOP CAPTION RECOGNITION (NEW)
+      if (isRecognitionActive) {
+        await stopCaptionRecognition();
+      }
+      
       // Pause audio
       if (sound && isPlaying) {
         await sound.pauseAsync();
@@ -1095,7 +1199,7 @@ export default function App() {
         
         Alert.alert(
           'Video Created!',
-          'Your podcast clip has been saved to Photos. You can now share it on social media.',
+          `Your podcast clip${captionsEnabled ? ' with captions' : ''} has been saved to Photos. You can now share it on social media.`,
           [
             { text: 'OK', onPress: () => {
               setShowRecordingView(false);
@@ -1275,6 +1379,35 @@ export default function App() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Caption styles configuration
+  const captionStyles = {
+    black: { 
+      backgroundColor: 'rgba(0,0,0,0.8)', 
+      textColor: '#ffffff',
+      borderColor: 'rgba(255,255,255,0.2)',
+      label: 'Classic Black'
+    },
+    orange: { 
+      backgroundColor: 'rgba(217,119,6,0.9)', 
+      textColor: '#ffffff',
+      borderColor: '#d97706',
+      label: 'Audio2 Orange' 
+    },
+    white: { 
+      backgroundColor: 'rgba(255,255,255,0.9)', 
+      textColor: '#000000',
+      borderColor: 'rgba(0,0,0,0.2)',
+      label: 'Clean White'
+    },
+    outline: { 
+      backgroundColor: 'transparent', 
+      textColor: '#ffffff',
+      borderColor: '#ffffff',
+      label: 'Outline Only',
+      textShadow: true
+    }
+  };
+
   const handleProgressBarPress = (e) => {
     if (duration > 0) {
       const { locationX } = e.nativeEvent;
@@ -1285,96 +1418,170 @@ export default function App() {
   };
 
   // Recording view component - UPDATED to hide controls during recording
-  const RecordingView = () => (
-    <View style={styles.recordingContainer}>
-      <StatusBar style="light" hidden={true} />
-      
-      {/* Full-screen wireframe design */}
-      <LinearGradient
-        colors={['#1c1c1c', '#2d2d2d']}
-        style={styles.recordingBackground}
-      >
-        {/* Episode artwork */}
-        {selectedEpisode?.artwork && (
-          <Image 
-            source={{ uri: selectedEpisode.artwork }} 
-            style={styles.recordingArtwork}
-            resizeMode="cover"
-          />
-        )}
+  const RecordingView = () => {
+    const currentStyle = captionStyles[captionStyle];
+    
+    return (
+      <View style={styles.recordingContainer}>
+        <StatusBar style="light" hidden={true} />
         
-        {/* Progress timeline */}
-        <View style={styles.recordingTimelineContainer}>
-          <View style={styles.recordingTimeline}>
-            <View 
-              style={[
-                styles.recordingTimelineFill, 
-                { width: `${duration ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
-              ]} 
+        {/* Full-screen wireframe design */}
+        <LinearGradient
+          colors={['#1c1c1c', '#2d2d2d']}
+          style={styles.recordingBackground}
+        >
+          {/* Episode artwork */}
+          {selectedEpisode?.artwork && (
+            <Image 
+              source={{ uri: selectedEpisode.artwork }} 
+              style={styles.recordingArtwork}
+              resizeMode="cover"
             />
-          </View>
-          <View style={styles.recordingTimeLabels}>
-            <Text style={styles.recordingTimeText}>{formatTime(Math.max(0, position - clipStart))}</Text>
-            <Text style={styles.recordingTimeText}>{formatTime(clipEnd - clipStart)}</Text>
-          </View>
-        </View>
-        
-        {/* Animated waveform */}
-        <View style={styles.recordingWaveform}>
-          {[...Array(15)].map((_, i) => (
-            <View 
-              key={i}
-              style={[
-                styles.recordingWaveformBar,
-                { 
-                  height: Math.random() * 40 + 10,
-                  opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
-                }
-              ]} 
-            />
-          ))}
-        </View>
-        
-        {/* Episode info */}
-        <View style={styles.recordingEpisodeInfo}>
-          <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
-            {selectedEpisode?.title}
-          </Text>
-          <Text style={styles.recordingPodcastName}>
-            {selectedEpisode?.podcastName || 'Podcast'}
-          </Text>
-        </View>
-        
-        {/* ONLY show controls when NOT actively recording */}
-        {!isRecording && (
-          <>
-            {/* Control buttons */}
-            <View style={styles.recordingControls}>
-              <TouchableOpacity 
-                style={styles.recordingButton}
-                onPress={startVideoRecording}
-              >
-                <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
-                <Text style={styles.recordingButtonText}>Start Recording</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => setShowRecordingView(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+          )}
+          
+          {/* Progress timeline */}
+          <View style={styles.recordingTimelineContainer}>
+            <View style={styles.recordingTimeline}>
+              <View 
+                style={[
+                  styles.recordingTimelineFill, 
+                  { width: `${duration ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
+                ]} 
+              />
             </View>
-            
-            {/* Status text */}
-            {recordingStatus ? (
-              <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
-            ) : null}
-          </>
-        )}
-      </LinearGradient>
-    </View>
-  );
+            <View style={styles.recordingTimeLabels}>
+              <Text style={styles.recordingTimeText}>{formatTime(Math.max(0, position - clipStart))}</Text>
+              <Text style={styles.recordingTimeText}>{formatTime(clipEnd - clipStart)}</Text>
+            </View>
+          </View>
+          
+          {/* Animated waveform */}
+          <View style={styles.recordingWaveform}>
+            {[...Array(15)].map((_, i) => (
+              <View 
+                key={i}
+                style={[
+                  styles.recordingWaveformBar,
+                  { 
+                    height: Math.random() * 40 + 10,
+                    opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
+                  }
+                ]} 
+              />
+            ))}
+          </View>
+          
+          {/* Episode info */}
+          <View style={styles.recordingEpisodeInfo}>
+            <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
+              {selectedEpisode?.title}
+            </Text>
+            <Text style={styles.recordingPodcastName}>
+              {selectedEpisode?.podcastName || 'Podcast'}
+            </Text>
+          </View>
+          
+          {/* CAPTION STATUS INDICATOR */}
+          {captionsEnabled && (
+            <View style={{
+              position: 'absolute',
+              top: 60,
+              right: 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 16,
+              gap: 8,
+            }}>
+              <View style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: currentCaptionText ? '#22c55e' : captionError ? '#ef4444' : '#d97706',
+              }} />
+              <Text style={{
+                color: '#f4f4f4',
+                fontSize: 12,
+                fontWeight: '500',
+              }}>
+                {captionError ? 'Caption Error' : currentCaptionText ? 'Captions Active' : 'Listening...'}
+              </Text>
+            </View>
+          )}
+          
+          {/* CAPTION OVERLAY */}
+          {captionsEnabled && currentCaptionText && (
+            <View style={[
+              {
+                position: 'absolute',
+                bottom: 120,
+                left: 20,
+                right: 20,
+                borderRadius: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                alignItems: 'center',
+              },
+              {
+                backgroundColor: currentStyle.backgroundColor,
+                borderWidth: currentStyle.borderColor ? 1 : 0,
+                borderColor: currentStyle.borderColor || 'transparent',
+              }
+            ]}>
+              <Text style={[
+                {
+                  fontSize: 16,
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  lineHeight: 20,
+                },
+                {
+                  color: currentStyle.textColor,
+                  textShadowColor: currentStyle.textShadow ? 'rgba(0,0,0,0.8)' : 'transparent',
+                  textShadowOffset: currentStyle.textShadow ? {width: 1, height: 1} : {width: 0, height: 0},
+                  textShadowRadius: currentStyle.textShadow ? 2 : 0,
+                }
+              ]}>
+                {currentCaptionText}
+              </Text>
+            </View>
+          )}
+          
+          {/* ONLY show controls when NOT actively recording */}
+          {!isRecording && (
+            <>
+              {/* Control buttons */}
+              <View style={styles.recordingControls}>
+                <TouchableOpacity 
+                  style={styles.recordingButton}
+                  onPress={startVideoRecording}
+                >
+                  <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
+                  <Text style={styles.recordingButtonText}>
+                    {captionsEnabled ? 'Start Recording + Captions' : 'Start Recording'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setShowRecordingView(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Status text */}
+              {recordingStatus ? (
+                <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
+              ) : null}
+            </>
+          )}
+        </LinearGradient>
+      </View>
+    );
+  };
 
   // Show recording view when active
   if (showRecordingView) {
@@ -2716,3 +2923,100 @@ const waveformStyles = StyleSheet.create({
     borderRadius: 2.5,
   },
 });
+
+// Caption recognition functions
+const startCaptionRecognition = async () => {
+  try {
+    setIsRecognitionActive(true);
+    
+    // Voice event handlers
+    Voice.onSpeechResults = (event) => {
+      const transcript = event.value?.[0] || '';
+      if (transcript) {
+        setCurrentCaptionText(transcript);
+        setCaptionError(null);
+      }
+    };
+    
+    Voice.onSpeechPartialResults = (event) => {
+      const transcript = event.value?.[0] || '';
+      if (transcript) {
+        setCurrentCaptionText(transcript);
+      }
+    };
+    
+    Voice.onSpeechError = (event) => {
+      console.error('Caption error:', event.error);
+      setCaptionError('Caption recognition paused');
+      // Auto-restart after error
+      setTimeout(() => {
+        if (isRecognitionActive) {
+          restartCaptionRecognition();
+        }
+      }, 1000);
+    };
+    
+    Voice.onSpeechEnd = () => {
+      // Auto-restart for continuous recognition
+      if (isRecognitionActive) {
+        setTimeout(() => {
+          restartCaptionRecognition();
+        }, 100);
+      }
+    };
+    
+    // Start recognition
+    const isAvailable = await Voice.isAvailable();
+    if (!isAvailable) {
+      throw new Error('Speech recognition not available');
+    }
+    
+    await Voice.start('en-US', {
+      'EXTRA_PARTIAL_RESULTS': true,
+      'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
+    });
+    
+    console.log('🎤 Caption recognition started');
+    
+  } catch (error) {
+    console.error('Caption start error:', error);
+    setCaptionError('Caption setup failed');
+    setIsRecognitionActive(false);
+  }
+};
+
+const stopCaptionRecognition = async () => {
+  try {
+    if (isRecognitionActive) {
+      await Voice.stop();
+      setIsRecognitionActive(false);
+      setCurrentCaptionText('');
+      console.log('🛑 Caption recognition stopped');
+    }
+  } catch (error) {
+    console.error('Caption stop error:', error);
+  }
+};
+
+const restartCaptionRecognition = async () => {
+  if (!isRecognitionActive) return;
+  
+  try {
+    await Voice.start('en-US', {
+      'EXTRA_PARTIAL_RESULTS': true,
+      'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
+    });
+  } catch (error) {
+    console.error('Caption restart error:', error);
+    setCaptionError('Caption recognition restarting...');
+  }
+};
+
+const handleProgressBarPress = (e) => {
+  if (duration > 0) {
+    const { locationX } = e.nativeEvent;
+    const containerWidth = screenWidth - 40;
+    const seekPosition = (locationX / containerWidth) * duration;
+    handleSeekToPosition(Math.max(0, Math.min(seekPosition, duration)));
+  }
+};
