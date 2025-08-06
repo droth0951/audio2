@@ -981,7 +981,10 @@ export default function App() {
             </View>
             <Switch
               value={captionsEnabled}
-              onValueChange={setCaptionsEnabled}
+              onValueChange={(value) => {
+                console.log('🎯 Caption toggle changed to:', value);
+                setCaptionsEnabled(value);
+              }}
               trackColor={{ false: '#404040', true: '#d97706' }}
               thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
             />
@@ -1126,6 +1129,11 @@ export default function App() {
 
   // 2. Clean up handleCreateVideo (remove debug logs)
   const handleCreateVideo = async () => {
+    console.log('🎯 handleCreateVideo called');
+    console.log('🎯 clipStart:', clipStart);
+    console.log('🎯 clipEnd:', clipEnd);
+    console.log('🎯 selectedEpisode:', selectedEpisode?.title);
+    
     if (!clipStart || !clipEnd) {
       Alert.alert('No Clip Selected', 'Please select start and end points first');
       return;
@@ -1136,10 +1144,14 @@ export default function App() {
       return;
     }
     
+    console.log('🎯 About to show recording guidance or view');
+    console.log('🎯 dontShowGuidanceAgain:', dontShowGuidanceAgain);
+    
     // Show guidance modal if user hasn't disabled it
     if (!dontShowGuidanceAgain) {
       setShowRecordingGuidance(true);
     } else {
+      console.log('🎯 Setting showRecordingView to true');
       setShowRecordingView(true);
     }
   };
@@ -1509,7 +1521,16 @@ export default function App() {
 
   // Recording view component - UPDATED to hide controls during recording
   const RecordingView = () => {
+    console.log('🎬 RecordingView starting render');
+    console.log('🎬 captionsEnabled:', captionsEnabled);
+    console.log('🎬 captionStyle:', captionStyle);
+    console.log('🎬 currentCaptionText:', currentCaptionText);
+    console.log('🎬 captionError:', captionError);
+    console.log('🎬 selectedEpisode:', selectedEpisode?.title);
+    console.log('🎬 isRecording:', isRecording);
+    
     const currentStyle = captionStyles[captionStyle] || captionStyles.black;
+    console.log('🎬 currentStyle:', currentStyle);
     
     return (
       <View style={styles.recordingContainer}>
@@ -1520,6 +1541,7 @@ export default function App() {
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.recordingBackground}
         >
+          {console.log('🎬 About to render episode artwork')}
           {/* Episode artwork */}
           {selectedEpisode?.artwork && (
             <Image 
@@ -1529,6 +1551,7 @@ export default function App() {
             />
           )}
           
+          {console.log('🎬 About to render progress timeline')}
           {/* Progress timeline */}
           <View style={styles.recordingTimelineContainer}>
             <View style={styles.recordingTimeline}>
@@ -1545,6 +1568,7 @@ export default function App() {
             </View>
           </View>
           
+          {console.log('🎬 About to render waveform')}
           {/* Animated waveform */}
           <View style={styles.recordingWaveform}>
             {[...Array(15)].map((_, i) => (
@@ -1561,6 +1585,7 @@ export default function App() {
             ))}
           </View>
           
+          {console.log('🎬 About to render episode info')}
           {/* Episode info */}
           <View style={styles.recordingEpisodeInfo}>
             <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
@@ -1571,6 +1596,7 @@ export default function App() {
             </Text>
           </View>
           
+          {console.log('🎬 About to render caption status - captionsEnabled:', captionsEnabled)}
           {/* CAPTION STATUS INDICATOR */}
           {captionsEnabled && (
             <View style={{
@@ -1601,6 +1627,7 @@ export default function App() {
             </View>
           )}
           
+          {console.log('🎬 About to render caption overlay - currentCaptionText:', currentCaptionText)}
           {/* CAPTION OVERLAY */}
           {captionsEnabled && currentCaptionText && captionStyles && captionStyles[captionStyle] && (
             <View style={[
@@ -1635,6 +1662,7 @@ export default function App() {
             </View>
           )}
           
+          {console.log('🎬 About to render recording controls - isRecording:', isRecording)}
           {/* ONLY show controls when NOT actively recording */}
           {!isRecording && (
             <>
@@ -1671,6 +1699,10 @@ export default function App() {
 
   // Show recording view when active
   if (showRecordingView) {
+    console.log('🎬 About to render RecordingView');
+    console.log('🎬 showRecordingView:', showRecordingView);
+    console.log('🎬 captionsEnabled:', captionsEnabled);
+    console.log('🎬 selectedEpisode exists:', !!selectedEpisode);
     try {
       return <RecordingView />;
     } catch (error) {
@@ -1763,6 +1795,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {console.log('🎬 Rendering main app view')}
       <SafeAreaView style={styles.container}>
         <StatusBar 
           style="light" 
