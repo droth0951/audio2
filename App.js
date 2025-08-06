@@ -1115,6 +1115,94 @@ export default function App() {
     }
   };
 
+  // Caption recognition functions - MOVED INSIDE COMPONENT
+  const startCaptionRecognition = async () => {
+    try {
+      setIsRecognitionActive(true);
+      
+      // Voice event handlers
+      Voice.onSpeechResults = (event) => {
+        const transcript = event.value?.[0] || '';
+        if (transcript) {
+          setCurrentCaptionText(transcript);
+          setCaptionError(null);
+        }
+      };
+      
+      Voice.onSpeechPartialResults = (event) => {
+        const transcript = event.value?.[0] || '';
+        if (transcript) {
+          setCurrentCaptionText(transcript);
+        }
+      };
+      
+      Voice.onSpeechError = (event) => {
+        console.error('Caption error:', event.error);
+        setCaptionError('Caption recognition paused');
+        // Auto-restart after error
+        setTimeout(() => {
+          if (isRecognitionActive) {
+            restartCaptionRecognition();
+          }
+        }, 1000);
+      };
+      
+      Voice.onSpeechEnd = () => {
+        // Auto-restart for continuous recognition
+        if (isRecognitionActive) {
+          setTimeout(() => {
+            restartCaptionRecognition();
+          }, 100);
+        }
+      };
+      
+      // Start recognition
+      const isAvailable = await Voice.isAvailable();
+      if (!isAvailable) {
+        throw new Error('Speech recognition not available');
+      }
+      
+      await Voice.start('en-US', {
+        'EXTRA_PARTIAL_RESULTS': true,
+        'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
+      });
+      
+      console.log('🎤 Caption recognition started');
+      
+    } catch (error) {
+      console.error('Caption start error:', error);
+      setCaptionError('Caption setup failed');
+      setIsRecognitionActive(false);
+    }
+  };
+
+  const stopCaptionRecognition = async () => {
+    try {
+      if (isRecognitionActive) {
+        await Voice.stop();
+        setIsRecognitionActive(false);
+        setCurrentCaptionText('');
+        console.log('🛑 Caption recognition stopped');
+      }
+    } catch (error) {
+      console.error('Caption stop error:', error);
+    }
+  };
+
+  const restartCaptionRecognition = async () => {
+    if (!isRecognitionActive) return;
+    
+    try {
+      await Voice.start('en-US', {
+        'EXTRA_PARTIAL_RESULTS': true,
+        'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
+      });
+    } catch (error) {
+      console.error('Caption restart error:', error);
+      setCaptionError('Caption recognition restarting...');
+    }
+  };
+
   const startVideoRecording = async () => {
     try {
       setRecordingStatus('Requesting permissions...');
@@ -2924,99 +3012,3 @@ const waveformStyles = StyleSheet.create({
   },
 });
 
-// Caption recognition functions
-const startCaptionRecognition = async () => {
-  try {
-    setIsRecognitionActive(true);
-    
-    // Voice event handlers
-    Voice.onSpeechResults = (event) => {
-      const transcript = event.value?.[0] || '';
-      if (transcript) {
-        setCurrentCaptionText(transcript);
-        setCaptionError(null);
-      }
-    };
-    
-    Voice.onSpeechPartialResults = (event) => {
-      const transcript = event.value?.[0] || '';
-      if (transcript) {
-        setCurrentCaptionText(transcript);
-      }
-    };
-    
-    Voice.onSpeechError = (event) => {
-      console.error('Caption error:', event.error);
-      setCaptionError('Caption recognition paused');
-      // Auto-restart after error
-      setTimeout(() => {
-        if (isRecognitionActive) {
-          restartCaptionRecognition();
-        }
-      }, 1000);
-    };
-    
-    Voice.onSpeechEnd = () => {
-      // Auto-restart for continuous recognition
-      if (isRecognitionActive) {
-        setTimeout(() => {
-          restartCaptionRecognition();
-        }, 100);
-      }
-    };
-    
-    // Start recognition
-    const isAvailable = await Voice.isAvailable();
-    if (!isAvailable) {
-      throw new Error('Speech recognition not available');
-    }
-    
-    await Voice.start('en-US', {
-      'EXTRA_PARTIAL_RESULTS': true,
-      'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
-    });
-    
-    console.log('🎤 Caption recognition started');
-    
-  } catch (error) {
-    console.error('Caption start error:', error);
-    setCaptionError('Caption setup failed');
-    setIsRecognitionActive(false);
-  }
-};
-
-const stopCaptionRecognition = async () => {
-  try {
-    if (isRecognitionActive) {
-      await Voice.stop();
-      setIsRecognitionActive(false);
-      setCurrentCaptionText('');
-      console.log('🛑 Caption recognition stopped');
-    }
-  } catch (error) {
-    console.error('Caption stop error:', error);
-  }
-};
-
-const restartCaptionRecognition = async () => {
-  if (!isRecognitionActive) return;
-  
-  try {
-    await Voice.start('en-US', {
-      'EXTRA_PARTIAL_RESULTS': true,
-      'EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS': 2000,
-    });
-  } catch (error) {
-    console.error('Caption restart error:', error);
-    setCaptionError('Caption recognition restarting...');
-  }
-};
-
-const handleProgressBarPress = (e) => {
-  if (duration > 0) {
-    const { locationX } = e.nativeEvent;
-    const containerWidth = screenWidth - 40;
-    const seekPosition = (locationX / containerWidth) * duration;
-    handleSeekToPosition(Math.max(0, Math.min(seekPosition, duration)));
-  }
-};
