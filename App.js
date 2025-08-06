@@ -1541,7 +1541,6 @@ export default function App() {
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.recordingBackground}
         >
-          {console.log('🎬 About to render episode artwork')}
           {/* Episode artwork */}
           {selectedEpisode?.artwork && (
             <Image 
@@ -1551,7 +1550,6 @@ export default function App() {
             />
           )}
           
-          {console.log('🎬 About to render progress timeline')}
           {/* Progress timeline */}
           <View style={styles.recordingTimelineContainer}>
             <View style={styles.recordingTimeline}>
@@ -1568,7 +1566,6 @@ export default function App() {
             </View>
           </View>
           
-          {console.log('🎬 About to render waveform')}
           {/* Animated waveform */}
           <View style={styles.recordingWaveform}>
             {[...Array(15)].map((_, i) => (
@@ -1585,7 +1582,6 @@ export default function App() {
             ))}
           </View>
           
-          {console.log('🎬 About to render episode info')}
           {/* Episode info */}
           <View style={styles.recordingEpisodeInfo}>
             <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
@@ -1596,7 +1592,6 @@ export default function App() {
             </Text>
           </View>
           
-          {console.log('🎬 About to render caption status - captionsEnabled:', captionsEnabled)}
           {/* CAPTION STATUS INDICATOR */}
           {captionsEnabled && (
             <View style={{
@@ -1627,7 +1622,6 @@ export default function App() {
             </View>
           )}
           
-          {console.log('🎬 About to render caption overlay - currentCaptionText:', currentCaptionText)}
           {/* CAPTION OVERLAY */}
           {captionsEnabled && currentCaptionText && captionStyles && captionStyles[captionStyle] && (
             <View style={[
@@ -1662,7 +1656,6 @@ export default function App() {
             </View>
           )}
           
-          {console.log('🎬 About to render recording controls - isRecording:', isRecording)}
           {/* ONLY show controls when NOT actively recording */}
           {!isRecording && (
             <>
@@ -1795,7 +1788,6 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {console.log('🎬 Rendering main app view')}
       <SafeAreaView style={styles.container}>
         <StatusBar 
           style="light" 
