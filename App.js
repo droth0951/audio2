@@ -1532,6 +1532,12 @@ export default function App() {
     const currentStyle = captionStyles[captionStyle] || captionStyles.black;
     console.log('🎬 currentStyle:', currentStyle);
     
+    // Static waveform values to prevent infinite loops
+    const waveformHeights = [20, 35, 28, 48, 30, 40, 28, 35, 20, 25, 32, 18, 42, 26, 38];
+    const waveformOpacities = isPlaying ? 
+      [0.9, 0.8, 0.95, 0.85, 0.9, 0.8, 0.9, 0.85, 0.8, 0.9, 0.85, 0.9, 0.8, 0.95, 0.85] : 
+      [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3];
+    
     return (
       <View style={styles.recordingContainer}>
         <StatusBar style="light" hidden={true} />
@@ -1568,14 +1574,14 @@ export default function App() {
           
           {/* Animated waveform */}
           <View style={styles.recordingWaveform}>
-            {[...Array(15)].map((_, i) => (
+            {waveformHeights.map((height, i) => (
               <View 
                 key={i}
                 style={[
                   styles.recordingWaveformBar,
                   { 
-                    height: Math.random() * 40 + 10,
-                    opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
+                    height: height,
+                    opacity: waveformOpacities[i]
                   }
                 ]} 
               />
@@ -1696,20 +1702,7 @@ export default function App() {
     console.log('🎬 showRecordingView:', showRecordingView);
     console.log('🎬 captionsEnabled:', captionsEnabled);
     console.log('🎬 selectedEpisode exists:', !!selectedEpisode);
-    try {
-      return <RecordingView />;
-    } catch (error) {
-      console.error('RecordingView render error:', error);
-      setShowRecordingView(false);
-      Alert.alert('Display Error', 'Caption display failed. Recording without captions.');
-      return (
-        <View style={styles.container}>
-          <Text style={{ color: '#f4f4f4', textAlign: 'center', marginTop: 100 }}>
-            Restarting recording view...
-          </Text>
-        </View>
-      );
-    }
+    return <RecordingView />;
   }
 
   // 3. Clean up the render conditional (remove debug wrapper)

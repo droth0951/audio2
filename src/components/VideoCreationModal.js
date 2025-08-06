@@ -267,10 +267,13 @@ const VideoCreationModal = ({
   };
 
   const generateWaveformBars = () => {
+    // Static waveform values to prevent infinite loops
+    const waveformHeights = [15, 25, 20, 35, 22, 30, 18, 28, 16, 24, 26, 14, 32, 19, 29];
+    
     const bars = [];
     const barCount = 15;
     for (let i = 0; i < barCount; i++) {
-      const height = Math.random() * 30 + 10;
+      const height = waveformHeights[i];
       const isActive = isRecording ? i < (barCount * (recordingProgress / 100)) : i < (barCount * 0.3);
       bars.push(
         <View
