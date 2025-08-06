@@ -418,6 +418,35 @@ export default function App() {
   const [captionError, setCaptionError] = useState(null);
   const [isRecognitionActive, setIsRecognitionActive] = useState(false);
 
+  // Caption styles configuration - MOVED EARLY FOR SAFETY
+  const captionStyles = {
+    black: { 
+      backgroundColor: 'rgba(0,0,0,0.8)', 
+      textColor: '#ffffff',
+      borderColor: 'rgba(255,255,255,0.2)',
+      label: 'Classic Black'
+    },
+    orange: { 
+      backgroundColor: 'rgba(217,119,6,0.9)', 
+      textColor: '#ffffff',
+      borderColor: '#d97706',
+      label: 'Audio2 Orange' 
+    },
+    white: { 
+      backgroundColor: 'rgba(255,255,255,0.9)', 
+      textColor: '#000000',
+      borderColor: 'rgba(0,0,0,0.2)',
+      label: 'Clean White'
+    },
+    outline: { 
+      backgroundColor: 'transparent', 
+      textColor: '#ffffff',
+      borderColor: '#ffffff',
+      label: 'Outline Only',
+      textShadow: true
+    }
+  };
+
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   // Cache management functions
   const getCachedFeed = async (feedUrl) => {
@@ -1467,34 +1496,7 @@ export default function App() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Caption styles configuration
-  const captionStyles = {
-    black: { 
-      backgroundColor: 'rgba(0,0,0,0.8)', 
-      textColor: '#ffffff',
-      borderColor: 'rgba(255,255,255,0.2)',
-      label: 'Classic Black'
-    },
-    orange: { 
-      backgroundColor: 'rgba(217,119,6,0.9)', 
-      textColor: '#ffffff',
-      borderColor: '#d97706',
-      label: 'Audio2 Orange' 
-    },
-    white: { 
-      backgroundColor: 'rgba(255,255,255,0.9)', 
-      textColor: '#000000',
-      borderColor: 'rgba(0,0,0,0.2)',
-      label: 'Clean White'
-    },
-    outline: { 
-      backgroundColor: 'transparent', 
-      textColor: '#ffffff',
-      borderColor: '#ffffff',
-      label: 'Outline Only',
-      textShadow: true
-    }
-  };
+
 
   const handleProgressBarPress = (e) => {
     if (duration > 0) {
@@ -1507,7 +1509,7 @@ export default function App() {
 
   // Recording view component - UPDATED to hide controls during recording
   const RecordingView = () => {
-    const currentStyle = captionStyles[captionStyle];
+    const currentStyle = captionStyles[captionStyle] || captionStyles.black;
     
     return (
       <View style={styles.recordingContainer}>
@@ -1587,20 +1589,20 @@ export default function App() {
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: currentCaptionText ? '#22c55e' : captionError ? '#ef4444' : '#d97706',
+                backgroundColor: currentCaptionText ? '#22c55e' : (captionError ? '#ef4444' : '#d97706'),
               }} />
               <Text style={{
                 color: '#f4f4f4',
                 fontSize: 12,
                 fontWeight: '500',
               }}>
-                {captionError ? 'Caption Error' : currentCaptionText ? 'Captions Active' : 'Listening...'}
+                {captionError ? 'Caption Error' : (currentCaptionText ? 'Captions Active' : 'Listening...')}
               </Text>
             </View>
           )}
           
           {/* CAPTION OVERLAY */}
-          {captionsEnabled && currentCaptionText && (
+          {captionsEnabled && currentCaptionText && captionStyles && captionStyles[captionStyle] && (
             <View style={[
               {
                 position: 'absolute',
@@ -1611,11 +1613,9 @@ export default function App() {
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 alignItems: 'center',
-              },
-              {
-                backgroundColor: currentStyle.backgroundColor,
-                borderWidth: currentStyle.borderColor ? 1 : 0,
-                borderColor: currentStyle.borderColor || 'transparent',
+                backgroundColor: captionStyles[captionStyle]?.backgroundColor || 'rgba(0,0,0,0.8)',
+                borderWidth: captionStyles[captionStyle]?.borderColor ? 1 : 0,
+                borderColor: captionStyles[captionStyle]?.borderColor || 'transparent',
               }
             ]}>
               <Text style={[
@@ -1624,12 +1624,10 @@ export default function App() {
                   fontWeight: '600',
                   textAlign: 'center',
                   lineHeight: 20,
-                },
-                {
-                  color: currentStyle.textColor,
-                  textShadowColor: currentStyle.textShadow ? 'rgba(0,0,0,0.8)' : 'transparent',
-                  textShadowOffset: currentStyle.textShadow ? {width: 1, height: 1} : {width: 0, height: 0},
-                  textShadowRadius: currentStyle.textShadow ? 2 : 0,
+                  color: captionStyles[captionStyle]?.textColor || '#ffffff',
+                  textShadowColor: captionStyles[captionStyle]?.textShadow ? 'rgba(0,0,0,0.8)' : 'transparent',
+                  textShadowOffset: captionStyles[captionStyle]?.textShadow ? {width: 1, height: 1} : {width: 0, height: 0},
+                  textShadowRadius: captionStyles[captionStyle]?.textShadow ? 2 : 0,
                 }
               ]}>
                 {currentCaptionText}
@@ -1673,7 +1671,20 @@ export default function App() {
 
   // Show recording view when active
   if (showRecordingView) {
-    return <RecordingView />;
+    try {
+      return <RecordingView />;
+    } catch (error) {
+      console.error('RecordingView render error:', error);
+      setShowRecordingView(false);
+      Alert.alert('Display Error', 'Caption display failed. Recording without captions.');
+      return (
+        <View style={styles.container}>
+          <Text style={{ color: '#f4f4f4', textAlign: 'center', marginTop: 100 }}>
+            Restarting recording view...
+          </Text>
+        </View>
+      );
+    }
   }
 
   // 3. Clean up the render conditional (remove debug wrapper)
