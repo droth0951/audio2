@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Pressable,
+  FlatList,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
@@ -29,6 +30,79 @@ import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// Cache for RSS feeds to avoid re-fetching
+const RSS_CACHE_KEY = 'rss_cache';
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+// Performance-optimized RSS parser
+const fastParseRSSFeed = (xmlText, limit = 5) => {
+  try {
+    const episodes = [];
+    
+    // Use more efficient regex patterns
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    let count = 0;
+    
+    while ((match = itemRegex.exec(xmlText)) && count < limit) {
+      const item = match[1];
+      
+      // Fast title extraction
+      const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([^<>\]]+)(?:\]\]>)?<\/title>/);
+      const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
+      
+      // Fast audio URL extraction
+      const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/);
+      const audioUrl = audioMatch ? audioMatch[1] : null;
+      
+      // Fast description extraction
+      let description = 'No description available.';
+      const descriptionMatch = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
+      console.log('🔍 Description match for episode', count + 1, ':', descriptionMatch ? 'Found' : 'Not found');
+      if (descriptionMatch && descriptionMatch[1]) {
+        description = descriptionMatch[1]
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+/g, ' ')
+          .trim();
+        console.log('📝 Parsed description length:', description.length);
+      }
+      
+      // Fast artwork extraction
+      let artwork = null;
+      const artworkMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                          item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
+      if (artworkMatch) {
+        artwork = artworkMatch[1];
+        console.log('🖼️ Artwork found for episode', count + 1, ':', artwork);
+      } else {
+        console.log('🖼️ No artwork found for episode', count + 1);
+      }
+      
+      if (audioUrl) {
+        episodes.push({
+          id: count,
+          title,
+          audioUrl,
+          pubDate: item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] || '',
+          artwork: artwork,
+          description: description || 'No description available.',
+        });
+        count++;
+      }
+    }
+    
+    return episodes;
+  } catch (error) {
+    console.error('Fast RSS parse error:', error);
+    return [];
+  }
+};
 
 const AnimatedWaveform = ({ 
   isPlaying = false,
@@ -245,17 +319,11 @@ const HomeAnimatedWaveform = ({
 
 
 
-function AppWithFonts() {
+export default function App() {
   const [fontsLoaded] = useFonts({
     'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
   });
-  if (!fontsLoaded) return null;
-  return <App />;
-}
 
-export default AppWithFonts;
-
-function App() {
   // Main app state
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -338,135 +406,171 @@ function App() {
   
   // Add this new state after episodes state
   const [allEpisodes, setAllEpisodes] = useState([]);
-
-  // Add isLoadingMore state at the top level
+  const [showLoadMore, setShowLoadMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
-  const loadPodcastFeed = async (feedUrl) => {
-    console.log('🎙️ Loading first 7 episodes from:', feedUrl);
-    setLoading(true);
+  // Cache management functions
+  const getCachedFeed = async (feedUrl) => {
     try {
-      // AGGRESSIVE TIMEOUT: 3 seconds only
+      const cacheKey = `${RSS_CACHE_KEY}_${feedUrl}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          console.log('📦 Using cached feed');
+          return data;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Cache read error:', error);
+      return null;
+    }
+  };
+
+  const setCachedFeed = async (feedUrl, episodes) => {
+    try {
+      const cacheKey = `${RSS_CACHE_KEY}_${feedUrl}`;
+      const cacheData = {
+        data: episodes,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    } catch (error) {
+      console.error('Cache write error:', error);
+    }
+  };
+
+  const loadPodcastFeed = async (feedUrl) => {
+    console.log('🎙️ loadPodcastFeed called with:', feedUrl);
+    setLoading(true);
+    
+    try {
+      // Check cache first
+      const cachedEpisodes = await getCachedFeed(feedUrl);
+      if (cachedEpisodes) {
+        setAllEpisodes(cachedEpisodes);
+        setEpisodes(cachedEpisodes.slice(0, 5)); // Show only first 5 episodes
+        setShowLoadMore(cachedEpisodes.length > 5);
+        setCurrentRssFeed(feedUrl);
+        console.log('✅ Feed loaded from cache!');
+        console.log('📝 Cached first episode description:', cachedEpisodes[0]?.description?.substring(0, 100) || 'No description');
+        console.log('📊 Cached total episodes:', cachedEpisodes.length);
+        console.log('📊 Cached show load more:', cachedEpisodes.length > 5);
+        return;
+      }
+
+      console.log('📡 Starting fetch...');
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduced timeout
+      
       const response = await fetch(feedUrl, {
         signal: controller.signal,
         headers: {
-          'Accept': 'application/rss+xml, application/xml, text/xml',
-          'User-Agent': 'Audio2/1.0',
-          'Cache-Control': 'no-cache', // Force fresh data
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
         }
+      }).catch(err => {
+        console.error('🔥 Fetch error:', err);
+        throw err;
       });
+      
       clearTimeout(timeoutId);
+      
+      console.log('📡 Response received! Status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Feed unavailable (${response.status})`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
+      console.log('📄 Getting text...');
       const xmlText = await response.text();
-      console.log('📄 XML received, parsing...');
-      // FAST PARSING: Stop after finding 7 episodes
-      const episodes = parseRSSFeedFast(xmlText, 7);
-      console.log(`🎧 Loaded ${episodes.length} episodes quickly`);
+      console.log('📄 XML length:', xmlText.length);
+      
+      console.log('🔧 Calling fastParseRSSFeed...');
+      // Parse up to 50 episodes to check if there are more available
+      const allEpisodes = fastParseRSSFeed(xmlText, 50);
+      console.log('🎧 Parsed episodes:', allEpisodes.length);
+      
+      // Show only first 5 episodes initially
+      const episodes = allEpisodes.slice(0, 5);
+      
       if (episodes.length === 0) {
-        throw new Error('No episodes found');
+        throw new Error('No episodes found in feed');
       }
-      setEpisodes(episodes);
+      
+      // Cache the results
+      await setCachedFeed(feedUrl, allEpisodes);
+      
+      setAllEpisodes(allEpisodes);
+      setEpisodes(episodes); // Show only first 5 episodes
+      setShowLoadMore(allEpisodes.length > 5); // Show load more if there are more episodes
       setCurrentRssFeed(feedUrl);
-      // Extract podcast title for display
-      const titleMatch = xmlText.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || 
-                        xmlText.match(/<title>(.*?)<\/title>/);
-      if (titleMatch) {
-        setPodcastTitle(titleMatch[1].trim());
-      }
+      console.log('✅ Feed loaded successfully!');
+      console.log('📝 First episode description:', episodes[0]?.description?.substring(0, 100) || 'No description');
+      console.log('📊 Total episodes parsed:', allEpisodes.length);
+      console.log('📊 Episodes to show:', episodes.length);
+      console.log('📊 Show load more:', allEpisodes.length > 5);
+      
     } catch (error) {
-      console.error('❌ Fast loading failed:', error);
-      let message = 'Could not load episodes';
+      console.error('❌ loadPodcastFeed error:', error);
+      console.error('❌ Error type:', error.name);
+      console.error('❌ Error message:', error.message);
+      
+      let errorMessage = 'Failed to load podcast feed';
+      
       if (error.name === 'AbortError') {
-        message = 'Feed took too long - try again';
-      } else if (error.message.includes('Network')) {
-        message = 'Check your internet connection';
+        errorMessage = 'Request timed out - please try again';
+      } else if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network error - check your internet connection';
+      } else if (error.message.includes('HTTP')) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = `Error: ${error.message}`;
       }
-      Alert.alert('Loading Failed', message);
-      // FALLBACK: Set empty episodes so user isn't stuck
-      setEpisodes([]);
+      
+      Alert.alert('Feed Error', errorMessage);
     } finally {
+      console.log('🏁 Setting loading to false');
       setLoading(false);
     }
   };
 
-  // FAST RSS PARSER: Stops early, only gets what we need
-  const parseRSSFeedFast = (xmlText, maxEpisodes = 7) => {
-    console.log('🔍 Fast parsing for first', maxEpisodes, 'episodes');
+  // Load more episodes function
+  const loadMoreEpisodes = useCallback(async () => {
+    if (isLoadingMore || !currentRssFeed) return;
     
+    setIsLoadingMore(true);
     try {
-      const episodes = [];
-      
-      // Get podcast artwork once
-      const channelImageMatch = xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/>/) ||
-                               xmlText.match(/<image[^>]*>[\s\S]*?<url>(.*?)<\/url>[\s\S]*?<\/image>/);
-      const podcastArtwork = channelImageMatch?.[1] || null;
-      
-      // Find all <item> tags but process only maxEpisodes
-      const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
-      
-      if (!itemMatches) {
-        console.log('❌ No items found in RSS');
-        return [];
+      // If we have more episodes in allEpisodes, show them
+      if (allEpisodes.length > episodes.length) {
+        setEpisodes(allEpisodes);
+        setShowLoadMore(false);
+        console.log('📊 Loaded all', allEpisodes.length, 'episodes');
+      } else {
+        // If we need to parse more episodes, fetch and parse more
+        console.log('📊 Fetching more episodes...');
+        const response = await fetch(currentRssFeed);
+        const xmlText = await response.text();
+        const moreEpisodes = fastParseRSSFeed(xmlText, 100); // Parse up to 100 episodes
+        
+        setAllEpisodes(moreEpisodes);
+        setEpisodes(moreEpisodes);
+        setShowLoadMore(false);
+        
+        // Update cache with full data
+        await setCachedFeed(currentRssFeed, moreEpisodes);
+        console.log('📊 Loaded', moreEpisodes.length, 'episodes from full parse');
       }
       
-      console.log(`📦 Processing first ${maxEpisodes} of ${itemMatches.length} episodes`);
-      
-      // SPEED OPTIMIZATION: Only process first N episodes
-      const itemsToProcess = itemMatches.slice(0, maxEpisodes);
-      
-      itemsToProcess.forEach((item, index) => {
-        // Extract essential data only
-        const title = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
-                     item.match(/<title>(.*?)<\/title>/)?.[1] || 
-                     `Episode ${index + 1}`;
-        
-        const audioUrl = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/)?.[1];
-        const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1];
-        
-        // Simple description extraction
-        let description = item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/)?.[1] ||
-                         item.match(/<description>([\s\S]*?)<\/description>/)?.[1] ||
-                         'No description available.';
-        
-        // Quick cleanup
-        if (description !== 'No description available.') {
-          description = description
-            .replace(/<[^>]*>/g, '')
-            .replace(/&[^;]+;/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .substring(0, 200); // Limit description length for speed
-        }
-        
-        // Episode artwork (fallback to podcast artwork)
-        const episodeImageMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/>/);
-        const episodeArtwork = episodeImageMatch?.[1] || podcastArtwork;
-        
-        if (audioUrl) {
-          episodes.push({
-            id: index,
-            title: title.trim(),
-            audioUrl,
-            pubDate,
-            artwork: episodeArtwork,
-            description: description,
-          });
-        }
-      });
-      
-      console.log(`✅ Fast parsed ${episodes.length} episodes`);
-      return episodes;
-      
     } catch (error) {
-      console.error('❌ Fast parsing error:', error);
-      return [];
+      console.error('Load more error:', error);
+      Alert.alert('Error', 'Failed to load more episodes');
+    } finally {
+      setIsLoadingMore(false);
     }
-  };
+  }, [isLoadingMore, currentRssFeed, allEpisodes, episodes.length]);
 
   // Apple Podcasts URL to RSS converter
   const getApplePodcastsRssUrl = async (appleUrl) => {
@@ -625,6 +729,8 @@ function App() {
 
   // Audio player functions
   const playEpisode = async (episode) => {
+    console.log('🎧 Playing episode:', episode.title);
+    console.log('🖼️ Episode artwork:', episode.artwork);
     try {
       setIsLoading(true);
       
@@ -632,6 +738,7 @@ function App() {
         await sound.unloadAsync();
       }
       
+      // Pre-configure audio mode for faster setup
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: true,
@@ -640,15 +747,24 @@ function App() {
         playThroughEarpieceAndroid: false,
       });
       
+      // Use streaming for faster loading
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: episode.audioUrl },
-        { shouldPlay: false }
+        { 
+          shouldPlay: false,
+          progressUpdateIntervalMillis: 1000, // Reduce update frequency
+          positionMillis: 0,
+          shouldCorrectPitch: false, // Disable for speed
+          rate: 1.0,
+          shouldRevert: false,
+        }
       );
       
       setSound(newSound);
       setSelectedEpisode(episode);
       setIsLoading(false);
       
+      // Optimized status update handler
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && !isScrubbing) {
           setPosition(status.positionMillis || 0);
@@ -790,7 +906,7 @@ function App() {
           textAlign: 'center',
           marginBottom: 16,
         }}>
-          About Audio2 Clip Making
+          Recording Instructions
         </Text>
         
         <Text style={{
@@ -799,11 +915,10 @@ function App() {
           lineHeight: 20,
           marginBottom: 20,
         }}>
-          Great job! You've found an insight worth sharing. We'll turn it into a file that will save to your photo library for sharing to social.{`\n`}
-          1. Keep your screen on during the clip making process{`\n`}
-          2. Don't switch apps or lock your phone{`\n`}
-          3. Hit Start Recording. The clip will play.{`\n`}
-          4. Check Photos to find and share your clip.
+          • Keep your screen on during recording{`\n`}
+          • Don't switch apps or lock your phone{`\n`}
+          • The recording will start automatically{`\n`}
+          • Your clip will be saved to Photos when complete
         </Text>
         
         <TouchableOpacity 
@@ -1329,82 +1444,16 @@ function App() {
   // Compose the gestures
   const composedGesture = Gesture.Race(swipeBackGesture, scrollGesture);
 
-  // Add a new function to load the complete RSS feed
-  const loadCompleteFeed = async () => {
-    if (!currentRssFeed) return;
-    
-    try {
-      setLoading(true);
-      console.log('📡 Loading complete RSS feed...');
-      
-      const response = await fetch(currentRssFeed, {
-        headers: {
-          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const xmlText = await response.text();
-      // Parse the complete feed without limit
-      const completeEpisodes = parseRSSFeed(xmlText);
-      
-      setAllEpisodes(completeEpisodes);
-      setEpisodes(completeEpisodes);
-      
-      console.log('✅ Complete feed loaded:', completeEpisodes.length, 'episodes');
-      
-    } catch (error) {
-      console.error('❌ Error loading complete feed:', error);
-      Alert.alert('Error', 'Failed to load complete feed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // Shuffle function to randomize array order
-  const shuffleArray = (array) => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
 
-  // ADD "Load More Episodes" button at the bottom of episode list
-  const LoadMoreButton = ({ isLoadingMore, setIsLoadingMore }) => {
-    const loadMoreEpisodes = async () => {
-      setIsLoadingMore(true);
-      try {
-        // Load next batch of episodes (8-20) ONLY when user clicks
-        const response = await fetch(currentRssFeed);
-        const xmlText = await response.text();
-        const allEpisodes = parseRSSFeedFast(xmlText, 20); // Get first 20 total
-        const newEpisodes = allEpisodes.slice(episodes.length); // Get the rest
-        setEpisodes([...episodes, ...newEpisodes]);
-      } catch (error) {
-        Alert.alert('Error', 'Could not load more episodes');
-      } finally {
-        setIsLoadingMore(false);
-      }
-    };
+  if (!fontsLoaded) {
     return (
-      <TouchableOpacity 
-        style={styles.loadMoreButton} 
-        onPress={loadMoreEpisodes}
-        disabled={isLoadingMore}
-      >
-        {isLoadingMore ? (
-          <ActivityIndicator size="small" color="#d97706" />
-        ) : (
-          <Text style={styles.loadMoreText}>Load More Episodes</Text>
-        )}
-      </TouchableOpacity>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1c1c1c' }}>
+        <ActivityIndicator size="large" color="#d97706" />
+        <Text style={{ color: '#f4f4f4', marginTop: 10 }}>Loading fonts...</Text>
+      </View>
     );
-  };
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1418,186 +1467,174 @@ function App() {
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.gradient}
         >
-          {/* Global loading overlay: covers everything when loading and no episodes */}
-          {loading && episodes.length === 0 && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#d97706" />
-              <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
-            </View>
-          )}
           <GestureDetector gesture={composedGesture}>
-            <Animated.View style={[animatedStyle, { flex: 1 }]}> 
-              <ScrollView 
-                style={styles.scrollView}
-                showsVerticalScrollIndicator={false}
-                showsHorizontalScrollIndicator={false}
-              >
-                {/* Show Episode List when no episode is selected */}
-                {!selectedEpisode && (
-                  <>
-                    {/* Header */}
-                    <View style={styles.header}>
-                      <View style={styles.logoContainer}>
-                        <HomeAnimatedWaveform 
-                          isPlaying={isPlaying} 
-                          size="large"
-                          style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
-                        />
-                        <Text
-                          style={{
-                            fontFamily: 'Lobster',
-                            fontSize: 48,
-                            color: '#f4f4f4',
-                            marginTop: -20, // Overlap: more negative margin
-                            textAlign: 'center',
-                            letterSpacing: 1,
-                          }}
-                        >
-                          Audio2
-                        </Text>
-                        <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
-                      </View>
+            <Animated.View style={[animatedStyle, { flex: 1 }]}>
+              {loading && episodes.length === 0 && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="large" color="#d97706" />
+                  <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
+                </View>
+              )}
+              {/* Show Episode List when no episode is selected */}
+              {!selectedEpisode && (
+                <>
+                  {/* Header */}
+                  <View style={styles.header}>
+                    <View style={styles.logoContainer}>
+                      <HomeAnimatedWaveform 
+                        isPlaying={isPlaying} 
+                        size="large"
+                        style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
+                      />
+                      <Text
+                        style={{
+                          fontFamily: 'Lobster',
+                          fontSize: 48,
+                          color: '#f4f4f4',
+                          marginTop: -20, // Overlap: more negative margin
+                          textAlign: 'center',
+                          letterSpacing: 1,
+                        }}
+                      >
+                        Audio2
+                      </Text>
+                      <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
                     </View>
+                  </View>
 
-                    {/* Enhanced Input Section with Search Toggle */}
-                    <View style={styles.inputSection}>
-                      <View style={styles.inputContainer}>
-                        <TextInput
-                          ref={textInputRef}
-                          style={styles.input}
-                          placeholder="Search podcasts or paste RSS feed URL"
-                          placeholderTextColor="#888"
-                          value={urlInput}
-                          blurOnSubmit={false}
-                          onChangeText={(text) => {
-                            console.log('📝 Input changed:', text);
-                            setUrlInput(text);
-                          }}
-                          onSubmitEditing={() => {
-                            console.log('⏎ Submit editing triggered');
-                            handlePodcastSearch(urlInput);
-                          }}
-                        />
-                      </View>
-                      <View style={styles.buttonContainer}>
-                        <Pressable 
-                          style={styles.submitButton} 
-                          onPress={() => {
-                            const query = urlInput.trim();
-                            if (query) {
-                              handlePodcastSearch(query);
-                            }
-                          }}
-                        >
-                          <Text style={styles.submitButtonText}>Search</Text>
-                        </Pressable>
-                        <Text style={styles.searchHintText}>may need to 2x tap</Text>
-                      </View>
+                  {/* Enhanced Input Section with Search Toggle */}
+                  <View style={styles.inputSection}>
+                    <View style={styles.inputContainer}>
+                      <TextInput
+                        ref={textInputRef}
+                        style={styles.input}
+                        placeholder="Search podcasts or paste RSS feed URL"
+                        placeholderTextColor="#888"
+                        value={urlInput}
+                        blurOnSubmit={false}
+                        onChangeText={(text) => {
+                          console.log('📝 Input changed:', text);
+                          setUrlInput(text);
+                        }}
+                        onSubmitEditing={() => {
+                          console.log('⏎ Submit editing triggered');
+                          handlePodcastSearch(urlInput);
+                        }}
+                      />
                     </View>
+                    <View style={styles.buttonContainer}>
+                      <Pressable 
+                        style={styles.submitButton} 
+                        onPress={() => {
+                          const query = urlInput.trim();
+                          if (query) {
+                            handlePodcastSearch(query);
+                          }
+                        }}
+                      >
+                        <Text style={styles.submitButtonText}>Search</Text>
+                      </Pressable>
+                      <Text style={styles.searchHintText}>may need to 2x tap</Text>
+                    </View>
+                  </View>
 
-                    {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
-                    {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
-                      <View style={{ paddingHorizontal: 16 }}>
-                        <View style={styles.recentSection}>
-                          <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                          <ScrollView 
-                            horizontal 
-                            showsHorizontalScrollIndicator={false}
-                            showsVerticalScrollIndicator={false}
-                            style={styles.recentScrollView}
+                  {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
+                  {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
+                    <View style={styles.recentSection}>
+                      <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.recentScrollView}
+                      >
+                        {recentPodcasts.map((podcast) => (
+                          <TouchableOpacity
+                            key={podcast.id}
+                            style={styles.recentPodcastItem}
+                            onPress={() => handleSelectPodcast(podcast)}
                           >
-                            {recentPodcasts.map((podcast) => (
-                              <TouchableOpacity
-                                key={podcast.id}
-                                style={styles.recentPodcastItem}
-                                onPress={() => handleSelectPodcast(podcast)}
-                              >
-                                <Image 
-                                  source={{ uri: podcast.artwork }} 
-                                  style={styles.recentPodcastArtwork}
-                                  defaultSource={require('./assets/logo1.png')}
-                                />
-                                <Text style={styles.recentPodcastName} numberOfLines={2}>
-                                  {podcast.name}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      </View>
-                    )}
+                            <Image 
+                              source={{ uri: podcast.artwork }} 
+                              style={styles.recentPodcastArtwork}
+                              defaultSource={require('./assets/logo1.png')}
+                            />
+                            <Text style={styles.recentPodcastName} numberOfLines={2}>
+                              {podcast.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
 
-                    {/* Popular Business Podcasts (show when no episodes and no search results) */}
-                    {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
-                      <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
-                        <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                        <View style={styles.pillRow}>
-                          {shuffleArray(popularBusinessPodcasts).slice(0, 15).map((title, idx) => (
-                            <TouchableOpacity key={title + idx} onPress={async () => {
-                              setSearchTerm(title);
-                              await handlePodcastSearch(title);
-                            }} style={styles.popularPodcastPill}>
-                              <Text style={styles.popularPodcastPillText}>{title}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
+                  {/* Popular Business Podcasts (show when no episodes and no search results) */}
+                  {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
+                    <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                      <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                      <View style={styles.pillRow}>
+                        {popularBusinessPodcasts.slice(0, 15).map((title, idx) => (
+                          <TouchableOpacity key={title + idx} onPress={async () => {
+                            setSearchTerm(title);
+                            await handlePodcastSearch(title);
+                          }} style={styles.popularPodcastPill}>
+                            <Text style={styles.popularPodcastPillText}>{title}</Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
-                    )}
+                    </View>
+                  )}
 
                    {searchResults.length > 0 && (
-<View style={styles.searchResultsSection}>
-  <Text style={styles.sectionTitle}>
-    Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
-  </Text>
-  {searchResults.map((podcast) => (
-    <TouchableOpacity
-      key={podcast.id}
-      style={styles.searchResultItem}
-      onPress={() => handleSelectPodcast(podcast)}
-    >
-      <Image 
-        source={{ uri: podcast.artwork }} 
-        style={styles.searchResultArtwork}
-        defaultSource={require('./assets/logo1.png')}
-      />
-      <View style={styles.searchResultInfo}>
-        <Text style={styles.searchResultName} numberOfLines={2}>
-          {podcast.name}
-        </Text>
-        <Text style={styles.searchResultArtist} numberOfLines={1}>
-          {podcast.artist}
-        </Text>
-        {podcast.genres.length > 0 && (
-          <Text style={styles.searchResultGenre} numberOfLines={1}>
-            {podcast.genres[0]}
+  <View style={styles.searchResultsSection}>
+    <Text style={styles.sectionTitle}>
+      Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
+    </Text>
+    {searchResults.map((podcast) => (
+      <TouchableOpacity
+        key={podcast.id}
+        style={styles.searchResultItem}
+        onPress={() => handleSelectPodcast(podcast)}
+      >
+        <Image 
+          source={{ uri: podcast.artwork }} 
+          style={styles.searchResultArtwork}
+          defaultSource={require('./assets/logo1.png')}
+        />
+        <View style={styles.searchResultInfo}>
+          <Text style={styles.searchResultName} numberOfLines={2}>
+            {podcast.name}
           </Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  ))}
-</View>
+          <Text style={styles.searchResultArtist} numberOfLines={1}>
+            {podcast.artist}
+          </Text>
+          {podcast.genres.length > 0 && (
+            <Text style={styles.searchResultGenre} numberOfLines={1}>
+              {podcast.genres[0]}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    ))}
+  </View>
 )}
 
-                    {/* Current Feed Info */}
-                    {podcastTitle ? (
-                      <View style={styles.feedInfo}>
-                        <Text style={styles.feedTitle}>{podcastTitle}</Text>
-                      </View>
-                    ) : null}
+                  {/* Current Feed Info */}
+                  {podcastTitle ? (
+                    <View style={styles.feedInfo}>
+                      <Text style={styles.feedTitle}>{podcastTitle}</Text>
+                    </View>
+                  ) : null}
 
-                    {/* Episodes List */}
-                    {/* Only show loading spinner here if loading and there are already episodes */}
-                    {isLoadingMore ? (
-                      <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#d97706" />
-                        <Text style={styles.loadingText}>Loading episodes...</Text>
-                        <Text style={styles.loadingSubtext}>Getting more episodes</Text>
-                      </View>
-                    ) : (
-                      <>
-                        {episodes.map((episode) => (
+                  {/* Episodes List */}
+                  {loading ? (
+                    <Text style={styles.loadingText}>Loading episodes...</Text>
+                  ) : (
+                    <>
+                      <FlatList
+                        data={episodes}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={({ item: episode }) => (
                           <TouchableOpacity
-                            key={episode.id}
                             style={styles.episodeItem}
                             onPress={() => playEpisode(episode)}
                           >
@@ -1617,23 +1654,256 @@ function App() {
                               </Text>
                             </View>
                           </TouchableOpacity>
-                        ))}
-                        {/* Load More Button - only show if we have episodes */}
-                        {episodes.length > 0 && episodes.length >= 7 && (
-                          <LoadMoreButton isLoadingMore={isLoadingMore} setIsLoadingMore={setIsLoadingMore} />
                         )}
-                      </>
+                        showsVerticalScrollIndicator={false}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={5}
+                        windowSize={10}
+                        initialNumToRender={5}
+                        ListFooterComponent={() => {
+                          console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore);
+                          return showLoadMore ? (
+                            <TouchableOpacity
+                              style={styles.submitButton}
+                              onPress={loadMoreEpisodes}
+                              disabled={isLoadingMore}
+                            >
+                              {isLoadingMore ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+                                  <Text style={styles.submitButtonText}>Loading...</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.submitButtonText}>Load More Episodes</Text>
+                              )}
+                            </TouchableOpacity>
+                          ) : null;
+                        }}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+                {/* Show Audio Player when episode is selected */}
+                {selectedEpisode && (
+                  <>
+                    {/* Navigation Header */}
+                    <View style={styles.navigationHeader}>
+                      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                        <MaterialCommunityIcons name="arrow-left" size={20} color="#d97706" />
+                        <Text style={styles.backButtonText}>Episodes</Text>
+                      </TouchableOpacity>
+
+                    <AnimatedWaveform 
+                      isPlaying={isPlaying} 
+                      size="medium"
+                      style={{ width: 120, height: 48 }}
+                    />
+                  </View>
+
+                  {/* Episode Header */}
+                  <View style={styles.episodeHeader}>
+                    {selectedEpisode.artwork ? (
+                      <Image 
+                        source={{ uri: selectedEpisode.artwork }} 
+                        style={styles.episodeArtworkLarge}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.episodeArtworkLarge, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ color: '#888', fontSize: 12 }}>No Artwork</Text>
+                      </View>
                     )}
-                  </>
-                )}
-              </ScrollView>
-            </Animated.View>
-          </GestureDetector>
-        </LinearGradient>
-        {showRecordingGuidance && <RecordingGuidanceModal />}
-      </SafeAreaView>
-    </GestureHandlerRootView>
-  );
+                    <Text style={styles.episodeTitleLarge} numberOfLines={3}>
+                      {selectedEpisode.title}
+                    </Text>
+                  </View>
+
+                  {/* Loading State */}
+                  {isLoading && (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color="#d97706" />
+                      <Text style={styles.loadingText}>Loading episode...</Text>
+                    </View>
+                  )}
+
+                  {/* Player Controls - Show when loaded */}
+                  {!isLoading && (
+                    <>
+                      {/* MAIN TIMELINE - NEW AWESOME SLIDER */}
+                      <View style={styles.mainTimelineSection}>
+                        <View style={styles.sliderContainer}>
+                          <Slider
+                            style={styles.slider}
+                            progress={progressSharedValue}
+                            minimumValue={minValue}
+                            maximumValue={maxValue}
+                            thumbWidth={20}
+                            thumbHeight={20}
+                            trackHeight={8}
+                            theme={{
+                              disableMinTrackTintColor: true,
+                              maximumTrackTintColor: '#404040',
+                              minimumTrackTintColor: '#d97706',
+                              cacheTrackTintColor: '#404040',
+                              bubbleBackgroundColor: '#d97706',
+                            }}
+                            renderBubble={() => null}
+                            onSlidingStart={() => {
+                              console.log('Scrubbing started');
+                              setIsScrubbing(true);
+                            }}
+                            onValueChange={(value) => {
+                              if (isScrubbing) {
+                                progressSharedValue.value = value;
+                                setPosition(value);
+                              }
+                            }}
+                            onSlidingComplete={(value) => {
+                              console.log('Scrubbing complete:', value);
+                              setPosition(value);
+                              if (sound) {
+                                sound.setPositionAsync(Math.max(0, Math.min(value, duration)));
+                              }
+                              setTimeout(() => {
+                                setIsScrubbing(false);
+                              }, 100);
+                            }}
+                          />
+                          
+                          {/* Clip Markers Overlay - Fixed positioning */}
+                          <View style={styles.clipMarkersContainer}>
+                            {clipStart && duration && (
+                              <View 
+                                style={[
+                                  styles.clipMarkerOverlay, 
+                                  { 
+                                    left: `${(clipStart / duration) * 100}%`,
+                                    backgroundColor: '#ef4444',
+                                  }
+                                ]} 
+                              />
+                            )}
+                            {clipEnd && duration && (
+                              <View 
+                                style={[
+                                  styles.clipMarkerOverlay, 
+                                  { 
+                                    left: `${(clipEnd / duration) * 100}%`,
+                                    backgroundColor: '#ef4444',
+                                  }
+                                ]} 
+                              />
+                            )}
+                            
+                            {/* Clip Range Highlight */}
+                            {clipStart && clipEnd && duration && (
+                              <View 
+                                style={[
+                                  styles.clipRangeHighlight,
+                                  {
+                                    left: `${(clipStart / duration) * 100}%`,
+                                    width: `${((clipEnd - clipStart) / duration) * 100}%`,
+                                  }
+                                ]}
+                              />
+                            )}
+                          </View>
+                        </View>
+                        
+                        {/* Time Display Below Main Timeline */}
+                        <View style={styles.mainTimeContainer}>
+                          <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
+                          <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+                        </View>
+                      </View>
+
+                      {/* Fine Skip Controls */}
+                      <View style={styles.fineControls}>
+                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
+                          <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
+                          <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Main Skip Controls */}
+                      <View style={styles.skipControls}>
+                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
+                          <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
+                          <MaterialCommunityIcons 
+                            name={isPlaying ? "pause" : "play"} 
+                            size={40} 
+                            color="#f4f4f4" 
+                          />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
+                          <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Clip Controls */}
+                      <View style={styles.clipControls}>
+                        <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
+                          <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
+                          <Text style={styles.clipButtonText}>
+                            {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        {clipStart && clipEnd && (
+                          <>
+                            <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
+                              <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
+                              <Text style={styles.clipButtonText}>Preview</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
+                              <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
+                              <Text style={styles.saveButtonText}>Create Video</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+
+                      {/* Clip Info */}
+                      {(clipStart !== null && clipEnd !== null) && (
+                        <Text style={styles.clipInfo}>
+                          Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
+                        </Text>
+                      )}
+
+                      {/* Episode Notes */}
+                      <View style={styles.episodeNotes}>
+                        <Text style={styles.notesTitle}>Episode Notes</Text>
+                        <ScrollView 
+                          style={styles.notesScrollView}
+                          showsVerticalScrollIndicator={true}
+                          nestedScrollEnabled={true}
+                        >
+                          <Text style={styles.notesText}>
+                            {selectedEpisode.description}
+                          </Text>
+                        </ScrollView>
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+          </Animated.View>
+        </GestureDetector>
+      </LinearGradient>
+      {showRecordingGuidance && <RecordingGuidanceModal />}
+    </SafeAreaView>
+  </GestureHandlerRootView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -1641,8 +1911,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1c1c1c',
     paddingTop: 0, // Remove any manual padding
-    paddingBottom: 0, // Remove any bottom padding
-    marginBottom: -34, // Negative margin to hide home indicator (iPhone specific)
   },
   gradient: {
     flex: 1,
@@ -1771,7 +2039,7 @@ const styles = StyleSheet.create({
   // Audio player styles
   navigationHeader: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
     paddingVertical: 10,
@@ -1822,9 +2090,9 @@ const styles = StyleSheet.create({
   mainTimelineSection: {
     marginBottom: 30,
     paddingHorizontal: 10,
-    overflow: 'hidden',
   },
   sliderContainer: {
+    position: 'relative',
     paddingVertical: 20,
     paddingHorizontal: 10,
   },
@@ -1839,7 +2107,6 @@ const styles = StyleSheet.create({
     right: 20,
     height: 40,
     pointerEvents: 'none', // Allow touches to pass through to slider
-    // backgroundColor: 'red', // DEBUG REMOVED
   },
   clipMarkerOverlay: {
     position: 'absolute',
@@ -1849,13 +2116,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginLeft: -2, // Center the marker
     zIndex: 10,
-    // backgroundColor: 'red', // DEBUG REMOVED
   },
   clipRangeHighlight: {
     position: 'absolute',
     top: 14, // Slightly below track center
     height: 12,
-    backgroundColor: 'rgba(239, 68, 68, 0.3)', // Semi-transparent red (restored)
+    backgroundColor: 'rgba(239, 68, 68, 0.3)', // Semi-transparent red
     borderRadius: 6,
     zIndex: 5,
   },
@@ -1971,6 +2237,10 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#404040',
+    flex: 1,
+  },
+  notesScrollView: {
+    maxHeight: 200,
   },
   notesTitle: {
     color: '#f4f4f4',
@@ -2429,26 +2699,6 @@ suggestionTagText: {
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 10,
-  },
-  loadMoreButton: {
-    backgroundColor: '#404040',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    margin: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#555555',
-  },
-  loadMoreText: {
-    color: '#d97706',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingSubtext: {
-    color: '#b4b4b4',
-    fontSize: 14,
-    marginTop: 4,
   },
 });
 
