@@ -35,7 +35,7 @@ const RSS_CACHE_KEY = 'rss_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
 // Performance-optimized RSS parser
-const fastParseRSSFeed = (xmlText, limit = 5) => {
+const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
   try {
     const episodes = [];
     
@@ -75,13 +75,34 @@ const fastParseRSSFeed = (xmlText, limit = 5) => {
       
       // Fast artwork extraction
       let artwork = null;
+      console.log('🔍 Extracting artwork for episode', count + 1);
+      
+      // Try multiple patterns for artwork extraction
       const artworkMatch = item.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
-                          item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/);
+                          item.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                          item.match(/<media:content[^>]*url="([^"]*)"[^>]*\/?>/) ||
+                          item.match(/<enclosure[^>]*type="image[^"]*"[^>]*url="([^"]*)"[^>]*\/?>/) ||
+                          item.match(/<media:thumbnail[^>]*url="([^"]*)"[^>]*\/?>/);
+      
       if (artworkMatch) {
         artwork = artworkMatch[1];
         console.log('🖼️ Artwork found for episode', count + 1, ':', artwork);
       } else {
-        console.log('🖼️ No artwork found for episode', count + 1);
+        console.log('🖼️ No episode artwork found for episode', count + 1);
+        
+        // Try to get podcast-level artwork as fallback
+        console.log('🔍 Trying podcast-level artwork as fallback...');
+        const podcastArtworkMatch = xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<media:content[^>]*url="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<media:thumbnail[^>]*url="([^"]*)"[^>]*\/?>/);
+        
+        if (podcastArtworkMatch) {
+          artwork = podcastArtworkMatch[1];
+          console.log('🖼️ Using podcast artwork as fallback for episode', count + 1, ':', artwork);
+        } else {
+          console.log('🖼️ No podcast artwork found either for episode', count + 1);
+        }
       }
       
       if (audioUrl) {
@@ -397,6 +418,16 @@ export default function App() {
     'Business Wars'
   ];
 
+  // Add state for episode notes bottom sheet
+  const [showEpisodeNotes, setShowEpisodeNotes] = useState(false);
+  const [episodeNotesHeight] = useState(screenHeight * 0.7); // 70% of screen height
+  const notesTranslateY = useSharedValue(screenHeight);
+  const notesOpacity = useSharedValue(0);
+
+  // Add state for episode loading spinner
+  const [isEpisodeLoading, setIsEpisodeLoading] = useState(false);
+  const [loadingEpisodeTitle, setLoadingEpisodeTitle] = useState('');
+
  // Place here:
   const translateX = useSharedValue(0);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -404,6 +435,15 @@ export default function App() {
     opacity: 1 - translateX.value / screenWidth,
   }));
   
+  // Add animated styles for episode notes bottom sheet
+  const notesAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: notesTranslateY.value }],
+  }));
+
+  const notesOverlayAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: notesOpacity.value,
+  }));
+
   // Add this new state after episodes state
   const [allEpisodes, setAllEpisodes] = useState([]);
   const [showLoadMore, setShowLoadMore] = useState(false);
@@ -450,10 +490,83 @@ export default function App() {
       // Check cache first
       const cachedEpisodes = await getCachedFeed(feedUrl);
       if (cachedEpisodes) {
+        // Add stored podcast artwork to cached episodes
+        const storedPodcastArtwork = await AsyncStorage.getItem(`podcast_artwork_${feedUrl}`);
+        console.log('🔍 Checking for stored podcast artwork for cached feed:', feedUrl);
+        console.log('🔍 Stored podcast artwork found:', !!storedPodcastArtwork);
+        
+        if (storedPodcastArtwork) {
+          console.log('🖼️ Adding stored artwork to cached episodes:', storedPodcastArtwork);
+          cachedEpisodes.forEach(episode => {
+            if (!episode.artwork) {
+              episode.artwork = storedPodcastArtwork;
+              console.log('🖼️ Added stored artwork to cached episode:', episode.title);
+            }
+          });
+        }
+        
         setAllEpisodes(cachedEpisodes);
         setEpisodes(cachedEpisodes.slice(0, 5)); // Show only first 5 episodes
         setShowLoadMore(cachedEpisodes.length > 5);
         setCurrentRssFeed(feedUrl);
+        
+        // Set podcast title from cache if available
+        const cachedPodcastTitle = await AsyncStorage.getItem(`podcast_title_${feedUrl}`);
+        console.log('🔍 Cached podcast title:', cachedPodcastTitle);
+        if (cachedPodcastTitle) {
+          console.log('✅ Setting podcast title from cache:', cachedPodcastTitle);
+          setPodcastTitle(cachedPodcastTitle);
+        } else {
+          console.log('❌ No cached podcast title found');
+          // Try to extract from the original RSS feed if we have it cached
+          const cachedRssContent = await AsyncStorage.getItem(`rss_content_${feedUrl}`);
+          console.log('🔍 Cached RSS content exists:', !!cachedRssContent);
+          if (cachedRssContent) {
+            console.log('🔍 Attempting to extract podcast title from cached RSS content...');
+            const channelTitleMatch = cachedRssContent.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+            console.log('🔍 Channel title match from cached RSS:', channelTitleMatch);
+            if (channelTitleMatch) {
+              const title = channelTitleMatch[1].trim();
+              console.log('✅ Extracted podcast title from cached RSS:', title);
+              setPodcastTitle(title);
+              await AsyncStorage.setItem(`podcast_title_${feedUrl}`, title);
+            } else {
+              console.log('❌ Could not extract podcast title from cached RSS content');
+              // Try alternative extraction
+              const titleMatch = cachedRssContent.match(/<title>(.*?)<\/title>/);
+              console.log('🔍 Alternative title match from cached RSS:', titleMatch);
+              if (titleMatch) {
+                const title = titleMatch[1].trim();
+                console.log('✅ Extracted podcast title (alternative) from cached RSS:', title);
+                setPodcastTitle(title);
+                await AsyncStorage.setItem(`podcast_title_${feedUrl}`, title);
+              }
+            }
+          } else {
+            console.log('❌ No cached RSS content found, will need fresh fetch');
+            // Force a fresh fetch to get the RSS content and extract title
+            console.log('🔄 Forcing fresh fetch to get podcast title...');
+            try {
+              const response = await fetch(feedUrl);
+              const xmlText = await response.text();
+              await AsyncStorage.setItem(`rss_content_${feedUrl}`, xmlText);
+              
+              // Extract podcast title from fresh RSS
+              const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+              if (channelTitleMatch) {
+                const title = channelTitleMatch[1].trim();
+                console.log('✅ Extracted podcast title from fresh RSS:', title);
+                setPodcastTitle(title);
+                await AsyncStorage.setItem(`podcast_title_${feedUrl}`, title);
+              } else {
+                console.log('❌ Could not extract podcast title from fresh RSS');
+              }
+            } catch (error) {
+              console.log('❌ Error fetching fresh RSS for title extraction:', error);
+            }
+          }
+        }
+        
         console.log('✅ Feed loaded from cache!');
         console.log('📝 Cached first episode description:', cachedEpisodes[0]?.description?.substring(0, 100) || 'No description');
         console.log('📊 Cached total episodes:', cachedEpisodes.length);
@@ -488,10 +601,94 @@ export default function App() {
       const xmlText = await response.text();
       console.log('📄 XML length:', xmlText.length);
       
+      // Cache the RSS content for later title extraction
+      await AsyncStorage.setItem(`rss_content_${feedUrl}`, xmlText);
+      
       console.log('🔧 Calling fastParseRSSFeed...');
+      // Log a sample of the RSS feed structure for debugging
+      console.log('🔍 RSS feed sample (first 1000 chars):', xmlText.substring(0, 1000));
+      console.log('🔍 RSS feed contains <itunes:image>:', xmlText.includes('<itunes:image'));
+      console.log('🔍 RSS feed contains <image>:', xmlText.includes('<image>'));
+      console.log('🔍 RSS feed contains <media:content>:', xmlText.includes('<media:content'));
+      
       // Parse up to 50 episodes to check if there are more available
       const allEpisodes = fastParseRSSFeed(xmlText, 50);
       console.log('🎧 Parsed episodes:', allEpisodes.length);
+      
+      // Add stored podcast artwork as fallback for episodes without artwork
+      const storedPodcastArtwork = await AsyncStorage.getItem(`podcast_artwork_${feedUrl}`);
+      console.log('🔍 Checking for stored podcast artwork for feed:', feedUrl);
+      console.log('🔍 Stored podcast artwork found:', !!storedPodcastArtwork);
+      
+      // Also try to extract podcast-level artwork from RSS feed
+      let podcastArtworkFromRss = null;
+      const podcastArtworkMatch = xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                 xmlText.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                 xmlText.match(/<media:content[^>]*url="([^"]*)"[^>]*\/?>/) ||
+                                 xmlText.match(/<media:thumbnail[^>]*url="([^"]*)"[^>]*\/?>/);
+      
+      if (podcastArtworkMatch) {
+        podcastArtworkFromRss = podcastArtworkMatch[1];
+        console.log('🖼️ Found podcast artwork in RSS feed:', podcastArtworkFromRss);
+      }
+      
+      // Use stored artwork first, then RSS artwork as fallback
+      const fallbackArtwork = storedPodcastArtwork || podcastArtworkFromRss;
+      
+      if (fallbackArtwork) {
+        console.log('🖼️ Using fallback artwork:', fallbackArtwork);
+        allEpisodes.forEach(episode => {
+          if (!episode.artwork) {
+            episode.artwork = fallbackArtwork;
+            console.log('🖼️ Added fallback artwork to episode:', episode.title);
+          }
+        });
+      } else {
+        console.log('❌ No fallback artwork found for this feed');
+      }
+      
+      // Extract podcast title from RSS feed
+      console.log('🔍 Extracting podcast title from RSS feed...');
+      
+      // Try multiple patterns for podcast title extraction
+      let podcastTitle = null;
+      
+      // Pattern 1: <channel><title>
+      const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+      console.log('🔍 Channel title match:', channelTitleMatch);
+      
+      if (channelTitleMatch) {
+        podcastTitle = channelTitleMatch[1].trim();
+        console.log('✅ Found podcast title (channel):', podcastTitle);
+      } else {
+        // Pattern 2: <title> outside of items
+        const titleMatch = xmlText.match(/<title>(.*?)<\/title>/);
+        console.log('🔍 General title match:', titleMatch);
+        
+        if (titleMatch) {
+          const title = titleMatch[1].trim();
+          // Check if this is not an episode title (should be outside <item> tags)
+          const beforeTitle = xmlText.substring(0, titleMatch.index);
+          const afterTitle = xmlText.substring(titleMatch.index + titleMatch[0].length);
+          
+          // If there are no <item> tags before this title, it's likely the podcast title
+          if (!beforeTitle.includes('<item>')) {
+            podcastTitle = title;
+            console.log('✅ Found podcast title (general):', podcastTitle);
+          } else {
+            console.log('❌ Title found but appears to be episode title, not podcast title');
+          }
+        }
+      }
+      
+      if (podcastTitle) {
+        console.log('✅ Setting podcast title:', podcastTitle);
+        setPodcastTitle(podcastTitle);
+        // Cache the podcast title
+        await AsyncStorage.setItem(`podcast_title_${feedUrl}`, podcastTitle);
+      } else {
+        console.log('❌ No podcast title found in RSS feed');
+      }
       
       // Show only first 5 episodes initially
       const episodes = allEpisodes.slice(0, 5);
@@ -607,11 +804,25 @@ export default function App() {
         if (rssUrl) {
           console.log('✅ Found RSS URL:', rssUrl);
           console.log('📝 Podcast name:', podcast.collectionName);
+          console.log('📝 Full Apple API response:', JSON.stringify(podcast, null, 2));
           
           // Update podcast title for display
-          setPodcastTitle(podcast.collectionName || 'Podcast');
+          const podcastName = podcast.collectionName || 'Podcast';
+          console.log('✅ Setting podcast title from Apple:', podcastName);
+          setPodcastTitle(podcastName);
           
-          return rssUrl;
+          return {
+            rssUrl: rssUrl,
+            podcastData: {
+              id: podcast.collectionId,
+              name: podcast.collectionName,
+              artist: podcast.artistName,
+              artwork: podcast.artworkUrl100?.replace('100x100', '600x600') || podcast.artworkUrl100,
+              feedUrl: podcast.feedUrl,
+              description: podcast.description || '',
+              genres: podcast.genres || []
+            }
+          };
         }
       }
       
@@ -731,6 +942,11 @@ export default function App() {
   const playEpisode = async (episode) => {
     console.log('🎧 Playing episode:', episode.title);
     console.log('🖼️ Episode artwork:', episode.artwork);
+    
+    // Show loading spinner
+    setIsEpisodeLoading(true);
+    setLoadingEpisodeTitle(episode.title);
+    
     try {
       setIsLoading(true);
       
@@ -763,6 +979,7 @@ export default function App() {
       setSound(newSound);
       setSelectedEpisode(episode);
       setIsLoading(false);
+      setIsEpisodeLoading(false); // Hide loading spinner
       
       // Optimized status update handler
       newSound.setOnPlaybackStatusUpdate((status) => {
@@ -775,6 +992,7 @@ export default function App() {
       
     } catch (error) {
       setIsLoading(false);
+      setIsEpisodeLoading(false); // Hide loading spinner on error
       Alert.alert('Error', `Failed to load episode: ${error.message}`);
     }
   };
@@ -1127,8 +1345,6 @@ export default function App() {
       return;
     }
     
-    // REMOVED: if (loading) return;
-    
     console.log('📍 Trimmed URL:', trimmedUrl);
     
     // Basic URL validation
@@ -1140,14 +1356,18 @@ export default function App() {
     
     try {
       let rssUrl = trimmedUrl;
+      let podcastData = null;
       
       // Handle Apple Podcasts URLs
       if (trimmedUrl.includes('podcasts.apple.com')) {
         console.log('🍎 Apple Podcasts URL detected, converting...');
         
-        rssUrl = await getApplePodcastsRssUrl(trimmedUrl);
-        
-        if (!rssUrl) {
+        const result = await getApplePodcastsRssUrl(trimmedUrl);
+        if (result && result.rssUrl) {
+          rssUrl = result.rssUrl;
+          podcastData = result.podcastData;
+          console.log('✅ Converted to RSS URL:', rssUrl);
+        } else {
           Alert.alert(
             'RSS Feed Not Found', 
             'Could not find RSS feed for this Apple Podcasts URL. Please try a different podcast.'
@@ -1155,8 +1375,37 @@ export default function App() {
           setUrlInput('');
           return;
         }
-        
-        console.log('✅ Converted to RSS URL:', rssUrl);
+      } else {
+        // For RSS URLs, try to find the podcast in Apple Podcasts
+        console.log('🔍 RSS URL detected, searching Apple Podcasts for podcast data...');
+        try {
+          // Extract podcast name from RSS feed first
+          const response = await fetch(trimmedUrl);
+          const xmlText = await response.text();
+          
+          // Extract podcast title from RSS
+          const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+          const podcastTitle = channelTitleMatch ? channelTitleMatch[1].trim() : null;
+          
+          if (podcastTitle) {
+            console.log('🔍 Found podcast title in RSS:', podcastTitle);
+            // Search Apple Podcasts for this podcast
+            const searchResults = await searchPodcasts(podcastTitle);
+            if (searchResults.length > 0) {
+              // Use the first result as it's likely the best match
+              podcastData = searchResults[0];
+              console.log('✅ Found matching podcast in Apple Podcasts:', podcastData.name);
+            }
+          }
+        } catch (error) {
+          console.log('❌ Error searching Apple Podcasts:', error);
+        }
+      }
+      
+      // Store podcast data if we found it
+      if (podcastData && podcastData.artwork) {
+        await AsyncStorage.setItem(`podcast_artwork_${rssUrl}`, podcastData.artwork);
+        console.log('✅ Stored Apple Podcasts artwork for RSS feed:', podcastData.artwork);
       }
       
       // Load the RSS feed - loadPodcastFeed handles its own loading state
@@ -1248,6 +1497,12 @@ export default function App() {
       const updatedRecents = [podcast, ...recentPodcasts.filter(p => p.id !== podcast.id)].slice(0, 5);
       setRecentPodcasts(updatedRecents);
       
+      // Store the podcast artwork for use as fallback
+      if (podcast.artwork) {
+        await AsyncStorage.setItem(`podcast_artwork_${podcast.feedUrl}`, podcast.artwork);
+        console.log('✅ Stored podcast artwork for fallback:', podcast.artwork);
+      }
+      
       // Load the podcast feed using existing function
       await loadPodcastFeed(podcast.feedUrl);
       
@@ -1283,6 +1538,46 @@ export default function App() {
       handleSeekToPosition(Math.max(0, Math.min(seekPosition, duration)));
     }
   };
+
+  // Episode notes bottom sheet functions
+  const showEpisodeNotesSheet = () => {
+    setShowEpisodeNotes(true);
+    notesOpacity.value = withTiming(1, { duration: 300 });
+    notesTranslateY.value = withSpring(0, {
+      damping: 20,
+      stiffness: 300,
+      mass: 0.8,
+    });
+  };
+
+  const hideEpisodeNotesSheet = () => {
+    notesOpacity.value = withTiming(0, { duration: 300 });
+    notesTranslateY.value = withSpring(screenHeight, {
+      damping: 20,
+      stiffness: 300,
+      mass: 0.8,
+    }, () => {
+      runOnJS(setShowEpisodeNotes)(false);
+    });
+  };
+
+  const handleNotesPanGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (event.translationY > 0) {
+        notesTranslateY.value = event.translationY;
+      }
+    })
+    .onEnd((event) => {
+      if (event.translationY > 100 || event.velocityY > 500) {
+        hideEpisodeNotesSheet();
+      } else {
+        notesTranslateY.value = withSpring(0, {
+          damping: 20,
+          stiffness: 300,
+          mass: 0.8,
+        });
+      }
+    });
 
   // Recording view component - UPDATED to hide controls during recording
   const RecordingView = () => (
@@ -1540,7 +1835,7 @@ export default function App() {
 
                   {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
                   {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
-                    <View style={styles.recentSection}>
+                    <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
                       <Text style={styles.sectionTitle}>Recent Podcasts</Text>
                       <ScrollView 
                         horizontal 
@@ -1618,12 +1913,20 @@ export default function App() {
   </View>
 )}
 
-                  {/* Current Feed Info */}
-                  {podcastTitle ? (
-                    <View style={styles.feedInfo}>
-                      <Text style={styles.feedTitle}>{podcastTitle}</Text>
+                  {/* Podcast Header */}
+                  {console.log('🔍 Rendering podcast header - podcastTitle:', podcastTitle, 'episodes.length:', episodes.length)}
+                  {podcastTitle && episodes.length > 0 && (
+                    <View style={styles.podcastHeader}>
+                      <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
                     </View>
-                  ) : null}
+                  )}
+                  
+                  {/* Podcast Title when loading */}
+                  {podcastTitle && loading && episodes.length === 0 && (
+                    <View style={styles.podcastHeader}>
+                      <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
+                    </View>
+                  )}
 
                   {/* Episodes List */}
                   {loading ? (
@@ -1638,12 +1941,16 @@ export default function App() {
                             style={styles.episodeItem}
                             onPress={() => playEpisode(episode)}
                           >
-                            {episode.artwork && (
+                            {episode.artwork ? (
                               <Image 
                                 source={{ uri: episode.artwork }} 
                                 style={styles.episodeArtwork}
                                 resizeMode="cover"
                               />
+                            ) : (
+                              <View style={[styles.episodeArtwork, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
+                                <MaterialCommunityIcons name="music-note" size={24} color="#888" />
+                              </View>
                             )}
                             <View style={styles.episodeInfo}>
                               <Text style={styles.episodeTitle} numberOfLines={2}>
@@ -1712,12 +2019,17 @@ export default function App() {
                       />
                     ) : (
                       <View style={[styles.episodeArtworkLarge, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ color: '#888', fontSize: 12 }}>No Artwork</Text>
+                        <MaterialCommunityIcons name="music-note" size={48} color="#888" />
                       </View>
                     )}
                     <Text style={styles.episodeTitleLarge} numberOfLines={3}>
                       {selectedEpisode.title}
                     </Text>
+                    {podcastTitle && (
+                      <Text style={styles.episodePodcastName}>
+                        {podcastTitle}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Loading State */}
@@ -1880,19 +2192,15 @@ export default function App() {
                         </Text>
                       )}
 
-                      {/* Episode Notes */}
-                      <View style={styles.episodeNotes}>
-                        <Text style={styles.notesTitle}>Episode Notes</Text>
-                        <ScrollView 
-                          style={styles.notesScrollView}
-                          showsVerticalScrollIndicator={true}
-                          nestedScrollEnabled={true}
-                        >
-                          <Text style={styles.notesText}>
-                            {selectedEpisode.description}
-                          </Text>
-                        </ScrollView>
-                      </View>
+                      {/* Episode Notes Button */}
+                      <TouchableOpacity 
+                        style={styles.episodeNotesButton}
+                        onPress={showEpisodeNotesSheet}
+                      >
+                        <MaterialCommunityIcons name="text-box-outline" size={20} color="#d97706" />
+                        <Text style={styles.episodeNotesButtonText}>Episode Notes</Text>
+                        <MaterialCommunityIcons name="chevron-up" size={20} color="#d97706" />
+                      </TouchableOpacity>
                     </>
                   )}
                 </>
@@ -1901,6 +2209,63 @@ export default function App() {
         </GestureDetector>
       </LinearGradient>
       {showRecordingGuidance && <RecordingGuidanceModal />}
+      
+      {/* Episode Loading Spinner */}
+      {isEpisodeLoading && (
+        <View style={styles.episodeLoadingOverlay}>
+          <View style={styles.episodeLoadingContent}>
+            <ActivityIndicator size="large" color="#d97706" />
+            <Text style={styles.episodeLoadingTitle}>Loading Episode</Text>
+            <Text style={styles.episodeLoadingPodcastName}>
+              {console.log('🔍 Loading modal podcastTitle:', podcastTitle)}
+              {podcastTitle || 'Podcast'}
+            </Text>
+            <Text style={styles.episodeLoadingSubtitle} numberOfLines={2}>
+              {loadingEpisodeTitle}
+            </Text>
+            <TouchableOpacity 
+              style={styles.episodeLoadingCancelButton}
+              onPress={() => {
+                setIsEpisodeLoading(false);
+                setLoadingEpisodeTitle('');
+              }}
+            >
+              <Text style={styles.episodeLoadingCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
+      {/* Episode Notes Bottom Sheet */}
+      {showEpisodeNotes && (
+        <>
+          <Animated.View style={[styles.episodeNotesOverlay, notesOverlayAnimatedStyle]}>
+            <TouchableOpacity 
+              style={styles.episodeNotesOverlayTouchable}
+              onPress={hideEpisodeNotesSheet}
+            />
+          </Animated.View>
+          <GestureDetector gesture={handleNotesPanGesture}>
+            <Animated.View style={[styles.episodeNotesSheet, notesAnimatedStyle]}>
+              <View style={styles.episodeNotesHandle} />
+              <View style={styles.episodeNotesHeader}>
+                <Text style={styles.episodeNotesHeaderTitle}>Episode Notes</Text>
+                <TouchableOpacity onPress={hideEpisodeNotesSheet}>
+                  <MaterialCommunityIcons name="close" size={24} color="#b4b4b4" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                style={styles.episodeNotesContent}
+                showsVerticalScrollIndicator={true}
+              >
+                <Text style={styles.episodeNotesText}>
+                  {selectedEpisode?.description || 'No episode notes available.'}
+                </Text>
+              </ScrollView>
+            </Animated.View>
+          </GestureDetector>
+        </>
+      )}
     </SafeAreaView>
   </GestureHandlerRootView>
 );
@@ -1989,15 +2354,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  // Feed info
-  feedInfo: {
+  // Podcast header
+  podcastHeader: {
     marginBottom: 20,
+    paddingHorizontal: 20,
   },
-  feedTitle: {
+  podcastHeaderTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#f4f4f4',
-    marginBottom: 4,
+    textAlign: 'center',
   },
   
   // Episode list
@@ -2075,11 +2441,18 @@ const styles = StyleSheet.create({
   },
   episodeTitleLarge: {
     color: '#f4f4f4',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
     paddingHorizontal: 20,
+  },
+  episodePodcastName: {
+    color: '#d97706',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 8,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -2231,28 +2604,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   
-  // Episode notes
-  episodeNotes: {
-    marginTop: 30,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#404040',
-    flex: 1,
-  },
-  notesScrollView: {
-    maxHeight: 200,
-  },
-  notesTitle: {
-    color: '#f4f4f4',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  notesText: {
-    color: '#b4b4b4',
-    fontSize: 14,
-    lineHeight: 20,
-  },
+
   
   // Recording view styles
   recordingContainer: {
@@ -2532,9 +2884,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   // Recent podcasts styles
-  recentSection: {
-    marginBottom: 20,
-  },
   recentScrollView: {
     paddingLeft: 0,
   },
@@ -2699,6 +3048,139 @@ suggestionTagText: {
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 10,
+  },
+  
+  // Episode Notes Button styles
+  episodeNotesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#404040',
+    marginTop: 20,
+  },
+  episodeNotesButtonText: {
+    color: '#d97706',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Episode Loading Spinner styles
+  episodeLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(28,28,28,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  episodeLoadingContent: {
+    backgroundColor: '#2d2d2d',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginHorizontal: 40,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  episodeLoadingTitle: {
+    color: '#f4f4f4',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  episodeLoadingPodcastName: {
+    color: '#d97706',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  episodeLoadingSubtitle: {
+    color: '#b4b4b4',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  episodeLoadingCancelButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  episodeLoadingCancelText: {
+    color: '#f4f4f4',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  // Episode Notes Bottom Sheet styles
+  episodeNotesOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 9998,
+  },
+  episodeNotesOverlayTouchable: {
+    flex: 1,
+  },
+  episodeNotesSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: screenHeight * 0.7,
+    backgroundColor: '#2d2d2d',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: '#404040',
+    zIndex: 9999,
+  },
+  episodeNotesHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#555555',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  episodeNotesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+  },
+  episodeNotesHeaderTitle: {
+    color: '#f4f4f4',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  episodeNotesContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  episodeNotesText: {
+    color: '#b4b4b4',
+    fontSize: 14,
+    lineHeight: 22,
   },
 });
 
