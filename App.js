@@ -30,6 +30,21 @@ import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// App-wide spacing constants
+const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+};
+
+const PADDING = {
+  horizontal: SPACING.md, // 16px
+  vertical: SPACING.lg,   // 20px
+};
+
 // Cache for RSS feeds to avoid re-fetching
 const RSS_CACHE_KEY = 'rss_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
@@ -1806,7 +1821,7 @@ export default function App() {
                         placeholder="Search podcasts or paste RSS feed URL"
                         placeholderTextColor="#888"
                         value={urlInput}
-                        blurOnSubmit={false}
+                        blurOnSubmit={true}
                         onChangeText={(text) => {
                           console.log('📝 Input changed:', text);
                           setUrlInput(text);
@@ -1814,6 +1829,7 @@ export default function App() {
                         onSubmitEditing={() => {
                           console.log('⏎ Submit editing triggered');
                           handlePodcastSearch(urlInput);
+                          textInputRef.current?.blur();
                         }}
                       />
                     </View>
@@ -1824,6 +1840,7 @@ export default function App() {
                           const query = urlInput.trim();
                           if (query) {
                             handlePodcastSearch(query);
+                            textInputRef.current?.blur();
                           }
                         }}
                       >
@@ -1835,7 +1852,7 @@ export default function App() {
 
                   {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
                   {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
-                    <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                    <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
                       <Text style={styles.sectionTitle}>Recent Podcasts</Text>
                       <ScrollView 
                         horizontal 
@@ -1864,7 +1881,7 @@ export default function App() {
 
                   {/* Popular Business Podcasts (show when no episodes and no search results) */}
                   {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
-                    <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                    <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
                       <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
                       <View style={styles.pillRow}>
                         {popularBusinessPodcasts.slice(0, 15).map((title, idx) => (
@@ -1880,7 +1897,7 @@ export default function App() {
                   )}
 
                    {searchResults.length > 0 && (
-  <View style={styles.searchResultsSection}>
+  <View style={[styles.searchResultsSection, { paddingHorizontal: PADDING.horizontal }]}>
     <Text style={styles.sectionTitle}>
       Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
     </Text>
@@ -2324,6 +2341,7 @@ const styles = StyleSheet.create({
   inputSection: {
     flexDirection: 'row',
     marginBottom: 30,
+    paddingHorizontal: PADDING.horizontal,
   },
   inputContainer: {
     flex: 1,
