@@ -1246,6 +1246,12 @@ export default function App() {
       return;
     }
     
+    // Stop audio playback when entering Create Video mode
+    if (sound && isPlaying) {
+      await sound.pauseAsync();
+      setIsPlaying(false);
+    }
+    
     // Show guidance modal if user hasn't disabled it
     if (!dontShowGuidanceAgain) {
       setShowRecordingGuidance(true);
@@ -1345,6 +1351,21 @@ export default function App() {
       setRecordingStatus(`Error: ${error.message}`);
     } finally {
       setIsRecording(false);
+    }
+  };
+
+  // Cleanup function to handle recording state when exiting
+  const cleanupRecording = async () => {
+    try {
+      if (isRecording) {
+        await ScreenRecorder.stopRecording();
+        console.log('Cleaned up recording state');
+      }
+    } catch (error) {
+      console.log('Cleanup recording error:', error.message);
+    } finally {
+      setIsRecording(false);
+      setRecordingStatus('');
     }
   };
 
@@ -1751,8 +1772,10 @@ export default function App() {
       }
     });
 
-  // Compose the gestures
-  const composedGesture = Gesture.Race(swipeBackGesture, scrollGesture);
+  // Compose the gestures - disable swipe-back when on episode detail page
+  const composedGesture = selectedEpisode 
+    ? scrollGesture // Only allow scroll when on episode detail page
+    : Gesture.Race(swipeBackGesture, scrollGesture); // Allow both when not on episode detail page
 
 
 
@@ -1931,7 +1954,6 @@ export default function App() {
 )}
 
                   {/* Podcast Header */}
-                  {console.log('🔍 Rendering podcast header - podcastTitle:', podcastTitle, 'episodes.length:', episodes.length)}
                   {podcastTitle && episodes.length > 0 && (
                     <View style={styles.podcastHeader}>
                       <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
@@ -2234,7 +2256,6 @@ export default function App() {
             <ActivityIndicator size="large" color="#d97706" />
             <Text style={styles.episodeLoadingTitle}>Loading Episode</Text>
             <Text style={styles.episodeLoadingPodcastName}>
-              {console.log('🔍 Loading modal podcastTitle:', podcastTitle)}
               {podcastTitle || 'Podcast'}
             </Text>
             <Text style={styles.episodeLoadingSubtitle} numberOfLines={2}>
@@ -2644,6 +2665,7 @@ const styles = StyleSheet.create({
   recordingTimelineContainer: {
     width: '100%',
     marginBottom: 30,
+    paddingHorizontal: 20,
   },
   recordingTimeline: {
     height: 8,
