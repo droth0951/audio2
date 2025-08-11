@@ -12,7 +12,10 @@ import {
   ActivityIndicator,
   Pressable,
   FlatList,
+  Switch,
 } from 'react-native';
+// Voice import - will be enabled after EAS build
+// import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,9 +29,85 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
-import { useFonts } from 'expo-font';
+// import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Simple Voice Manager for Captions (Mock Implementation)
+class VoiceManager {
+  static isListening = false;
+  static onResultCallback = null;
+  static onErrorCallback = null;
+  static mockInterval = null;
+
+  static async startListening(onResult, onError) {
+    try {
+      console.log('🎤 Starting mock voice recognition...');
+      
+      this.isListening = true;
+      this.onResultCallback = onResult;
+      this.onErrorCallback = onError;
+
+      // Mock speech recognition with sample captions
+      const sampleCaptions = [
+        "Welcome to today's podcast episode",
+        "We're discussing the latest trends in technology",
+        "Our guest today is an expert in the field",
+        "Let's dive into the main topic",
+        "This is really interesting information",
+        "Thank you for listening to our show",
+        "Don't forget to subscribe for more content"
+      ];
+
+      let captionIndex = 0;
+      this.mockInterval = setInterval(() => {
+        if (this.isListening && this.onResultCallback) {
+          const caption = sampleCaptions[captionIndex % sampleCaptions.length];
+          this.onResultCallback(caption);
+          captionIndex++;
+        }
+      }, 3000); // New caption every 3 seconds
+
+      console.log('🎤 Mock voice recognition started successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to start mock voice recognition:', error);
+      this.isListening = false;
+      
+      if (this.onErrorCallback) {
+        this.onErrorCallback(error);
+      }
+    }
+  }
+
+  static async stopListening() {
+    try {
+      console.log('🛑 Stopping mock voice recognition...');
+      this.isListening = false;
+      
+      if (this.mockInterval) {
+        clearInterval(this.mockInterval);
+        this.mockInterval = null;
+      }
+      
+      console.log('🛑 Mock voice recognition stopped successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to stop mock voice recognition:', error);
+      this.isListening = false;
+    }
+  }
+
+  static async checkPermissions() {
+    console.log('🔍 Mock permissions check - always granted');
+    return { granted: true, reason: 'Mock implementation - always granted' };
+  }
+
+  static async requestPermissions() {
+    console.log('🔍 Mock permission request - always granted');
+    return true;
+  }
+}
 
 // App-wide spacing constants
 const SPACING = {
@@ -356,9 +435,20 @@ const HomeAnimatedWaveform = ({
 
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
-  });
+  // Temporarily disable custom font loading to fix the error
+  // const [fontsLoaded, fontError] = useFonts({
+  //   'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
+  // });
+
+  // Handle font loading error
+  // if (fontError) {
+  //   console.log('Font loading error:', fontError);
+  // }
+
+  // Show loading state while fonts are loading
+  // if (!fontsLoaded && !fontError) {
+  //   return null; // Still loading
+  // }
 
   // Main app state
   const [episodes, setEpisodes] = useState([]);
@@ -442,6 +532,11 @@ export default function App() {
   // Add state for episode loading spinner
   const [isEpisodeLoading, setIsEpisodeLoading] = useState(false);
   const [loadingEpisodeTitle, setLoadingEpisodeTitle] = useState('');
+
+  // Caption state variables
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [currentCaptionText, setCurrentCaptionText] = useState('');
+  const [isListening, setIsListening] = useState(false);
 
  // Place here:
   const translateX = useSharedValue(0);
@@ -1271,6 +1366,36 @@ export default function App() {
         return;
       }
 
+      // Start captions if enabled
+      if (captionsEnabled) {
+        setRecordingStatus('Checking speech recognition permissions...');
+        const permissionCheck = await VoiceManager.checkPermissions();
+        
+        if (!permissionCheck.granted) {
+          setRecordingStatus('Requesting speech recognition permissions...');
+          const hasPermission = await VoiceManager.requestPermissions();
+          if (!hasPermission) {
+            Alert.alert(
+              'Permission Required', 
+              'Speech recognition permission is needed for captions. Please enable it in Settings.',
+              [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
+            );
+            return;
+          }
+        }
+        
+        setRecordingStatus('Starting captions...');
+        setIsListening(true);
+        await VoiceManager.startListening(
+          (text) => {
+            setCurrentCaptionText(text);
+          },
+          (error) => {
+            console.log('Caption error:', error);
+          }
+        );
+      }
+
       setRecordingStatus('Setting up audio...');
       
       // Set audio mode for recording (this prevents ducking) - PROVEN WORKING CONFIG
@@ -1317,6 +1442,13 @@ export default function App() {
     try {
       setRecordingStatus('Stopping recording...');
       
+      // Stop captions if active
+      if (isListening) {
+        await VoiceManager.stopListening();
+        setIsListening(false);
+        setCurrentCaptionText('');
+      }
+      
       // Pause audio
       if (sound && isPlaying) {
         await sound.pauseAsync();
@@ -1360,6 +1492,14 @@ export default function App() {
       if (isRecording) {
         await ScreenRecorder.stopRecording();
         console.log('Cleaned up recording state');
+      }
+      
+      // Clean up voice recognition if it's active
+      if (isListening) {
+        console.log('🧹 Cleaning up voice recognition...');
+        await VoiceManager.stopListening();
+        setIsListening(false);
+        setCurrentCaptionText('');
       }
     } catch (error) {
       console.log('Cleanup recording error:', error.message);
@@ -1676,6 +1816,31 @@ export default function App() {
           </Text>
         </View>
         
+        {/* Caption toggle - only show when not recording */}
+        {!isRecording && (
+          <View style={styles.captionToggleContainer}>
+            <View style={styles.captionToggleRow}>
+              <Text style={styles.captionToggleLabel}>Auto Captions</Text>
+              <Switch
+                value={captionsEnabled}
+                onValueChange={setCaptionsEnabled}
+                trackColor={{ false: '#404040', true: '#d97706' }}
+                thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
+              />
+            </View>
+            <Text style={styles.captionToggleSubtitle}>
+              Generate captions from audio during recording
+            </Text>
+          </View>
+        )}
+
+        {/* Caption display during recording */}
+        {isRecording && currentCaptionText && (
+          <View style={styles.captionOverlay}>
+            <Text style={styles.captionText}>{currentCaptionText}</Text>
+          </View>
+        )}
+
         {/* ONLY show controls when NOT actively recording */}
         {!isRecording && (
           <>
@@ -1691,7 +1856,10 @@ export default function App() {
               
               <TouchableOpacity 
                 style={styles.cancelButton}
-                onPress={() => setShowRecordingView(false)}
+                onPress={async () => {
+                  await cleanupRecording();
+                  setShowRecordingView(false);
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -1714,10 +1882,11 @@ export default function App() {
 
   // 3. Clean up the render conditional (remove debug wrapper)
   // Simple swipe back handler
-  const handleSwipeBack = () => {
+  const handleSwipeBack = async () => {
     if (selectedEpisode) {
       handleBack();
     } else if (showRecordingView) {
+      await cleanupRecording();
       setShowRecordingView(false);
     } else if (searchTerm) {
       setSearchTerm('');
@@ -1779,14 +1948,15 @@ export default function App() {
 
 
 
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1c1c1c' }}>
-        <ActivityIndicator size="large" color="#d97706" />
-        <Text style={{ color: '#f4f4f4', marginTop: 10 }}>Loading fonts...</Text>
-      </View>
-    );
-  }
+  // Font loading check temporarily disabled
+  // if (!fontsLoaded) {
+  //   return (
+  //     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1c1c1c' }}>
+  //       <ActivityIndicator size="large" color="#d97706" />
+  //       <Text style={{ color: '#f4f4f4', marginTop: 10 }}>Loading fonts...</Text>
+  //     </View>
+  //   );
+  // }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -3220,6 +3390,48 @@ suggestionTagText: {
   episodeNotesText: {
     color: '#b4b4b4',
     fontSize: 14,
+    lineHeight: 22,
+  },
+  
+  // Caption styles
+  captionToggleContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  captionToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  captionToggleLabel: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  captionToggleSubtitle: {
+    color: '#b4b4b4',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  captionOverlay: {
+    position: 'absolute',
+    top: 300, // Position over the waveform animation area
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    zIndex: 10, // Ensure it appears above the waveform
+  },
+  captionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
     lineHeight: 22,
   },
 });
