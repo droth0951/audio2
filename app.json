@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "1.2.3",
+    "version": "1.2.5",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -13,12 +13,12 @@
       "backgroundColor": "#1c1c1c"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.danroth.podknowledge",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1.2.4",
+      "buildNumber": "1.2.5",
       "splash": {
         "image": "./assets/launch-iphone14pro.png",
         "resizeMode": "cover",
