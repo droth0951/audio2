@@ -16,7 +16,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.danroth.podknowledge",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "Audio2 uses speech recognition to generate captions for your podcast clips.",
+        "NSMicrophoneUsageDescription": "Audio2 needs microphone access to listen to podcast audio for caption generation."
       },
       "buildNumber": "1.2.5",
       "splash": {

@@ -14,8 +14,8 @@ import {
   FlatList,
   Switch,
 } from 'react-native';
-// Voice import - will be enabled after EAS build
-// import Voice from '@react-native-voice/voice';
+// Voice import - enabled for real speech recognition
+import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
 import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,45 +33,49 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTi
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Simple Voice Manager for Captions (Mock Implementation)
+// Real Voice Manager for Captions
 class VoiceManager {
   static isListening = false;
   static onResultCallback = null;
   static onErrorCallback = null;
-  static mockInterval = null;
 
   static async startListening(onResult, onError) {
     try {
-      console.log('🎤 Starting mock voice recognition...');
+      console.log('🎤 Starting real voice recognition...');
       
       this.isListening = true;
       this.onResultCallback = onResult;
       this.onErrorCallback = onError;
 
-      // Mock speech recognition with sample captions
-      const sampleCaptions = [
-        "Welcome to today's podcast episode",
-        "We're discussing the latest trends in technology",
-        "Our guest today is an expert in the field",
-        "Let's dive into the main topic",
-        "This is really interesting information",
-        "Thank you for listening to our show",
-        "Don't forget to subscribe for more content"
-      ];
-
-      let captionIndex = 0;
-      this.mockInterval = setInterval(() => {
-        if (this.isListening && this.onResultCallback) {
-          const caption = sampleCaptions[captionIndex % sampleCaptions.length];
-          this.onResultCallback(caption);
-          captionIndex++;
+      // Set up event listeners
+      Voice.onSpeechResults = (event) => {
+        console.log('🎤 Speech result received:', event);
+        if (this.isListening && event.value && event.value[0]) {
+          this.onResultCallback(event.value[0]);
         }
-      }, 3000); // New caption every 3 seconds
+      };
 
-      console.log('🎤 Mock voice recognition started successfully');
+      Voice.onSpeechError = (error) => {
+        console.log('🎤 Speech error:', error);
+        if (this.onErrorCallback) {
+          this.onErrorCallback(error);
+        }
+      };
+
+      Voice.onSpeechStart = () => {
+        console.log('🎤 Speech recognition started');
+      };
+
+      Voice.onSpeechEnd = () => {
+        console.log('🎤 Speech recognition ended');
+      };
+
+      // Start voice recognition
+      await Voice.start('en-US');
+      console.log('🎤 Voice recognition started successfully');
       
     } catch (error) {
-      console.error('❌ Failed to start mock voice recognition:', error);
+      console.error('❌ Failed to start voice recognition:', error);
       this.isListening = false;
       
       if (this.onErrorCallback) {
@@ -82,30 +86,70 @@ class VoiceManager {
 
   static async stopListening() {
     try {
-      console.log('🛑 Stopping mock voice recognition...');
+      console.log('🛑 Stopping voice recognition...');
       this.isListening = false;
       
-      if (this.mockInterval) {
-        clearInterval(this.mockInterval);
-        this.mockInterval = null;
-      }
+      // Remove listeners first to prevent any callbacks during stop
+      Voice.removeAllListeners();
       
-      console.log('🛑 Mock voice recognition stopped successfully');
+      // Stop voice recognition
+      await Voice.stop();
+      console.log('🛑 Voice recognition stopped successfully');
       
     } catch (error) {
-      console.error('❌ Failed to stop mock voice recognition:', error);
+      console.error('❌ Failed to stop voice recognition:', error);
+      // Even if stop fails, we should still clean up our state
       this.isListening = false;
+      Voice.removeAllListeners();
     }
   }
 
   static async checkPermissions() {
-    console.log('🔍 Mock permissions check - always granted');
-    return { granted: true, reason: 'Mock implementation - always granted' };
+    try {
+      console.log('🔍 Checking Voice availability...');
+      
+      // Check if Voice is available
+      const isAvailable = await Voice.isAvailable();
+      console.log('🔍 Voice available:', isAvailable);
+      
+      if (!isAvailable) {
+        return { granted: false, reason: 'Speech recognition not available on this device' };
+      }
+
+      // For now, let's assume permissions are granted and test the basic functionality
+      // We'll handle actual permission errors when they occur during startListening
+      console.log('🔍 Assuming permissions are available for testing');
+      return { granted: true };
+      
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return { granted: false, reason: 'Unable to check permissions' };
+    }
   }
 
   static async requestPermissions() {
-    console.log('🔍 Mock permission request - always granted');
-    return true;
+    try {
+      // The Voice library doesn't have a direct requestPermissions method
+      // Instead, we try to start recognition which will trigger the permission request
+      const permissionCheck = await this.checkPermissions();
+      
+      if (permissionCheck.granted) {
+        return true;
+      }
+
+      // If not granted, try to start recognition to trigger permission request
+      try {
+        await Voice.start('en-US');
+        await Voice.stop();
+        return true;
+      } catch (error) {
+        console.error('Permission request failed:', error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to request voice permissions:', error);
+      return false;
+    }
   }
 }
 
@@ -1368,32 +1412,48 @@ export default function App() {
 
       // Start captions if enabled
       if (captionsEnabled) {
-        setRecordingStatus('Checking speech recognition permissions...');
-        const permissionCheck = await VoiceManager.checkPermissions();
-        
-        if (!permissionCheck.granted) {
-          setRecordingStatus('Requesting speech recognition permissions...');
-          const hasPermission = await VoiceManager.requestPermissions();
-          if (!hasPermission) {
-            Alert.alert(
-              'Permission Required', 
-              'Speech recognition permission is needed for captions. Please enable it in Settings.',
-              [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
-            );
-            return;
+        try {
+          console.log('🎤 Captions enabled, starting speech recognition...');
+          setRecordingStatus('Checking speech recognition permissions...');
+          
+          const permissionCheck = await VoiceManager.checkPermissions();
+          console.log('🔍 Permission check result:', permissionCheck);
+          
+          if (!permissionCheck.granted) {
+            console.log('🔍 Requesting permissions...');
+            setRecordingStatus('Requesting speech recognition permissions...');
+            const hasPermission = await VoiceManager.requestPermissions();
+            console.log('🔍 Permission request result:', hasPermission);
+            
+            if (!hasPermission) {
+              Alert.alert(
+                'Permission Required', 
+                'Speech recognition permission is needed for captions. Please enable it in Settings.',
+                [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
+              );
+              return;
+            }
           }
+          
+          console.log('🎤 Starting voice recognition...');
+          setRecordingStatus('Starting captions...');
+          setIsListening(true);
+          
+          await VoiceManager.startListening(
+            (text) => {
+              console.log('🎤 Caption text received:', text);
+              setCurrentCaptionText(text);
+            },
+            (error) => {
+              console.log('❌ Caption error:', error);
+              Alert.alert('Caption Error', `Speech recognition error: ${error.message || error}`);
+            }
+          );
+          
+        } catch (error) {
+          console.error('❌ Error starting captions:', error);
+          Alert.alert('Caption Error', `Failed to start captions: ${error.message || error}`);
         }
-        
-        setRecordingStatus('Starting captions...');
-        setIsListening(true);
-        await VoiceManager.startListening(
-          (text) => {
-            setCurrentCaptionText(text);
-          },
-          (error) => {
-            console.log('Caption error:', error);
-          }
-        );
       }
 
       setRecordingStatus('Setting up audio...');
