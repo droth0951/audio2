@@ -22,7 +22,7 @@
         "NSPhotoLibraryUsageDescription": "Allow Audio2 to access your photos to save waveform images",
         "NSPhotoLibraryAddUsageDescription": "Allow Audio2 to save waveform images to your photo library"
       },
-      "buildNumber": "1.2.11",
+      "buildNumber": "1.2.12",
       "splash": {
         "image": "./assets/launch-iphone14pro.png",
         "resizeMode": "cover",
