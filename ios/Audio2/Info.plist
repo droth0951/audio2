@@ -38,7 +38,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1.2.8</string>
+    <string>1.2.10</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -56,6 +56,10 @@
     <string>Allow Audio2 to save waveform images to your photo library</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow Audio2 to access your photos to save waveform images</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Audio2 uses speech recognition to generate captions for your podcast clips.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Audio2 needs microphone access to listen to podcast audio for caption generation.</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
