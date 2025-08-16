@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "1.2.5",
+    "version": "1.2.7",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -18,9 +18,11 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Audio2 uses speech recognition to generate captions for your podcast clips.",
-        "NSMicrophoneUsageDescription": "Audio2 needs microphone access to listen to podcast audio for caption generation."
+        "NSMicrophoneUsageDescription": "Audio2 needs microphone access to listen to podcast audio for caption generation.",
+        "NSPhotoLibraryUsageDescription": "Allow Audio2 to access your photos to save waveform images",
+        "NSPhotoLibraryAddUsageDescription": "Allow Audio2 to save waveform images to your photo library"
       },
-      "buildNumber": "1.2.5",
+      "buildNumber": "1.2.7",
       "splash": {
         "image": "./assets/launch-iphone14pro.png",
         "resizeMode": "cover",
@@ -55,6 +57,10 @@
       "eas": {
         "projectId": "5ec96b76-832e-4468-8e21-d5f0c3d3a36b"
       }
-    }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5ec96b76-832e-4468-8e21-d5f0c3d3a36b"
+    },
+    "runtimeVersion": "1.2.0"
   }
 }
