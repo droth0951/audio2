@@ -1480,9 +1480,12 @@ export default function App() {
       
       // Stop recording after clip duration
       const clipDuration = clipEnd - clipStart;
-      setTimeout(async () => {
+      
+      const recordingTimer = setTimeout(async () => {
         await stopVideoRecording();
       }, clipDuration);
+      
+      return () => clearTimeout(recordingTimer);
       
     } catch (error) {
       console.error('Recording error:', error);
@@ -1845,23 +1848,25 @@ export default function App() {
             />
           </View>
           <View style={styles.recordingTimeLabels}>
-            <Text style={styles.recordingTimeText}>{formatTime(Math.max(0, position - clipStart))}</Text>
+            <Text style={styles.recordingTimeText}>
+              {formatTime(Math.max(0, position - clipStart))}
+            </Text>
             <Text style={styles.recordingTimeText}>{formatTime(clipEnd - clipStart)}</Text>
           </View>
         </View>
         
-        {/* Animated waveform */}
+        {/* Recording waveform */}
         <View style={styles.recordingWaveform}>
-          {[...Array(15)].map((_, i) => (
-            <View 
+          {Array.from({ length: 15 }, (_, i) => (
+            <View
               key={i}
               style={[
                 styles.recordingWaveformBar,
-                { 
+                {
                   height: Math.random() * 40 + 10,
                   opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
                 }
-              ]} 
+              ]}
             />
           ))}
         </View>
@@ -1876,26 +1881,24 @@ export default function App() {
           </Text>
         </View>
         
-        {/* Caption toggle - only show when not recording */}
-        {!isRecording && (
-          <View style={styles.captionToggleContainer}>
-            <View style={styles.captionToggleRow}>
-              <Text style={styles.captionToggleLabel}>Auto Captions</Text>
-              <Switch
-                value={captionsEnabled}
-                onValueChange={setCaptionsEnabled}
-                trackColor={{ false: '#404040', true: '#d97706' }}
-                thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
-              />
-            </View>
-            <Text style={styles.captionToggleSubtitle}>
-              Generate captions from audio during recording
-            </Text>
+        {/* Caption toggle */}
+        <View style={styles.captionToggleContainer}>
+          <View style={styles.captionToggleRow}>
+            <Text style={styles.captionToggleLabel}>Auto Captions</Text>
+            <Switch
+              value={captionsEnabled}
+              onValueChange={setCaptionsEnabled}
+              trackColor={{ false: '#404040', true: '#d97706' }}
+              thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
+            />
           </View>
-        )}
+          <Text style={styles.captionToggleSubtitle}>
+            Generate captions from audio during recording
+          </Text>
+        </View>
 
-        {/* Caption display during recording */}
-        {isRecording && currentCaptionText && (
+        {/* Caption display */}
+        {currentCaptionText && (
           <View style={styles.captionOverlay}>
             <Text style={styles.captionText}>{currentCaptionText}</Text>
           </View>
@@ -2831,6 +2834,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     marginBottom: 30,
+    paddingBottom: 100, // Extra padding for large text accessibility
     gap: 12,
   },
   clipButton: {
