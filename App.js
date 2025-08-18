@@ -2102,7 +2102,7 @@ export default function App() {
                       >
                         <Text style={styles.submitButtonText}>Search</Text>
                       </Pressable>
-                      <Text style={styles.searchHintText}>may need to 2x tap</Text>
+
                     </View>
                   </View>
 
