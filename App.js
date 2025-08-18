@@ -1881,21 +1881,23 @@ export default function App() {
           </Text>
         </View>
         
-        {/* Caption toggle */}
-        <View style={styles.captionToggleContainer}>
-          <View style={styles.captionToggleRow}>
-            <Text style={styles.captionToggleLabel}>BETA Captions</Text>
-            <Switch
-              value={captionsEnabled}
-              onValueChange={setCaptionsEnabled}
-              trackColor={{ false: '#404040', true: '#d97706' }}
-              thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
-            />
+        {/* Caption toggle - ONLY show when NOT actively recording */}
+        {!isRecording && (
+          <View style={styles.captionToggleContainer}>
+            <View style={styles.captionToggleRow}>
+              <Text style={styles.captionToggleLabel}>BETA Captions</Text>
+              <Switch
+                value={captionsEnabled}
+                onValueChange={setCaptionsEnabled}
+                trackColor={{ false: '#404040', true: '#d97706' }}
+                thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
+              />
+            </View>
+            <Text style={styles.captionToggleSubtitle}>
+              Generate captions from audio during recording
+            </Text>
           </View>
-          <Text style={styles.captionToggleSubtitle}>
-            Generate captions from audio during recording
-          </Text>
-        </View>
+        )}
 
         {/* Caption display */}
         {currentCaptionText && (
