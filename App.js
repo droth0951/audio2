@@ -1877,14 +1877,14 @@ export default function App() {
             {selectedEpisode?.title}
           </Text>
           <Text style={styles.recordingPodcastName}>
-            {selectedEpisode?.podcastName || 'Podcast'}
+            {selectedEpisode?.podcastName || podcastTitle || 'Podcast'}
           </Text>
         </View>
         
         {/* Caption toggle */}
         <View style={styles.captionToggleContainer}>
           <View style={styles.captionToggleRow}>
-            <Text style={styles.captionToggleLabel}>Auto Captions</Text>
+            <Text style={styles.captionToggleLabel}>BETA Captions</Text>
             <Switch
               value={captionsEnabled}
               onValueChange={setCaptionsEnabled}
@@ -2899,7 +2899,7 @@ const styles = StyleSheet.create({
   recordingTimelineContainer: {
     width: '100%',
     marginBottom: 30,
-    paddingHorizontal: 20,
+    paddingHorizontal: 40, // Increased padding to prevent timeline from running off screen
   },
   recordingTimeline: {
     height: 8,
