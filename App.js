@@ -1604,8 +1604,8 @@ export default function App() {
     try {
       console.log('🎵 Starting audio trim:', startMs, 'to', endMs, 'ms');
       
-          // Phase 2: Call Railway server (actual audio trimming)
-    const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
+      // Phase 2: Call Railway server (actual audio trimming)
+      const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1621,6 +1621,36 @@ export default function App() {
       
       if (result.success) {
         console.log('🎵 Server response:', result.message);
+        
+        // Check if the result is a base64 data URL
+        if (result.trimmedUrl.startsWith('data:audio/mpeg;base64,')) {
+          console.log('🎵 Converting base64 data URL to HTTP URL for AssemblyAI...');
+          
+          // Extract base64 data
+          const base64Data = result.trimmedUrl.split(',')[1];
+          
+          // Convert base64 to blob and upload to temporary HTTP service
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create FormData and upload to file.io
+          const formData = new FormData();
+          formData.append('file', new Blob([bytes], { type: 'audio/mpeg' }), 'trimmed-audio.mp3');
+          
+          const uploadResponse = await fetch('https://file.io', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const uploadResult = await uploadResponse.json();
+          console.log('🎵 Uploaded to temporary URL:', uploadResult.link);
+          
+          return uploadResult.link;
+        }
+        
         return result.trimmedUrl;
       } else {
         console.error('🎵 Server error:', result.error);
