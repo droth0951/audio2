@@ -1462,6 +1462,17 @@ export default function App() {
       return;
     }
 
+    // Stop audio playback when entering Create Video mode
+    if (sound) {
+      try {
+        await sound.stopAsync();
+        setIsPlaying(false);
+        console.log('🎵 Audio stopped for video creation');
+      } catch (error) {
+        console.log('🎵 Error stopping audio:', error);
+      }
+    }
+
     // LEAN caption generation
     if (captionsEnabled) {
       console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
