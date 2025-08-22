@@ -1479,7 +1479,8 @@ export default function App() {
           
           // Step 2: Submit job with trimmed audio
           setProcessingStep('Sending clip to transcription service...');
-          console.log('🎬 Submitting to Assembly with trimmed URL:', trimmedAudioUrl);
+          console.log('🎬 Submitting to Assembly with trimmed URL length:', trimmedAudioUrl.length);
+          console.log('🎬 First 100 chars of URL:', trimmedAudioUrl.substring(0, 100));
           const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
             method: 'POST',
             headers: {
@@ -1487,7 +1488,7 @@ export default function App() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              audio_url: trimmedAudioUrl,
+              audio_url: trimmedAudioUrl, // Use trimmed audio URL
               word_boost: [], // Enable word-level timestamps
               punctuate: true,
               format_text: true
@@ -1495,7 +1496,12 @@ export default function App() {
           });
           
           const job = await submitResponse.json();
-          console.log('🎬 Assembly job submitted successfully');
+          console.log('🎬 Assembly response:', JSON.stringify(job, null, 2));
+          
+          if (!job.id) {
+            throw new Error(`AssemblyAI submission failed: ${job.error || 'Unknown error'}`);
+          }
+          
           console.log('🎬 Assembly job created:', job.id, 'Status:', job.status);
         
         // Step 2: Wait and check (simple polling)
