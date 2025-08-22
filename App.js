@@ -1598,8 +1598,8 @@ export default function App() {
     try {
       console.log('🎵 Starting audio trim:', startMs, 'to', endMs, 'ms');
       
-          // Phase 1: Call Vercel server (placeholder implementation)
-    const response = await fetch('https://audio-trimmer-server-4ietnmtpt-droth0951s-projects.vercel.app/api/trim-audio', {
+          // Phase 2: Call Railway server (actual audio trimming)
+    const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
