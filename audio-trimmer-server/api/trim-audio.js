@@ -1,7 +1,7 @@
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const axios = require('axios');
-const { writeFile, unlink, readFile } = require('fs/promises');
+const { writeFile, unlink, readFile, mkdir } = require('fs/promises');
 const { join } = require('path');
 const { tmpdir } = require('os');
 
@@ -14,9 +14,6 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let inputFile = null;
-  let outputFile = null;
-
   try {
     const { audioUrl, start, end } = req.body;
     
@@ -28,11 +25,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Convert milliseconds to seconds for FFmpeg
+    // Convert milliseconds to seconds
     const startSeconds = start / 1000;
-    const durationSeconds = (end - start) / 1000;
+    const endSeconds = end / 1000;
+    const durationSeconds = endSeconds - startSeconds;
     
-    console.log('🎵 FFmpeg timing:', { startSeconds, durationSeconds });
+    console.log('🎵 Timing info:', { startSeconds, endSeconds, durationSeconds });
 
     // Cost protection: reject clips longer than 2 minutes
     const maxDurationSeconds = 120; // 2 minutes
@@ -44,70 +42,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Generate unique filenames
-    const timestamp = Date.now();
-    inputFile = join(tmpdir(), `input-${timestamp}.mp3`);
-    outputFile = join(tmpdir(), `output-${timestamp}.mp3`);
-
-    console.log('🎵 Downloading audio file...');
-    
-    // Download the audio file
-    const response = await axios({
-      method: 'get',
-      url: audioUrl,
-      responseType: 'arraybuffer',
-      timeout: 30000, // 30 second timeout
-    });
-
-    console.log('🎵 Audio downloaded, size:', response.data.length, 'bytes');
-
-    // Write to temporary file
-    await writeFile(inputFile, response.data);
-    console.log('🎵 Temp file created, starting FFmpeg trim...');
-
-    // Trim audio using FFmpeg
-    await new Promise((resolve, reject) => {
-      ffmpeg(inputFile)
-        .seekInput(startSeconds)
-        .duration(durationSeconds)
-        .output(outputFile)
-        .audioCodec('libmp3lame')
-        .audioBitrate('128k')
-        .on('start', (commandLine) => {
-          console.log('🎵 FFmpeg command:', commandLine);
-        })
-        .on('progress', (progress) => {
-          console.log('🎵 FFmpeg progress:', progress.percent + '%');
-        })
-        .on('end', () => {
-          console.log('🎵 FFmpeg trimming completed');
-          resolve();
-        })
-        .on('error', (err) => {
-          console.error('🎵 FFmpeg error:', err);
-          reject(err);
-        })
-        .run();
-    });
-
-    console.log('🎵 Reading trimmed file...');
-    
-    // Read the trimmed file and return as base64
-    const trimmedData = await readFile(outputFile);
-    const base64Audio = trimmedData.toString('base64');
-    
-    // Return the trimmed audio as a data URL
-    const dataUrl = `data:audio/mpeg;base64,${base64Audio}`;
-    
-    console.log('🎵 Trimmed audio ready, size:', trimmedData.length, 'bytes');
+    // Don't actually trim the audio - just return the original URL with timing info
+    console.log('🎵 Returning timing info for AssemblyAI trimming');
     
     return res.json({ 
       success: true,
-      trimmedUrl: dataUrl,
-      message: `Audio trimmed from ${startSeconds}s to ${startSeconds + durationSeconds}s`,
-      originalSize: response.data.length,
-      trimmedSize: trimmedData.length,
-      costSavings: `${Math.round((1 - trimmedData.length / response.data.length) * 100)}%`
+      audioUrl: audioUrl, // Original podcast URL
+      startTime: startSeconds, // In seconds
+      endTime: endSeconds,
+      duration: durationSeconds,
+      message: `Audio clip: ${startSeconds}s to ${endSeconds}s (${durationSeconds}s duration)`
     });
     
   } catch (error) {
@@ -116,14 +60,5 @@ module.exports = async function handler(req, res) {
       error: 'Audio trimming failed',
       details: error.message 
     });
-  } finally {
-    // Clean up temporary files
-    try {
-      if (inputFile) await unlink(inputFile);
-      if (outputFile) await unlink(outputFile);
-      console.log('🎵 Temporary files cleaned up');
-    } catch (cleanupError) {
-      console.error('🎵 Cleanup error:', cleanupError);
-    }
   }
 }

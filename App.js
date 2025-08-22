@@ -1484,14 +1484,13 @@ export default function App() {
       setProcessingStep('Preparing your audio clip...');
       
               try {
-          // Step 1: Trim audio to clip
+          // Step 1: Get timing info from Railway
           setProcessingStep('Preparing your audio clip...');
-          const trimmedAudioUrl = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
+          const trimResponse = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
           
-          // Step 2: Submit job with trimmed audio
+          // Step 2: Submit job with AssemblyAI's built-in trimming
           setProcessingStep('Sending clip to transcription service...');
-          console.log('🎬 Submitting to Assembly with trimmed URL length:', trimmedAudioUrl.length);
-          console.log('🎬 First 100 chars of URL:', trimmedAudioUrl.substring(0, 100));
+          console.log('🎬 Submitting to Assembly with timing parameters');
           const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
             method: 'POST',
             headers: {
@@ -1499,7 +1498,9 @@ export default function App() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              audio_url: trimmedAudioUrl, // Use trimmed audio URL
+              audio_url: trimResponse.audioUrl, // Original podcast URL
+              audio_start_from: Math.floor(trimResponse.startTime * 1000), // AssemblyAI expects milliseconds
+              audio_end_at: Math.floor(trimResponse.endTime * 1000),
               word_boost: [], // Enable word-level timestamps
               punctuate: true,
               format_text: true
@@ -1610,12 +1611,12 @@ export default function App() {
     return '';
   };
 
-  // Audio trimming function
+  // Audio trimming function - now returns timing info for AssemblyAI
   const trimAudioToClip = async (audioUrl, startMs, endMs) => {
     try {
-      console.log('🎵 Starting audio trim:', startMs, 'to', endMs, 'ms');
+      console.log('🎵 Getting timing info for clip:', startMs, 'to', endMs, 'ms');
       
-      // Phase 2: Call Railway server (actual audio trimming)
+      // Call Railway server for timing validation
       const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
         method: 'POST',
         headers: {
@@ -1632,19 +1633,29 @@ export default function App() {
       
       if (result.success) {
         console.log('🎵 Server response:', result.message);
+        console.log('🎵 Timing info:', { startTime: result.startTime, endTime: result.endTime, duration: result.duration });
         
-        // Railway server now returns HTTP URLs directly
-        console.log('🎵 Using trimmed audio URL from Railway server');
-        
-        return result.trimmedUrl;
+        return result; // Return the full response object
       } else {
         console.error('🎵 Server error:', result.error);
-        return audioUrl; // Fallback to original
+        // Fallback: return basic timing info
+        return {
+          audioUrl: audioUrl,
+          startTime: startMs / 1000,
+          endTime: endMs / 1000,
+          duration: (endMs - startMs) / 1000
+        };
       }
       
     } catch (error) {
       console.error('🎵 Audio trimming failed:', error);
-      return audioUrl; // Fallback to original
+      // Fallback: return basic timing info
+      return {
+        audioUrl: audioUrl,
+        startTime: startMs / 1000,
+        endTime: endMs / 1000,
+        duration: (endMs - startMs) / 1000
+      };
     }
   };
 
