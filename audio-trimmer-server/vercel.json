@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/trim-audio.js": {
+      "maxDuration": 30
+    }
+  }
+}

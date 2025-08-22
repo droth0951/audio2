@@ -581,6 +581,11 @@ export default function App() {
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [currentCaptionText, setCurrentCaptionText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [captionText, setCaptionText] = useState('');
+  const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
+  const [allCaptionWords, setAllCaptionWords] = useState([]); // Store all words with timestamps
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
 
  // Place here:
   const translateX = useSharedValue(0);
@@ -993,7 +998,9 @@ export default function App() {
   useEffect(() => {
     if (currentRssFeed) {
       loadPodcastFeed(currentRssFeed);
-    }
+                    } else {
+                  console.log('❌ Failed to load episodes from RSS feed');
+                }
     return sound ? () => { sound.unloadAsync(); } : undefined;
   }, [currentRssFeed]);
 
@@ -1118,17 +1125,23 @@ export default function App() {
       });
       
       // Use streaming for faster loading
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: episode.audioUrl },
-        { 
-          shouldPlay: false,
-          progressUpdateIntervalMillis: 1000, // Reduce update frequency
-          positionMillis: 0,
-          shouldCorrectPitch: false, // Disable for speed
-          rate: 1.0,
-          shouldRevert: false,
-        }
-      );
+      let newSound;
+      try {
+        const result = await Audio.Sound.createAsync(
+          { uri: episode.audioUrl },
+          { 
+            shouldPlay: false,
+            progressUpdateIntervalMillis: 1000, // Reduce update frequency
+            positionMillis: 0,
+            shouldCorrectPitch: false, // Disable for speed
+            rate: 1.0,
+            shouldRevert: false,
+          }
+        );
+        newSound = result.sound;
+      } catch (loadError) {
+        throw loadError;
+      }
       
       setSound(newSound);
       setSelectedEpisode(episode);
@@ -1141,6 +1154,16 @@ export default function App() {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
+          
+          // Update captions during recording
+          if (isRecording && allCaptionWords.length > 0) {
+            console.log('🎬 Recording in progress, updating captions at time:', status.positionMillis || 0);
+            updateCaptionsForTime(status.positionMillis || 0);
+          } else if (isRecording) {
+            console.log('🎬 Recording but no caption words available');
+          } else if (allCaptionWords.length > 0) {
+            console.log('🎬 Not recording, but have caption words. Current time:', status.positionMillis || 0);
+          }
         }
       });
       
@@ -1249,7 +1272,61 @@ export default function App() {
     }
   };
 
-  // 1. FINAL WORKING MODAL
+  // 1. PROCESSING MODAL
+  const ProcessingModal = () => (
+    <View style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 99999,
+    }}>
+      <View style={{
+        backgroundColor: '#2d2d2d',
+        borderRadius: 16,
+        padding: 24,
+        marginHorizontal: 20,
+        borderWidth: 2,
+        borderColor: '#d97706',
+        minWidth: 300,
+      }}>
+        <Text style={{
+          color: '#f4f4f4',
+          fontSize: 18,
+          fontWeight: '600',
+          textAlign: 'center',
+          marginBottom: 16,
+        }}>
+          Preparing Your Clip
+        </Text>
+        
+        <Text style={{
+          color: '#b4b4b4',
+          fontSize: 14,
+          lineHeight: 20,
+          marginBottom: 20,
+          textAlign: 'center',
+        }}>
+          {processingStep}
+        </Text>
+        
+        <Text style={{
+          color: '#d97706',
+          fontSize: 12,
+          textAlign: 'center',
+          fontStyle: 'italic',
+        }}>
+          Please don't switch apps or lock your phone
+        </Text>
+      </View>
+    </View>
+  );
+
+  // 2. FINAL WORKING MODAL
   const RecordingGuidanceModal = () => (
     <View style={{
       position: 'absolute',
@@ -1384,18 +1461,190 @@ export default function App() {
       Alert.alert('No Episode', 'Please select an episode first');
       return;
     }
-    
+
+    // LEAN caption generation
+    if (captionsEnabled) {
+      console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
+      setIsGeneratingCaptions(true);
+      setCaptionText('Generating captions...');
+      
+      // Show processing modal with step-by-step feedback
+      setShowProcessingModal(true);
+      setProcessingStep('Preparing your audio clip...');
+      
+              try {
+          // Step 1: Trim audio to clip
+          setProcessingStep('Preparing your audio clip...');
+          const trimmedAudioUrl = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
+          
+          // Step 2: Submit job with trimmed audio
+          setProcessingStep('Sending clip to transcription service...');
+          console.log('🎬 Submitting to Assembly with trimmed URL:', trimmedAudioUrl);
+          const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer b9399f83f15a4c65a0a00f3c9876f2c9',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              audio_url: trimmedAudioUrl,
+              word_boost: [], // Enable word-level timestamps
+              punctuate: true,
+              format_text: true
+            })
+          });
+          
+          const job = await submitResponse.json();
+          console.log('🎬 Assembly job submitted successfully');
+          console.log('🎬 Assembly job created:', job.id, 'Status:', job.status);
+        
+        // Step 2: Wait and check (simple polling)
+        setProcessingStep('Transcribing your clip...');
+        let attempts = 0;
+        while (attempts < 24) { // 2 minutes max (24 * 5 seconds)
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          const checkResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${job.id}`, {
+            headers: { 'Authorization': 'Bearer b9399f83f15a4c65a0a00f3c9876f2c9' }
+          });
+          
+          const result = await checkResponse.json();
+          
+          if (result.status === 'completed') {
+            setProcessingStep('Preparing captions for recording...');
+            const captionText = result.text || '';
+            const words = result.words || [];
+            console.log('🎬 Assembly completed! Captions ready');
+            
+            if (words.length > 0) {
+              // Filter words to only include those within the selected clip time range
+              const clipWords = words.filter(word => {
+                const wordStartMs = word.start; // Assembly timestamps in milliseconds
+                const clipStartMs = clipStart; // clipStart is already in milliseconds
+                const clipEndMs = clipEnd; // clipEnd is already in milliseconds
+                return wordStartMs >= clipStartMs && wordStartMs <= clipEndMs;
+              });
+              
+              // Store all words for time-based progression
+              setAllCaptionWords(clipWords);
+              console.log('🎬 Captions ready for', clipWords.length, 'words');
+              
+              // Show initial caption (first 80 characters)
+              const initialCaption = clipWords.map(word => word.text).join(' ').substring(0, 80);
+              console.log('🎬 Initial caption:', initialCaption);
+              setCaptionText(initialCaption);
+            } else {
+              // Fallback: use the full text but limit to 80 characters
+              console.log('🎬 No words data, using full text fallback');
+              const trimmedCaption = captionText.substring(0, 80);
+              console.log('🎬 Using fallback caption:', trimmedCaption);
+              setCaptionText(trimmedCaption);
+            }
+            break;
+          }
+          
+          if (result.status === 'error') {
+            throw new Error('Transcription failed');
+          }
+          
+          attempts++;
+        }
+        
+        if (attempts >= 24) {
+          throw new Error('Timeout');
+        }
+        
+      } catch (error) {
+        console.log('Caption error:', error);
+        setCaptionsEnabled(false);
+        setCaptionText('');
+        Alert.alert('Caption Error', 'Continuing without captions');
+      }
+      
+      setIsGeneratingCaptions(false);
+      setShowProcessingModal(false); // Close processing modal
+    }
+
+    // Proceed with existing video creation
     // Stop audio playback when entering Create Video mode
     if (sound && isPlaying) {
       await sound.pauseAsync();
       setIsPlaying(false);
     }
     
-    // Show guidance modal if user hasn't disabled it
+    // Ensure sound is loaded before proceeding
+    if (!sound || !sound._loaded) {
+      console.log('🎬 Sound not loaded, loading now...');
+      await loadEpisode(selectedEpisode);
+    }
+    
     if (!dontShowGuidanceAgain) {
       setShowRecordingGuidance(true);
     } else {
       setShowRecordingView(true);
+    }
+  };
+
+  // Add caption status info display (optional)
+  const getCaptionStatusText = () => {
+    if (!captionsEnabled) return '';
+    if (isGeneratingCaptions) return 'Generating captions...';
+    if (captionText) return 'Captions ready';
+    return '';
+  };
+
+  // Audio trimming function
+  const trimAudioToClip = async (audioUrl, startMs, endMs) => {
+    try {
+      console.log('🎵 Starting audio trim:', startMs, 'to', endMs, 'ms');
+      
+          // Phase 1: Call Vercel server (placeholder implementation)
+    const response = await fetch('https://audio-trimmer-server-4ietnmtpt-droth0951s-projects.vercel.app/api/trim-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          audioUrl: audioUrl,
+          start: startMs,
+          end: endMs
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('🎵 Server response:', result.message);
+        return result.trimmedUrl;
+      } else {
+        console.error('🎵 Server error:', result.error);
+        return audioUrl; // Fallback to original
+      }
+      
+    } catch (error) {
+      console.error('🎵 Audio trimming failed:', error);
+      return audioUrl; // Fallback to original
+    }
+  };
+
+  // Update captions based on current playback time
+  const updateCaptionsForTime = (currentTimeMs) => {
+    if (allCaptionWords.length === 0) {
+      return;
+    }
+    
+    // Find words that should be visible at current time
+    const visibleWords = allCaptionWords.filter(word => {
+      const wordStart = word.start;
+      const wordEnd = word.end || (word.start + 500); // Assume 500ms duration if no end time
+      const shouldShow = currentTimeMs >= wordStart && currentTimeMs <= wordEnd + 2000;
+      return shouldShow;
+    });
+    
+    if (visibleWords.length > 0) {
+      const currentCaption = visibleWords.map(word => word.text).join(' ');
+      const trimmedCaption = currentCaption.substring(0, 80);
+      setCaptionText(trimmedCaption);
     }
   };
 
@@ -1410,51 +1659,10 @@ export default function App() {
         return;
       }
 
-      // Start captions if enabled
-      if (captionsEnabled) {
-        try {
-          console.log('🎤 Captions enabled, starting speech recognition...');
-          setRecordingStatus('Checking speech recognition permissions...');
-          
-          const permissionCheck = await VoiceManager.checkPermissions();
-          console.log('🔍 Permission check result:', permissionCheck);
-          
-          if (!permissionCheck.granted) {
-            console.log('🔍 Requesting permissions...');
-            setRecordingStatus('Requesting speech recognition permissions...');
-            const hasPermission = await VoiceManager.requestPermissions();
-            console.log('🔍 Permission request result:', hasPermission);
-            
-            if (!hasPermission) {
-              Alert.alert(
-                'Permission Required', 
-                'Speech recognition permission is needed for captions. Please enable it in Settings.',
-                [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
-              );
-              return;
-            }
-          }
-          
-          console.log('🎤 Starting voice recognition...');
-          setRecordingStatus('Starting captions...');
-          setIsListening(true);
-          
-          await VoiceManager.startListening(
-            (text) => {
-              console.log('🎤 Caption text received:', text);
-              setCurrentCaptionText(text);
-            },
-            (error) => {
-              console.log('❌ Caption error:', error);
-              Alert.alert('Caption Error', `Speech recognition error: ${error.message || error}`);
-            }
-          );
-          
-        } catch (error) {
-          console.error('❌ Error starting captions:', error);
-          Alert.alert('Caption Error', `Failed to start captions: ${error.message || error}`);
-        }
-      }
+      // DISABLED: Old Voice API captions - now using Assembly
+      // if (captionsEnabled) {
+      //   // Old Voice API caption logic removed
+      // }
 
       setRecordingStatus('Setting up audio...');
       
@@ -1467,25 +1675,57 @@ export default function App() {
 
       setRecordingStatus('Starting recording...');
       
+      // Ensure no existing recording is in progress
+      try {
+        await ScreenRecorder.stopRecording();
+      } catch (error) {
+        // Ignore errors - this is just cleanup
+      }
+      
       // Start screen recording with microphone disabled (we want app audio only)
       const micEnabled = false;
       await ScreenRecorder.startRecording(micEnabled);
       
       setIsRecording(true);
       setRecordingStatus('Recording in progress...');
+      console.log('🎬 Recording started! isRecording set to true');
+      
+
       
       // Seek to clip start and play
+      console.log('🎬 Seeking to clip start:', clipStart, 'ms');
       await sound.setPositionAsync(clipStart);
+      console.log('🎬 Starting audio playback');
       await sound.playAsync();
       
       // Stop recording after clip duration
-      const clipDuration = clipEnd - clipStart;
-      
       const recordingTimer = setTimeout(async () => {
         await stopVideoRecording();
-      }, clipDuration);
+      }, clipEnd - clipStart); // Use actual clip duration
       
-      return () => clearTimeout(recordingTimer);
+      // Update captions every 500ms during recording
+      let recordingActive = true; // Local variable to track recording state
+      const captionUpdateInterval = setInterval(() => {
+        if (recordingActive && allCaptionWords.length > 0) {
+          const currentTime = clipStart + (Date.now() - recordingStartTime);
+          updateCaptionsForTime(currentTime);
+        } else {
+          // Only log once when conditions aren't met
+          if (!recordingActive) {
+            console.log('🎬 Timer stopped - recording completed');
+            clearInterval(captionUpdateInterval);
+          }
+        }
+      }, 500);
+      
+      // Store recording start time for timer-based updates
+      const recordingStartTime = Date.now();
+      
+              return () => {
+          clearTimeout(recordingTimer);
+          clearInterval(captionUpdateInterval);
+          recordingActive = false;
+        };
       
     } catch (error) {
       console.error('Recording error:', error);
@@ -1505,12 +1745,19 @@ export default function App() {
     try {
       setRecordingStatus('Stopping recording...');
       
-      // Stop captions if active
-      if (isListening) {
-        await VoiceManager.stopListening();
-        setIsListening(false);
-        setCurrentCaptionText('');
-      }
+      // DISABLED: Old Voice API cleanup - now using Assembly
+      // if (isListening) {
+      //   await VoiceManager.stopListening();
+      //   setIsListening(false);
+      //   setCurrentCaptionText('');
+      // }
+      
+      // Reset audio session for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+      });
       
       // Pause audio
       if (sound && isPlaying) {
@@ -1881,28 +2128,14 @@ export default function App() {
           </Text>
         </View>
         
-        {/* Caption toggle - ONLY show when NOT actively recording */}
-        {!isRecording && (
-          <View style={styles.captionToggleContainer}>
-            <View style={styles.captionToggleRow}>
-              <Text style={styles.captionToggleLabel}>BETA Captions</Text>
-              <Switch
-                value={captionsEnabled}
-                onValueChange={setCaptionsEnabled}
-                trackColor={{ false: '#404040', true: '#d97706' }}
-                thumbColor={captionsEnabled ? '#f4f4f4' : '#b4b4b4'}
-              />
-            </View>
-            <Text style={styles.captionToggleSubtitle}>
-              Generate captions from audio during recording
-            </Text>
-          </View>
-        )}
+        {/* REMOVED: Old caption toggle - now using Assembly captions */}
 
         {/* Caption display */}
-        {currentCaptionText && (
+        {captionText && (
           <View style={styles.captionOverlay}>
-            <Text style={styles.captionText}>{currentCaptionText}</Text>
+            <Text style={styles.captionText}>
+              {captionText.slice(0, 80)}
+            </Text>
           </View>
         )}
 
@@ -2435,7 +2668,7 @@ export default function App() {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Clip Controls */}
+                      {/* Enhanced Clip Controls with Caption Toggle */}
                       <View style={styles.clipControls}>
                         <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
                           <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
@@ -2446,18 +2679,50 @@ export default function App() {
                         
                         {clipStart && clipEnd && (
                           <>
+                            {/* Add this caption button */}
+                            <TouchableOpacity 
+                              style={[styles.clipButton, captionsEnabled && { backgroundColor: '#d97706' }]} 
+                              onPress={() => setCaptionsEnabled(!captionsEnabled)}
+                              disabled={isGeneratingCaptions}
+                            >
+                              <MaterialCommunityIcons 
+                                name="closed-caption" 
+                                size={16} 
+                                color="#f4f4f4" 
+                              />
+                              <Text style={styles.clipButtonText}>
+                                {isGeneratingCaptions ? 'Wait...' : 'Captions'}
+                              </Text>
+                            </TouchableOpacity>
+                            
+                            {/* Your existing preview and create video buttons */}
                             <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
                               <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
                               <Text style={styles.clipButtonText}>Preview</Text>
                             </TouchableOpacity>
                             
-                            <TouchableOpacity style={styles.saveButton} onPress={handleCreateVideo}>
+                            <TouchableOpacity 
+                              style={styles.saveButton} 
+                              onPress={handleCreateVideo}
+                              disabled={isGeneratingCaptions}
+                            >
                               <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
-                              <Text style={styles.saveButtonText}>Create Video</Text>
+                              <Text style={styles.saveButtonText}>
+                                {isGeneratingCaptions ? 'Wait...' : 'Create Video'}
+                              </Text>
                             </TouchableOpacity>
                           </>
                         )}
                       </View>
+
+                      {/* Caption Status Display */}
+                      {(captionsEnabled || isGeneratingCaptions) && (
+                        <View style={styles.captionStatus}>
+                          <Text style={styles.captionStatusText}>
+                            {getCaptionStatusText()}
+                          </Text>
+                        </View>
+                      )}
 
                       {/* Clip Info */}
                       {(clipStart !== null && clipEnd !== null) && (
@@ -2482,7 +2747,8 @@ export default function App() {
           </Animated.View>
         </GestureDetector>
       </LinearGradient>
-      {showRecordingGuidance && <RecordingGuidanceModal />}
+              {showRecordingGuidance && <RecordingGuidanceModal />}
+        {showProcessingModal && <ProcessingModal />}
       
       {/* Episode Loading Spinner */}
       {isEpisodeLoading && (
@@ -2849,6 +3115,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 90,
   },
+  clipButtonActive: {
+    backgroundColor: '#d97706', // Audio2 orange when captions enabled
+    borderWidth: 2,
+    borderColor: '#e97c0a', // Slightly lighter orange border
+  },
   clipButtonText: {
     color: '#f4f4f4',
     fontSize: 14,
@@ -2865,6 +3136,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 120,
   },
+  saveButtonDisabled: {
+    backgroundColor: '#666666', // Grayed out when generating captions
+    opacity: 0.7,
+  },
   saveButtonText: {
     color: '#f4f4f4',
     fontSize: 14,
@@ -2877,6 +3152,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 20,
+  },
+  
+  // Optional: Caption status indicator
+  captionStatus: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  
+  captionStatusText: {
+    color: '#d97706',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   
 
@@ -3482,23 +3770,17 @@ suggestionTagText: {
   },
   captionOverlay: {
     position: 'absolute',
-    top: 300, // Position over the waveform animation area
+    bottom: 100,
     left: 20,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    zIndex: 10, // Ensure it appears above the waveform
+    padding: 12,
   },
   captionText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 22,
   },
 });
 

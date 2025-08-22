@@ -1,0 +1,16 @@
+{
+  "name": "audio-trimmer-server",
+  "version": "1.0.0",
+  "description": "Serverless audio trimming for Audio2 app",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@vercel/node": "^3.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}
