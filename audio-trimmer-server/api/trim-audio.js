@@ -32,15 +32,7 @@ module.exports = async function handler(req, res) {
     
     console.log('🎵 Timing info:', { startSeconds, endSeconds, durationSeconds });
 
-    // Cost protection: reject clips longer than 2 minutes
-    const maxDurationSeconds = 120; // 2 minutes
-    if (durationSeconds > maxDurationSeconds) {
-      return res.status(400).json({ 
-        error: 'Clip too long',
-        message: `Maximum clip duration is ${maxDurationSeconds} seconds. Requested: ${durationSeconds} seconds`,
-        success: false
-      });
-    }
+    // No longer needed - AssemblyAI handles the trimming with timing parameters
 
     // Don't actually trim the audio - just return the original URL with timing info
     console.log('🎵 Returning timing info for AssemblyAI trimming');
