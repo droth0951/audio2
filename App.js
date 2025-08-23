@@ -14,6 +14,7 @@ import {
   FlatList,
   Switch,
 } from 'react-native';
+import { CaptionsDemoScreen } from './src/screens/CaptionsDemoScreen';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
@@ -263,7 +264,7 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
   }
 };
 
-const AnimatedWaveform = ({ 
+const AnimatedWaveform = React.memo(({ 
   isPlaying = false,
   size = 'large',
   color = '#d97706',
@@ -305,45 +306,34 @@ const AnimatedWaveform = ({
   const config = sizeConfig[size];
 
   useEffect(() => {
-    if (isPlaying) {
-      const animations = animatedValues.map((animValue, index) => {
-        return RNAnimated.loop(
-          RNAnimated.sequence([
-            RNAnimated.timing(animValue, {
-              toValue: 1,
-              duration: 400 + (index * 50),
-              useNativeDriver: false,
-            }),
-            RNAnimated.timing(animValue, {
-              toValue: 0.3,
-              duration: 400 + (index * 50),
-              useNativeDriver: false,
-            }),
-          ])
-        );
-      });
-
-      animations.forEach((animation, index) => {
-        setTimeout(() => {
-          animation.start();
-        }, index * 100);
-      });
-
-      return () => {
-        animatedValues.forEach(animValue => animValue.stopAnimation());
-      };
-    } else {
-      const restAnimations = animatedValues.map(animValue =>
-        RNAnimated.timing(animValue, {
-          toValue: 0.4,
-          duration: 300,
-          useNativeDriver: false,
-        })
+    // Always animate - don't depend on isPlaying state
+    const animations = animatedValues.map((animValue, index) => {
+      return RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(animValue, {
+            toValue: 1,
+            duration: 400 + (index * 50),
+            useNativeDriver: false,
+          }),
+          RNAnimated.timing(animValue, {
+            toValue: 0.3,
+            duration: 400 + (index * 50),
+            useNativeDriver: false,
+          }),
+        ])
       );
+    });
 
-      RNAnimated.parallel(restAnimations).start();
-    }
-  }, [isPlaying]);
+    animations.forEach((animation, index) => {
+      setTimeout(() => {
+        animation.start();
+      }, index * 100);
+    });
+
+    return () => {
+      animatedValues.forEach(animValue => animValue.stopAnimation());
+    };
+  }, []); // Empty dependency array - only run once on mount
 
   return (
     <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
@@ -360,6 +350,95 @@ const AnimatedWaveform = ({
                 height: animValue.interpolate({
                   inputRange: [0, 1],
                   outputRange: [config.baseHeights[index] * 0.3, config.baseHeights[index]],
+                }),
+                opacity: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.4, 0.9],
+                }),
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const HeartbeatWaveform = () => {
+  const animatedValues = useRef([
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+    new RNAnimated.Value(0.3),
+  ]).current;
+
+  useEffect(() => {
+    // Create a smooth heartbeat animation
+    const heartbeatAnimation = () => {
+      const animations = animatedValues.map((animValue, index) => {
+        return RNAnimated.sequence([
+          // Gentle rise
+          RNAnimated.timing(animValue, {
+            toValue: 0.8,
+            duration: 800,
+            useNativeDriver: false,
+          }),
+          // Quick pulse
+          RNAnimated.timing(animValue, {
+            toValue: 1.0,
+            duration: 200,
+            useNativeDriver: false,
+          }),
+          // Gentle fall
+          RNAnimated.timing(animValue, {
+            toValue: 0.3,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+        ]);
+      });
+
+      // Start animations with staggered timing for wave effect
+      animations.forEach((animation, index) => {
+        setTimeout(() => {
+          animation.start(() => {
+            // Restart the heartbeat cycle
+            setTimeout(() => heartbeatAnimation(), 2000);
+          });
+        }, index * 100);
+      });
+    };
+
+    // Start the heartbeat
+    heartbeatAnimation();
+
+    return () => {
+      animatedValues.forEach(animValue => animValue.stopAnimation());
+    };
+  }, []); // Only run once on mount
+
+  const baseHeights = [16, 28, 22, 38, 24, 32, 22, 28, 16];
+
+  return (
+    <View style={[waveformStyles.container, { height: 40 }]}>
+      <View style={waveformStyles.waveform}>
+        {animatedValues.map((animValue, index) => (
+          <RNAnimated.View
+            key={index}
+            style={[
+              waveformStyles.bar,
+              {
+                width: 4,
+                marginHorizontal: 1.5,
+                backgroundColor: '#d97706',
+                height: animValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [baseHeights[index] * 0.3, baseHeights[index]],
                 }),
                 opacity: animValue.interpolate({
                   inputRange: [0, 1],
@@ -577,6 +656,9 @@ export default function App() {
   const notesTranslateY = useSharedValue(screenHeight);
   const notesOpacity = useSharedValue(0);
 
+  // Add state for captions demo
+  const [showCaptionsDemo, setShowCaptionsDemo] = useState(false);
+
   // Add state for episode loading spinner
   const [isEpisodeLoading, setIsEpisodeLoading] = useState(false);
   const [loadingEpisodeTitle, setLoadingEpisodeTitle] = useState('');
@@ -588,6 +670,7 @@ export default function App() {
   const [captionText, setCaptionText] = useState('');
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [allCaptionWords, setAllCaptionWords] = useState([]); // Store all words with timestamps
+  const [currentWordIndex, setCurrentWordIndex] = useState(-1); // Track current word for highlighting
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
 
@@ -1651,6 +1734,10 @@ export default function App() {
               // Store all words for time-based progression
               setAllCaptionWords(clipWords);
               console.log('🎬 Captions ready for', clipWords.length, 'words');
+              console.log('🎬 Sample word data:', clipWords.slice(0, 3));
+              console.log('🎬 First word start time:', clipWords[0]?.start, 'ms');
+              console.log('🎬 Last word end time:', clipWords[clipWords.length - 1]?.end, 'ms');
+              console.log('🎬 Expected clip range:', clipStart, 'to', clipEnd, 'ms');
               
               // Show initial caption (first 80 characters)
               const initialCaption = clipWords.map(word => word.text).join(' ').substring(0, 80);
@@ -1770,6 +1857,106 @@ export default function App() {
     }
   };
 
+  // State for smooth caption scrolling
+  const [wordPositions, setWordPositions] = useState({});
+  const scrollViewRef = useRef(null);
+  const scrollY = useRef(new RNAnimated.Value(0)).current;
+
+  // Find current word based on playback time (LEAN FIX)
+  const findCurrentWordIndex = (currentTime) => {
+    if (allCaptionWords.length === 0 || clipStart === null || clipEnd === null) return -1;
+    
+    const timeRelativeToClip = currentTime - clipStart;
+    console.log('🎬 Current time:', currentTime, 'Clip start:', clipStart, 'Relative time:', timeRelativeToClip);
+    console.log('🎬 Time relative to clip:', timeRelativeToClip, 'ms');
+    
+          // Find the word that should be currently spoken
+      for (let i = 0; i < allCaptionWords.length; i++) {
+        const word = allCaptionWords[i];
+        const wordStart = word.start - clipStart; // Make word timing relative to clip start
+        const wordEnd = (word.end || (word.start + 500)) - clipStart; // Make word timing relative to clip start
+        
+        console.log(`🎬 Word ${i}: "${word.text}" (${wordStart}-${wordEnd}ms relative to clip)`);
+        
+        // If we're within this word's time range, this is our current word
+        if (timeRelativeToClip >= wordStart && timeRelativeToClip <= wordEnd) {
+          console.log(`🎬 Found current word: ${i} "${word.text}"`);
+          return i;
+        }
+        
+        // If we've passed this word, continue to next
+        if (timeRelativeToClip > wordEnd) {
+          continue;
+        }
+        
+        // If we haven't reached this word yet, show the first word
+        if (timeRelativeToClip < wordStart) {
+          console.log(`🎬 Before word ${i}, showing first word (0)`);
+          return 0;
+        }
+      }
+    
+    // If we've passed all words, return the last word
+    console.log('🎬 Past all words, returning last word');
+    return allCaptionWords.length - 1;
+  };
+
+  // Store word position when it's laid out
+  const storeWordPosition = (index, layout) => {
+    setWordPositions(prev => ({
+      ...prev,
+      [index]: layout.y
+    }));
+  };
+
+  // Calculate target scroll position to center the current word
+  const calculateTargetScroll = (wordIndex) => {
+    if (wordIndex === -1 || !wordPositions[wordIndex]) return 0;
+    
+    const wordY = wordPositions[wordIndex];
+    const containerHeight = 200; // Fixed height of caption container
+    const wordHeight = 24; // Approximate word height
+    
+    // Center the word in the container
+    return Math.max(0, wordY - (containerHeight / 2) + (wordHeight / 2));
+  };
+
+  // Smoothly animate scroll to center current word
+  const animateToCurrentWord = (wordIndex) => {
+    if (wordIndex === -1 || !scrollViewRef.current || !showRecordingView) {
+      console.log('🎬 Animation skipped - wordIndex:', wordIndex, 'scrollViewRef:', !!scrollViewRef.current, 'showRecordingView:', showRecordingView);
+      return;
+    }
+    
+    const targetScroll = calculateTargetScroll(wordIndex);
+    console.log('🎬 Animating to word', wordIndex, 'target scroll:', targetScroll);
+    
+    RNAnimated.timing(scrollY, {
+      toValue: targetScroll,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Update current word when playback time changes
+  useEffect(() => {
+    if (!isPlaying || allCaptionWords.length === 0 || !showRecordingView) return;
+    
+    console.log('🎬 Caption update - isPlaying:', isPlaying, 'showRecordingView:', showRecordingView, 'position:', position);
+    
+    const newWordIndex = findCurrentWordIndex(position);
+    console.log('🎬 Current word index:', currentWordIndex, 'New word index:', newWordIndex);
+    
+    if (newWordIndex !== currentWordIndex) {
+      console.log('🎬 Updating current word from', currentWordIndex, 'to', newWordIndex);
+      if (newWordIndex >= 0 && newWordIndex < allCaptionWords.length) {
+        console.log('🎬 New word text:', allCaptionWords[newWordIndex].text);
+      }
+      setCurrentWordIndex(newWordIndex);
+      // LEAN STEP 1: No animation yet
+    }
+  }, [position, isPlaying, allCaptionWords, clipStart, showRecordingView]);
+
   // Update captions based on current playback time
   const updateCaptionsForTime = (currentTimeMs) => {
     if (allCaptionWords.length === 0) {
@@ -1837,6 +2024,8 @@ export default function App() {
       
       // Seek to clip start and play
       console.log('🎬 Seeking to clip start:', clipStart, 'ms');
+      console.log('🎬 Clip end:', clipEnd, 'ms');
+      console.log('🎬 Clip duration:', clipEnd - clipStart, 'ms');
       await sound.setPositionAsync(clipStart);
       console.log('🎬 Starting audio playback');
       await sound.playAsync();
@@ -1846,27 +2035,14 @@ export default function App() {
         await stopVideoRecording();
       }, clipEnd - clipStart); // Use actual clip duration
       
-      // Update captions every 500ms during recording
-      let recordingActive = true; // Local variable to track recording state
-      const captionUpdateInterval = setInterval(() => {
-        if (recordingActive && allCaptionWords.length > 0) {
-          const currentTime = clipStart + (Date.now() - recordingStartTime);
-          updateCaptionsForTime(currentTime);
-        } else {
-          // Only log once when conditions aren't met
-          if (!recordingActive) {
-            console.log('🎬 Timer stopped - recording completed');
-            clearInterval(captionUpdateInterval);
-          }
-        }
-      }, 500);
+      // Timeline and captions will update automatically based on audio position
+      // No need for manual updates since position state changes drive the UI
       
       // Store recording start time for timer-based updates
       const recordingStartTime = Date.now();
       
               return () => {
           clearTimeout(recordingTimer);
-          clearInterval(captionUpdateInterval);
           recordingActive = false;
         };
       
@@ -2233,10 +2409,14 @@ export default function App() {
         {/* Progress timeline */}
         <View style={styles.recordingTimelineContainer}>
           <View style={styles.recordingTimeline}>
-            <View 
+            <Animated.View 
               style={[
                 styles.recordingTimelineFill, 
-                { width: `${duration && clipStart !== null && clipEnd !== null ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
+                { 
+                  width: duration && clipStart !== null && clipEnd !== null 
+                    ? `${Math.max(0, Math.min(100, ((position - clipStart) / (clipEnd - clipStart)) * 100))}%` 
+                    : '0%' 
+                }
               ]} 
             />
           </View>
@@ -2250,18 +2430,11 @@ export default function App() {
         
         {/* Recording waveform */}
         <View style={styles.recordingWaveform}>
-          {Array.from({ length: 15 }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.recordingWaveformBar,
-                {
-                  height: Math.random() * 40 + 10,
-                  opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
-                }
-              ]}
-            />
-          ))}
+          <AnimatedWaveform 
+            isPlaying={isPlaying} 
+            size="medium" 
+            color="#d97706"
+          />
         </View>
         
         {/* Episode info */}
@@ -2274,22 +2447,14 @@ export default function App() {
           </Text>
         </View>
         
-        {/* Caption display - positioned closer to episode info */}
-        {captionsEnabled && captionText && typeof captionText === 'string' && (
-          <View style={styles.captionOverlay}>
+        {/* Caption display - LEAN STEP 1: Just show current word */}
+        {captionsEnabled && allCaptionWords.length > 0 && (
+          <View style={styles.captionScrollContainer}>
             <Text style={styles.captionText}>
-              {captionText.slice(0, 80)}
+              {currentWordIndex >= 0 && currentWordIndex < allCaptionWords.length 
+                ? allCaptionWords[currentWordIndex].text 
+                : 'Loading...'}
             </Text>
-            {captionText.length > 80 && (
-              <Text style={styles.captionText}>
-                {captionText.slice(80, 160)}
-              </Text>
-            )}
-            {captionText.length > 160 && (
-              <Text style={styles.captionText}>
-                {captionText.slice(160, 240)}
-              </Text>
-            )}
           </View>
         )}
 
@@ -2327,6 +2492,10 @@ export default function App() {
   );
 
   // Show recording view when active
+  if (showCaptionsDemo) {
+    return <CaptionsDemoScreen />;
+  }
+
   if (showRecordingView) {
     return <RecordingView />;
   }
@@ -2454,6 +2623,15 @@ export default function App() {
                       </Text>
                       <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
                     </View>
+                    
+                    {/* Captions Demo Button */}
+                    <TouchableOpacity 
+                      style={styles.captionsDemoButton}
+                      onPress={() => setShowCaptionsDemo(true)}
+                    >
+                      <MaterialCommunityIcons name="closed-caption" size={20} color="#d97706" />
+                      <Text style={styles.captionsDemoButtonText}>Test Captions</Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Enhanced Input Section with Search Toggle */}
@@ -2922,6 +3100,7 @@ export default function App() {
                                     // Clear caption data when disabling
                                     setCaptionText('');
                                     setAllCaptionWords([]);
+                                    setCurrentWordIndex(0);
                                   }
                                 }}
                                 disabled={isGeneratingCaptions}
@@ -3705,20 +3884,21 @@ const styles = StyleSheet.create({
   },
   recordingBackground: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Start from top instead of centering
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingTop: 60, // Add some top padding for status bar
   },
   recordingArtwork: {
     width: 160,
     height: 160,
     borderRadius: 20,
-    marginBottom: 40,
+    marginBottom: 20, // Reduced from 40
     backgroundColor: '#404040',
   },
   recordingTimelineContainer: {
     width: '100%',
-    marginBottom: 30,
+    marginBottom: 20, // Reduced from 30
     paddingHorizontal: 40, // Increased padding to prevent timeline from running off screen
   },
   recordingTimeline: {
@@ -3742,10 +3922,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   recordingWaveform: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
     marginBottom: 10,
     height: 50,
   },
@@ -3757,7 +3935,7 @@ const styles = StyleSheet.create({
   },
   recordingEpisodeInfo: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 40, // Increased spacing to prevent captions from running into podcast name
   },
   recordingEpisodeTitle: {
     color: '#f4f4f4',
@@ -4353,23 +4531,68 @@ suggestionTagText: {
     fontSize: 12,
     lineHeight: 16,
   },
-  captionOverlay: {
-    alignItems: 'center',
+  captionScrollContainer: {
+    height: 200, // Fixed height for smooth scrolling
     marginBottom: 20,
     paddingHorizontal: 20,
-    minHeight: 120,
+    overflow: 'hidden', // Mask the overflow
+  },
+  captionScrollView: {
+    flex: 1,
+  },
+  captionScrollContent: {
+    paddingVertical: 100, // Add padding to allow centering at top/bottom
+  },
+  captionOverlay: {
+    alignItems: 'flex-start', // Left-align the container for left-justified text
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    height: 120, // Increased height for 5 lines
+    justifyContent: 'center',
   },
   captionText: {
     color: '#ffffff',
-    fontSize: 22,
+    fontSize: 16, // Even smaller font to ensure 3 lines fit
     fontWeight: '500',
     fontFamily: 'Georgia',
-    textAlign: 'center',
+    textAlign: 'left', // Left-justified for better readability
     textShadowColor: '#000000',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    lineHeight: 28,
-    marginBottom: 6,
+    lineHeight: 20, // Tighter line height
+    marginBottom: 2, // Minimal spacing between lines
+  },
+  captionWord: {
+    color: '#ffffff',
+    fontSize: 16, // Match captionText size
+    fontWeight: '500',
+    fontFamily: 'Georgia',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  captionWordHighlighted: {
+    color: '#d97706',
+    fontWeight: '700',
+  },
+  captionsDemoButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(217, 119, 6, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d97706',
+  },
+  captionsDemoButtonText: {
+    color: '#d97706',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
 

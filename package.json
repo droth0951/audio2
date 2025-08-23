@@ -14,6 +14,7 @@
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-voice/voice": "^3.2.4",
+    "@shopify/flash-list": "1.7.6",
     "@shopify/react-native-skia": "v2.0.0-next.4",
     "expo": "53.0.19",
     "expo-audio": "^0.4.8",
@@ -24,6 +25,7 @@
     "expo-media-library": "~17.1.7",
     "expo-screen-recorder": "^0.1.8",
     "expo-status-bar": "~2.2.3",
+    "expo-updates": "~0.28.17",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
@@ -32,12 +34,14 @@
     "react-native-reanimated": "~3.17.4",
     "react-native-rss-parser": "^1.5.1",
     "react-native-svg": "15.11.2",
+    "react-native-text-size": "^4.0.0-rc.1",
     "react-native-view-shot": "4.0.3",
-    "react-native-web": "^0.20.0",
-    "expo-updates": "~0.28.17"
+    "react-native-web": "^0.20.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3"
   },
   "private": true
 }
