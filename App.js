@@ -511,6 +511,10 @@ export default function App() {
   const [clipEnd, setClipEnd] = useState(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   
+  // Clean UI Selection Mode
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectionStep, setSelectionStep] = useState('idle'); // 'idle', 'start', 'end'
+  
   // Video recording state
   const [isRecording, setIsRecording] = useState(false);
   const [showRecordingView, setShowRecordingView] = useState(false);
@@ -1230,6 +1234,28 @@ export default function App() {
     }
   };
 
+  const handleSkip1Backward = async () => {
+    if (sound) {
+      const newPosition = Math.max(0, position - 1000);
+      await sound.setPositionAsync(newPosition);
+    }
+  };
+
+  const handleSkip1Forward = async () => {
+    if (sound && duration) {
+      const newPosition = Math.min(duration, position + 1000);
+      await sound.setPositionAsync(newPosition);
+    }
+  };
+
+  const handleClearClip = () => {
+    setClipStart(null);
+    setClipEnd(null);
+    setCaptionsEnabled(false);
+    setCaptionText('');
+    setAllCaptionWords([]);
+  };
+
   const handleSetClipPoint = () => {
     if (!selectedEpisode || !sound) {
       Alert.alert('No Episode', 'Please select and load an episode first');
@@ -1270,6 +1296,85 @@ export default function App() {
         }
       }, clipEnd - clipStart);
     }
+  };
+
+  // Clean UI Selection Functions
+  const handleStartClipSelection = () => {
+    if (!selectedEpisode || !sound) {
+      Alert.alert('No Episode', 'Please select and load an episode first');
+      return;
+    }
+    
+    if (typeof position !== 'number' || position === null || position === undefined) {
+      console.error('Position is not a valid number:', position);
+      Alert.alert('Error', 'Unable to get current position');
+      return;
+    }
+    
+    // Set start point to current position
+    setClipStart(position);
+    setIsSelectionMode(true);
+    setSelectionStep('end');
+    Alert.alert('Clip Start Set', `Start: ${formatTime(position)}\n\nTap the scrubber to set the end point`);
+  };
+
+  const handleScrubberTap = (value) => {
+    if (isSelectionMode && selectionStep === 'end') {
+      const clipLength = value - clipStart;
+      if (clipLength > 240000) { // 4 minutes = 240,000 milliseconds
+        Alert.alert('Clip Too Long', 'Clips must be 4 minutes or less');
+        return;
+      }
+      if (clipLength < 5000) { // 5 seconds minimum
+        Alert.alert('Clip Too Short', 'Clips must be at least 5 seconds long');
+        return;
+      }
+      
+      setClipEnd(value);
+      setIsSelectionMode(false);
+      setSelectionStep('idle');
+      Alert.alert('Clip Ready!', `Clip: ${formatTime(clipStart)} - ${formatTime(value)}\n\nTap "Record Clip" to create your video`);
+    }
+  };
+
+  const handleClearSelection = () => {
+    setClipStart(null);
+    setClipEnd(null);
+    setIsSelectionMode(false);
+    setSelectionStep('idle');
+    setCaptionsEnabled(false);
+    setCaptionText('');
+    setAllCaptionWords([]);
+  };
+
+  const handleSetClipEnd = () => {
+    if (!selectedEpisode || !sound) {
+      Alert.alert('No Episode', 'Please select and load an episode first');
+      return;
+    }
+    
+    const clipLength = position - clipStart;
+    console.log('🎬 Clip length check:', {
+      start: clipStart,
+      end: position,
+      length: clipLength,
+      lengthInSeconds: clipLength / 1000,
+      maxAllowed: 240000
+    });
+    
+    if (clipLength > 240000) { // 4 minutes = 240,000 milliseconds
+      Alert.alert('Clip Too Long', `Clip length: ${Math.round(clipLength / 1000)}s. Clips must be 4 minutes or less`);
+      return;
+    }
+    if (clipLength < 5000) { // 5 seconds minimum
+      Alert.alert('Clip Too Short', `Clip length: ${Math.round(clipLength / 1000)}s. Clips must be at least 5 seconds long`);
+      return;
+    }
+    
+    setClipEnd(position);
+    setIsSelectionMode(false);
+    setSelectionStep('idle');
+    Alert.alert('Clip Ready!', `Clip: ${formatTime(clipStart)} - ${formatTime(position)}\n\nTap "Record Clip" to create your video`);
   };
 
   // 1. PROCESSING MODAL
@@ -1452,7 +1557,7 @@ export default function App() {
 
   // 2. Clean up handleCreateVideo (remove debug logs)
   const handleCreateVideo = async () => {
-    if (!clipStart || !clipEnd) {
+    if (clipStart === null || clipEnd === null) {
       Alert.alert('No Clip Selected', 'Please select start and end points first');
       return;
     }
@@ -2043,6 +2148,9 @@ export default function App() {
 
   // Utility functions
   const formatTime = (millis) => {
+    if (typeof millis !== 'number' || isNaN(millis) || millis < 0) {
+      return '0:00';
+    }
     const minutes = Math.floor(millis / 60000);
     const seconds = Math.floor((millis % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -2122,15 +2230,15 @@ export default function App() {
             <View 
               style={[
                 styles.recordingTimelineFill, 
-                { width: `${duration ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
+                { width: `${duration && clipStart !== null && clipEnd !== null ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
               ]} 
             />
           </View>
           <View style={styles.recordingTimeLabels}>
             <Text style={styles.recordingTimeText}>
-              {formatTime(Math.max(0, position - clipStart))}
+              {formatTime(Math.max(0, clipStart !== null ? position - clipStart : 0))}
             </Text>
-            <Text style={styles.recordingTimeText}>{formatTime(clipEnd - clipStart)}</Text>
+            <Text style={styles.recordingTimeText}>{formatTime(clipStart !== null && clipEnd !== null ? clipEnd - clipStart : 0)}</Text>
           </View>
         </View>
         
@@ -2153,7 +2261,7 @@ export default function App() {
         {/* Episode info */}
         <View style={styles.recordingEpisodeInfo}>
           <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
-            {selectedEpisode?.title}
+            {selectedEpisode?.title || 'Episode'}
           </Text>
           <Text style={styles.recordingPodcastName}>
             {selectedEpisode?.podcastName || podcastTitle || 'Podcast'}
@@ -2163,7 +2271,7 @@ export default function App() {
         {/* REMOVED: Old caption toggle - now using Assembly captions */}
 
         {/* Caption display */}
-        {captionText && (
+        {captionText && typeof captionText === 'string' && (
           <View style={styles.captionOverlay}>
             <Text style={styles.captionText}>
               {captionText.slice(0, 80)}
@@ -2171,13 +2279,12 @@ export default function App() {
           </View>
         )}
 
-        {/* ONLY show controls when NOT actively recording */}
+        {/* Control buttons - positioned over waveform when not recording */}
         {!isRecording && (
-          <>
-            {/* Control buttons */}
-            <View style={styles.recordingControls}>
+          <View style={styles.recordingButtonOverlay}>
+            <View style={styles.recordingButtonRow}>
               <TouchableOpacity 
-                style={styles.recordingButton}
+                style={styles.recordingButtonWide}
                 onPress={startVideoRecording}
               >
                 <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
@@ -2185,21 +2292,21 @@ export default function App() {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.cancelButton}
+                style={styles.recordingCancelButton}
                 onPress={async () => {
                   await cleanupRecording();
                   setShowRecordingView(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.recordingCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
             
             {/* Status text */}
-            {recordingStatus ? (
+            {recordingStatus && typeof recordingStatus === 'string' ? (
               <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
             ) : null}
-          </>
+          </View>
         )}
       </LinearGradient>
     </View>
@@ -2496,7 +2603,10 @@ export default function App() {
                                 {episode.title}
                               </Text>
                               <Text style={styles.episodeDate}>
-                                {episode.pubDate ? new Date(episode.pubDate).toLocaleDateString() : ''}
+                                {episode.pubDate ? (() => {
+                                  const date = new Date(episode.pubDate);
+                                  return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+                                })() : ''}
                               </Text>
                             </View>
                           </TouchableOpacity>
@@ -2548,29 +2658,6 @@ export default function App() {
                     />
                   </View>
 
-                  {/* Episode Header */}
-                  <View style={styles.episodeHeader}>
-                    {selectedEpisode.artwork ? (
-                      <Image 
-                        source={{ uri: selectedEpisode.artwork }} 
-                        style={styles.episodeArtworkLarge}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.episodeArtworkLarge, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
-                        <MaterialCommunityIcons name="music-note" size={48} color="#888" />
-                      </View>
-                    )}
-                    <Text style={styles.episodeTitleLarge} numberOfLines={3}>
-                      {selectedEpisode.title}
-                    </Text>
-                    {podcastTitle && (
-                      <Text style={styles.episodePodcastName}>
-                        {podcastTitle}
-                      </Text>
-                    )}
-                  </View>
-
                   {/* Loading State */}
                   {isLoading && (
                     <View style={styles.loadingContainer}>
@@ -2581,7 +2668,33 @@ export default function App() {
 
                   {/* Player Controls - Show when loaded */}
                   {!isLoading && (
-                    <>
+                    <ScrollView 
+                      style={styles.playerControlsScrollView}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.playerControlsContent}
+                    >
+                      {/* Episode Header */}
+                      <View style={styles.episodeHeader}>
+                        {selectedEpisode.artwork ? (
+                          <Image 
+                            source={{ uri: selectedEpisode.artwork }} 
+                            style={styles.episodeArtworkLarge}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.episodeArtworkLarge, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
+                            <MaterialCommunityIcons name="music-note" size={48} color="#888" />
+                          </View>
+                        )}
+                        <Text style={styles.episodeTitleLarge} numberOfLines={3}>
+                          {selectedEpisode.title}
+                        </Text>
+                        {podcastTitle && (
+                          <Text style={styles.episodePodcastName}>
+                            {podcastTitle}
+                          </Text>
+                        )}
+                      </View>
                       {/* MAIN TIMELINE - NEW AWESOME SLIDER */}
                       <View style={styles.mainTimelineSection}>
                         <View style={styles.sliderContainer}>
@@ -2620,6 +2733,11 @@ export default function App() {
                               setTimeout(() => {
                                 setIsScrubbing(false);
                               }, 100);
+                              
+                              // Handle clip selection if in selection mode
+                              if (isSelectionMode && selectionStep === 'end') {
+                                handleScrubberTap(value);
+                              }
                             }}
                           />
                           
@@ -2631,7 +2749,7 @@ export default function App() {
                                   styles.clipMarkerOverlay, 
                                   { 
                                     left: `${(clipStart / duration) * 100}%`,
-                                    backgroundColor: '#ef4444',
+                                    backgroundColor: '#d97706', // Orange for clean UI
                                   }
                                 ]} 
                               />
@@ -2642,7 +2760,7 @@ export default function App() {
                                   styles.clipMarkerOverlay, 
                                   { 
                                     left: `${(clipEnd / duration) * 100}%`,
-                                    backgroundColor: '#ef4444',
+                                    backgroundColor: '#d97706', // Orange for clean UI
                                   }
                                 ]} 
                               />
@@ -2656,6 +2774,7 @@ export default function App() {
                                   {
                                     left: `${(clipStart / duration) * 100}%`,
                                     width: `${((clipEnd - clipStart) / duration) * 100}%`,
+                                    backgroundColor: '#d97706', // Orange highlight for clean UI
                                   }
                                 ]}
                               />
@@ -2663,105 +2782,153 @@ export default function App() {
                           </View>
                         </View>
                         
-                        {/* Time Display Below Main Timeline */}
-                        <View style={styles.mainTimeContainer}>
-                          <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
-                          <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+                      </View>
+                      
+                      {/* Time Display Right Under Scrubber */}
+                      <View style={styles.mainTimeContainer}>
+                        <Text style={styles.mainTimeText}>{formatTime(position)}</Text>
+                        <Text style={styles.mainTimeText}>{formatTime(duration)}</Text>
+                      </View>
+
+                      {/* PLAYBACK Section */}
+                      <View style={styles.controlSection}>
+                        <View style={styles.playbackControls}>
+                          <TouchableOpacity style={styles.skipButton} onPress={handleSkipBackward}>
+                            <MaterialCommunityIcons name="rewind-15" size={20} color="#f4f4f4" />
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity style={styles.largePlayButton} onPress={handleTogglePlayback}>
+                            <MaterialCommunityIcons 
+                              name={isPlaying ? "pause" : "play"} 
+                              size={40} 
+                              color="#f4f4f4" 
+                            />
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity style={styles.skipButton} onPress={handleSkipForward}>
+                            <MaterialCommunityIcons name="fast-forward-15" size={20} color="#f4f4f4" />
+                          </TouchableOpacity>
                         </View>
                       </View>
 
-                      {/* Fine Skip Controls */}
-                      <View style={styles.fineControls}>
-                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Backward}>
-                          <MaterialCommunityIcons name="rewind-5" size={24} color="#f4f4f4" />
+                      {/* Fine Tune Controls */}
+                      {/* <View style={styles.fineTuneControls}>
+                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Backward}>
+                          <MaterialCommunityIcons name="rewind-5" size={16} color="#f4f4f4" />
+                          <Text style={styles.fineTuneButtonText}>-5s</Text>
                         </TouchableOpacity>
                         
-                        <TouchableOpacity style={styles.circularButton} onPress={handleSkip5Forward}>
-                          <MaterialCommunityIcons name="fast-forward-5" size={24} color="#f4f4f4" />
+                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Forward}>
+                          <MaterialCommunityIcons name="fast-forward-5" size={16} color="#f4f4f4" />
+                          <Text style={styles.fineTuneButtonText}>+5s</Text>
                         </TouchableOpacity>
-                      </View>
+                        
+                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Backward}>
+                          <MaterialCommunityIcons name="rewind" size={16} color="#f4f4f4" />
+                          <Text style={styles.fineTuneButtonText}>-1s</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Forward}>
+                          <MaterialCommunityIcons name="fast-forward" size={16} color="#f4f4f4" />
+                          <Text style={styles.fineTuneButtonText}>+1s</Text>
+                        </TouchableOpacity>
+                      </View> */}
 
-                      {/* Main Skip Controls */}
-                      <View style={styles.skipControls}>
-                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipBackward}>
-                          <MaterialCommunityIcons name="rewind-15" size={36} color="#f4f4f4" />
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.playButton} onPress={handleTogglePlayback}>
-                          <MaterialCommunityIcons 
-                            name={isPlaying ? "pause" : "play"} 
-                            size={40} 
-                            color="#f4f4f4" 
-                          />
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.circularButtonLarge} onPress={handleSkipForward}>
-                          <MaterialCommunityIcons name="fast-forward-15" size={36} color="#f4f4f4" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Enhanced Clip Controls with Caption Toggle */}
-                      <View style={styles.clipControls}>
-                        <TouchableOpacity style={styles.clipButton} onPress={handleSetClipPoint}>
-                          <MaterialCommunityIcons name="content-cut" size={16} color="#f4f4f4" />
-                          <Text style={styles.clipButtonText}>
-                            {!clipStart ? 'Start' : !clipEnd ? 'End' : 'New'}
-                          </Text>
-                        </TouchableOpacity>
-                        
-                        {clipStart && clipEnd && (
+                      {/* CLIP SELECTION Section */}
+                      <View style={styles.controlSection}>
+                        {/* Clean UI: Single Action Button */}
+                        {clipStart === null ? (
+                          <TouchableOpacity style={styles.startClipButton} onPress={handleStartClipSelection}>
+                            <MaterialCommunityIcons name="scissors-cutting" size={20} color="#f4f4f4" />
+                            <Text style={styles.startClipButtonText}>Start Clip Selection</Text>
+                          </TouchableOpacity>
+                        ) : clipEnd === null ? (
                           <>
-                            {/* Add this caption button */}
-                            <TouchableOpacity 
-                              style={[styles.clipButton, captionsEnabled && { backgroundColor: '#d97706' }]} 
-                              onPress={() => setCaptionsEnabled(!captionsEnabled)}
-                              disabled={isGeneratingCaptions}
-                            >
-                              <MaterialCommunityIcons 
-                                name="closed-caption" 
-                                size={16} 
-                                color="#f4f4f4" 
-                              />
-                              <Text style={styles.clipButtonText}>
-                                {isGeneratingCaptions ? 'Wait...' : 'Captions'}
-                              </Text>
+                            <TouchableOpacity style={styles.startClipButton} onPress={handleSetClipEnd}>
+                              <MaterialCommunityIcons name="scissors-cutting" size={20} color="#f4f4f4" />
+                              <Text style={styles.startClipButtonText}>End Clip</Text>
                             </TouchableOpacity>
                             
-                            {/* Your existing preview and create video buttons */}
-                            <TouchableOpacity style={styles.clipButton} onPress={handlePlayClip}>
-                              <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
-                              <Text style={styles.clipButtonText}>Preview</Text>
-                            </TouchableOpacity>
+                            {/* Fine Tune Controls - Only during selection */}
+                            <View style={styles.fineTuneControls}>
+                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Backward}>
+                                <MaterialCommunityIcons name="rewind-5" size={16} color="#f4f4f4" />
+                                <Text style={styles.fineTuneButtonText}>-5s</Text>
+                              </TouchableOpacity>
+                              
+                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Forward}>
+                                <MaterialCommunityIcons name="fast-forward-5" size={16} color="#f4f4f4" />
+                                <Text style={styles.fineTuneButtonText}>+5s</Text>
+                              </TouchableOpacity>
+                              
+                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Backward}>
+                                <MaterialCommunityIcons name="rewind" size={16} color="#f4f4f4" />
+                                <Text style={styles.fineTuneButtonText}>-1s</Text>
+                              </TouchableOpacity>
+                              
+                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Forward}>
+                                <MaterialCommunityIcons name="fast-forward" size={16} color="#f4f4f4" />
+                                <Text style={styles.fineTuneButtonText}>+1s</Text>
+                              </TouchableOpacity>
+                            </View>
                             
-                            <TouchableOpacity 
-                              style={styles.saveButton} 
-                              onPress={handleCreateVideo}
-                              disabled={isGeneratingCaptions}
-                            >
-                              <MaterialCommunityIcons name="video-plus" size={16} color="#f4f4f4" />
-                              <Text style={styles.saveButtonText}>
-                                {isGeneratingCaptions ? 'Wait...' : 'Create Video'}
-                              </Text>
+                            {/* Cancel Button - Below fine tune controls */}
+                            <TouchableOpacity style={styles.cancelButton} onPress={handleClearSelection}>
+                              <MaterialCommunityIcons name="close" size={16} color="#f4f4f4" />
+                              <Text style={styles.cancelButtonText}>Cancel</Text>
                             </TouchableOpacity>
                           </>
+                        ) : (
+                          <View style={styles.clipReadyControls}>
+                            <TouchableOpacity style={styles.previewClipButton} onPress={handlePlayClip}>
+                              <MaterialCommunityIcons name="play-outline" size={16} color="#f4f4f4" />
+                              <Text style={styles.previewClipButtonText}>Preview</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity style={styles.clearClipButton} onPress={handleClearSelection}>
+                              <MaterialCommunityIcons name="delete" size={16} color="#f4f4f4" />
+                              <Text style={styles.clearClipButtonText}>Clear</Text>
+                            </TouchableOpacity>
+                          </View>
                         )}
                       </View>
 
-                      {/* Caption Status Display */}
-                      {(captionsEnabled || isGeneratingCaptions) && (
-                        <View style={styles.captionStatus}>
-                          <Text style={styles.captionStatusText}>
-                            {getCaptionStatusText()}
-                          </Text>
+                      {/* CREATE VIDEO Section */}
+                      {clipStart !== null && clipEnd !== null && (
+                        <View style={styles.controlSection}>
+                          {/* Caption Toggle */}
+                          <View style={styles.captionToggleContainer}>
+                            <View style={styles.captionToggleWrapper}>
+                              <TouchableOpacity 
+                                style={[styles.captionToggle, captionsEnabled && styles.captionToggleActive]} 
+                                onPress={() => setCaptionsEnabled(!captionsEnabled)}
+                                disabled={isGeneratingCaptions}
+                              >
+                                <View style={[styles.captionToggleThumb, captionsEnabled && styles.captionToggleThumbActive]} />
+                              </TouchableOpacity>
+                              <Text style={styles.captionToggleText}>
+                                Add automated captions to your clip
+                              </Text>
+                            </View>
+                          </View>
+                          
+                          {/* Record Clip Button */}
+                          <TouchableOpacity 
+                            style={styles.recordClipButton} 
+                            onPress={handleCreateVideo}
+                            disabled={isGeneratingCaptions}
+                          >
+                            <MaterialCommunityIcons name="video-plus" size={20} color="#f4f4f4" />
+                            <Text style={styles.recordClipButtonText}>
+                              {isGeneratingCaptions ? 'Generating Captions...' : 'Record Clip'}
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       )}
 
-                      {/* Clip Info */}
-                      {(clipStart !== null && clipEnd !== null) && (
-                        <Text style={styles.clipInfo}>
-                          Clip: {formatTime(clipEnd - clipStart)} ({formatTime(clipStart)} - {formatTime(clipEnd)})
-                        </Text>
-                      )}
+                      {/* Caption Status Display - Removed to prevent layout shift */}
+
+
 
                       {/* Episode Notes Button */}
                       <TouchableOpacity 
@@ -2772,7 +2939,7 @@ export default function App() {
                         <Text style={styles.episodeNotesButtonText}>Episode Notes</Text>
                         <MaterialCommunityIcons name="chevron-up" size={20} color="#d97706" />
                       </TouchableOpacity>
-                    </>
+                    </ScrollView>
                   )}
                 </>
               )}
@@ -2792,7 +2959,7 @@ export default function App() {
               {podcastTitle || 'Podcast'}
             </Text>
             <Text style={styles.episodeLoadingSubtitle} numberOfLines={2}>
-              {loadingEpisodeTitle}
+              {loadingEpisodeTitle || 'Loading...'}
             </Text>
             <TouchableOpacity 
               style={styles.episodeLoadingCancelButton}
@@ -2979,7 +3146,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10, // Reduced from 20 to remove space between Episodes and episode art
     paddingVertical: 10,
   },
   backButton: {
@@ -3002,7 +3169,7 @@ const styles = StyleSheet.create({
   },
   episodeHeader: {
     alignItems: 'center',
-    marginBottom: 30, // Reverted back to original
+    marginBottom: 15, // Reduced from 30 to bring scrubber closer
   },
   episodeArtworkLarge: {
     width: 120,
@@ -3033,12 +3200,12 @@ const styles = StyleSheet.create({
   
   // Timeline styles
   mainTimelineSection: {
-    marginBottom: 30,
+    marginBottom: 0, // Removed margin since timestamps are now outside
     paddingHorizontal: 10,
   },
   sliderContainer: {
     position: 'relative',
-    paddingVertical: 20,
+    paddingVertical: 8, // Reduced from 20 to bring timestamps closer
     paddingHorizontal: 10,
   },
   slider: {
@@ -3047,7 +3214,7 @@ const styles = StyleSheet.create({
   },
   clipMarkersContainer: {
     position: 'absolute',
-    top: 20, // Match the paddingVertical of sliderContainer
+    top: 8, // Match the new paddingVertical of sliderContainer
     left: 20, // Account for thumb width (20px / 2 = 10px) + container padding
     right: 20,
     height: 40,
@@ -3073,7 +3240,8 @@ const styles = StyleSheet.create({
   mainTimeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 0, // Removed margin to be right under scrubber
+    paddingHorizontal: 10, // Add horizontal padding to match timeline section
   },
   mainTimeText: {
     color: '#b4b4b4',
@@ -3081,7 +3249,254 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // Control buttons
+  // Player controls scroll view
+  playerControlsScrollView: {
+    flex: 1,
+  },
+  playerControlsContent: {
+    paddingBottom: 20,
+  },
+  
+  // Control sections
+  controlSection: {
+    marginBottom: 16, // Reduced from 24
+    paddingHorizontal: 20,
+  },
+  sectionTitle: {
+    fontSize: 12, // Reduced from 14
+    fontWeight: '600',
+    color: '#d97706',
+    marginBottom: 8, // Reduced from 12
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  
+  // PLAYBACK Section
+  playbackControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 30, // Increased for larger play button
+  },
+  
+  // FINE TUNE Section
+  fineTuneControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 16, // Add spacing from the button above
+  },
+  fineTuneButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 8, // Reduced from 10
+    paddingHorizontal: 10, // Reduced from 12
+    borderRadius: 12, // Reduced from 16
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60, // Reduced from 70
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  fineTuneButtonText: {
+    color: '#f4f4f4',
+    fontSize: 11, // Reduced from 12
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  
+  // CLIP SELECTION Section
+  clipStatusContainer: {
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  clipStatusText: {
+    color: '#b4b4b4',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  clipSelectionControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  clipSelectionButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 8, // Reduced from 10
+    paddingHorizontal: 10, // Reduced from 12
+    borderRadius: 12, // Reduced from 16
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70, // Reduced from 80
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  clipSelectionButtonText: {
+    color: '#f4f4f4',
+    fontSize: 11, // Reduced from 12
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  
+  // CREATE VIDEO Section
+  captionToggleContainer: {
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#404040',
+    minHeight: 48,
+  },
+  captionToggleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  captionToggleText: {
+    color: '#f4f4f4',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  captionToggleState: {
+    color: '#d97706',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  captionToggle: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#404040',
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  captionToggleActive: {
+    backgroundColor: '#d97706',
+    borderColor: '#e97c0a',
+  },
+  captionToggleThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#f4f4f4',
+  },
+  captionToggleThumbActive: {
+    transform: [{ translateX: 20 }],
+  },
+  createVideoButton: {
+    backgroundColor: '#d97706',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e97c0a',
+  },
+  createVideoButtonText: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  
+  // Clean UI Button Styles
+  startClipButton: {
+    backgroundColor: '#d97706',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e97c0a',
+    marginTop: 8,
+  },
+  startClipButtonText: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  clearClipButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  clearClipButtonText: {
+    color: '#f4f4f4',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  clipReadyControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  previewClipButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#555555',
+  },
+  previewClipButtonText: {
+    color: '#f4f4f4',
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  recordClipButton: {
+    backgroundColor: '#d97706',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e97c0a',
+    marginTop: 8,
+  },
+  recordClipButtonText: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  
+  // Legacy control buttons (keeping for compatibility)
   fineControls: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -3107,9 +3522,9 @@ const styles = StyleSheet.create({
     gap: 30,
   },
   circularButtonLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60, // Reduced from 80
+    height: 60, // Reduced from 80
+    borderRadius: 30, // Reduced from 40
     backgroundColor: '#404040',
     justifyContent: 'center',
     alignItems: 'center',
@@ -3117,14 +3532,75 @@ const styles = StyleSheet.create({
     borderColor: '#555555',
   },
   playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60, // Reduced from 80
+    height: 60, // Reduced from 80
+    borderRadius: 30, // Reduced from 40
     backgroundColor: '#d97706',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#e97c0a',
+  },
+  
+  // Clean UI - Large Play Button
+  largePlayButton: {
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    backgroundColor: '#d97706',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e97c0a',
+    shadowColor: '#d97706',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  
+  // Clean UI - Small Skip Buttons
+  skipButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#555555',
+    minWidth: 60,
+  },
+  skipButtonText: {
+    color: '#f4f4f4',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  
+  // Cancel Button Style
+  cancelButton: {
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#404040',
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  cancelButtonText: {
+    color: '#b4b4b4',
+    fontSize: 12,
+    fontWeight: '400',
+    marginLeft: 4,
   },
   
   // Clip controls
@@ -3295,21 +3771,76 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   cancelButton: {
-    backgroundColor: '#404040',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 20,
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#404040',
+    marginTop: 8,
+    alignSelf: 'center',
   },
   cancelButtonText: {
-    color: '#f4f4f4',
-    fontSize: 14,
-    fontWeight: '500',
+    color: '#b4b4b4',
+    fontSize: 12,
+    fontWeight: '400',
+    marginLeft: 4,
   },
   recordingStatusText: {
     color: '#b4b4b4',
     fontSize: 14,
     textAlign: 'center',
     marginTop: 20,
+  },
+  
+  // New recording button overlay styles
+  recordingButtonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  recordingButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 40,
+  },
+  recordingButtonWide: {
+    backgroundColor: 'rgba(217, 119, 6, 0.8)', // Semi-transparent orange
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(233, 124, 10, 0.8)',
+  },
+  recordingCancelButton: {
+    backgroundColor: 'rgba(64, 64, 64, 0.8)', // Semi-transparent gray
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(85, 85, 85, 0.8)',
+  },
+  recordingCancelButtonText: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '500',
   },
   // 5. Add styles to StyleSheet.create()
   modalOverlay: {
@@ -3805,14 +4336,16 @@ suggestionTagText: {
     bottom: 100,
     left: 20,
     right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 8,
-    padding: 12,
   },
   captionText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '600',
     textAlign: 'center',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+    lineHeight: 24,
   },
 });
 
