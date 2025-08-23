@@ -1686,6 +1686,12 @@ export default function App() {
       
       setIsGeneratingCaptions(false);
       setShowProcessingModal(false); // Close processing modal
+    } else {
+      // Captions disabled - clear any existing caption data
+      console.log('🎬 Captions disabled - proceeding without captions');
+      setCaptionText('');
+      setAllCaptionWords([]);
+      setIsGeneratingCaptions(false);
     }
 
     // Proceed with existing video creation
@@ -2268,14 +2274,22 @@ export default function App() {
           </Text>
         </View>
         
-        {/* REMOVED: Old caption toggle - now using Assembly captions */}
-
-        {/* Caption display */}
-        {captionText && typeof captionText === 'string' && (
+        {/* Caption display - positioned closer to episode info */}
+        {captionsEnabled && captionText && typeof captionText === 'string' && (
           <View style={styles.captionOverlay}>
             <Text style={styles.captionText}>
               {captionText.slice(0, 80)}
             </Text>
+            {captionText.length > 80 && (
+              <Text style={styles.captionText}>
+                {captionText.slice(80, 160)}
+              </Text>
+            )}
+            {captionText.length > 160 && (
+              <Text style={styles.captionText}>
+                {captionText.slice(160, 240)}
+              </Text>
+            )}
           </View>
         )}
 
@@ -2901,7 +2915,15 @@ export default function App() {
                             <View style={styles.captionToggleWrapper}>
                               <TouchableOpacity 
                                 style={[styles.captionToggle, captionsEnabled && styles.captionToggleActive]} 
-                                onPress={() => setCaptionsEnabled(!captionsEnabled)}
+                                onPress={() => {
+                                  const newValue = !captionsEnabled;
+                                  setCaptionsEnabled(newValue);
+                                  if (!newValue) {
+                                    // Clear caption data when disabling
+                                    setCaptionText('');
+                                    setAllCaptionWords([]);
+                                  }
+                                }}
                                 disabled={isGeneratingCaptions}
                               >
                                 <View style={[styles.captionToggleThumb, captionsEnabled && styles.captionToggleThumbActive]} />
@@ -3724,7 +3746,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    marginBottom: 40,
+    marginBottom: 10,
     height: 50,
   },
   recordingWaveformBar: {
@@ -3735,7 +3757,7 @@ const styles = StyleSheet.create({
   },
   recordingEpisodeInfo: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: 20,
   },
   recordingEpisodeTitle: {
     color: '#f4f4f4',
@@ -4332,20 +4354,22 @@ suggestionTagText: {
     lineHeight: 16,
   },
   captionOverlay: {
-    position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    minHeight: 120,
   },
   captionText: {
     color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '500',
+    fontFamily: 'Georgia',
     textAlign: 'center',
     textShadowColor: '#000000',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-    lineHeight: 24,
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+    lineHeight: 28,
+    marginBottom: 6,
   },
 });
 
