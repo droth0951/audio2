@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "1.2.7",
+    "version": "1.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -22,7 +22,7 @@
         "NSPhotoLibraryUsageDescription": "Allow Audio2 to access your photos to save waveform images",
         "NSPhotoLibraryAddUsageDescription": "Allow Audio2 to save waveform images to your photo library"
       },
-      "buildNumber": "1.2.12",
+      "buildNumber": "1.3.0",
       "splash": {
         "image": "./assets/launch-iphone14pro.png",
         "resizeMode": "cover",
