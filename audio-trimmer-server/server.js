@@ -12,11 +12,15 @@ app.use(express.json({ limit: '50mb' }));
 // Serve temp files statically
 app.use('/temp', express.static(path.join(__dirname, 'temp')));
 
-// Import our trim-audio handler
+// Import our API handlers
 const trimAudioHandler = require('./api/trim-audio.js');
+const transcribeHandler = require('./api/transcribe.js');
+const transcribeStatusHandler = require('./api/transcribe-status.js');
 
 // Routes
 app.post('/api/trim-audio', trimAudioHandler);
+app.post('/api/transcribe', transcribeHandler);
+app.post('/api/transcribe-status', transcribeStatusHandler);
 
 // Health check
 app.get('/health', (req, res) => {
