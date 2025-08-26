@@ -3001,10 +3001,7 @@ export default function App() {
                                 setIsScrubbing(false);
                               }, 100);
                               
-                              // Handle clip selection if in selection mode
-                              if (isSelectionMode && selectionStep === 'end') {
-                                handleScrubberTap(value);
-                              }
+                              // Removed automatic clip end setting - user must click "End Clip" button
                             }}
                           />
                           
