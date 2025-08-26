@@ -33,6 +33,262 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTi
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// Utility function for formatting time
+const formatTime = (millis) => {
+  if (typeof millis !== 'number' || isNaN(millis) || millis < 0) {
+    return '0:00';
+  }
+  const minutes = Math.floor(millis / 60000);
+  const seconds = Math.floor((millis % 60000) / 1000);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+// Simple Caption Overlay Component
+const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
+  const [currentText, setCurrentText] = useState('');
+
+  useEffect(() => {
+    if (!transcript?.words?.length || typeof currentTimeMs !== 'number') {
+      if (__DEV__) {
+        console.log('🎬 Caption overlay: No transcript or invalid time', {
+          hasTranscript: !!transcript,
+          hasWords: !!transcript?.words?.length,
+          currentTimeMs,
+          clipStartMs
+        });
+      }
+      setCurrentText('');
+      return;
+    }
+
+    const clipRelativeTime = currentTimeMs - clipStartMs;
+    const visibleWords = [];
+    const LOOKAHEAD_MS = 1500;
+    
+    for (const word of transcript.words) {
+      // Adjust word timing to be relative to clip start
+      const wordTimeRelativeToClip = word.startMs - clipStartMs;
+      
+      if (clipRelativeTime >= wordTimeRelativeToClip - 200 && 
+          clipRelativeTime <= wordTimeRelativeToClip + LOOKAHEAD_MS) {
+        visibleWords.push(word.text);
+      }
+    }
+    
+    const newText = visibleWords.slice(0, 6).join(' ');
+    setCurrentText(newText);
+    
+    // Debug logging
+    if (__DEV__) {
+      if (newText) {
+        console.log('🎬 Caption text:', newText, 'at time:', currentTimeMs, 'clipRelative:', clipRelativeTime);
+      } else {
+        console.log('🎬 No caption text at time:', currentTimeMs, 'clipRelative:', clipRelativeTime, 'words checked:', transcript.words.length);
+        // Log first few word timings for debugging
+        if (transcript.words.length > 0) {
+          const firstWord = transcript.words[0];
+          const lastWord = transcript.words[transcript.words.length - 1];
+          console.log('🎬 Word timing debug:', {
+            firstWord: { text: firstWord.text, startMs: firstWord.startMs, relativeToClip: firstWord.startMs - clipStartMs },
+            lastWord: { text: lastWord.text, startMs: lastWord.startMs, relativeToClip: lastWord.startMs - clipStartMs },
+            clipStartMs,
+            clipRelativeTime
+          });
+        }
+      }
+    }
+    
+  }, [transcript, currentTimeMs, clipStartMs]);
+
+  if (!currentText.trim()) return null;
+
+  return (
+    <View style={{
+      position: 'absolute',
+      bottom: 100,
+      left: 20,
+      right: 20,
+      alignItems: 'center',
+      zIndex: 100,
+    }}>
+      <Text style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        color: '#ffffff',
+        fontSize: 18,
+        fontWeight: '600',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+        textAlign: 'center',
+        lineHeight: 24,
+        maxWidth: '90%',
+        textShadowColor: '#000000',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 3,
+      }}>
+        {currentText}
+      </Text>
+    </View>
+  );
+};
+
+// Recording View Component
+const RecordingView = ({ 
+  selectedEpisode, 
+  podcastTitle, 
+  duration, 
+  clipStart, 
+  clipEnd, 
+  position, 
+  isPlaying, 
+  captionsEnabled, 
+  preparedTranscript, 
+  isRecording, 
+  recordingStatus, 
+  startVideoRecording, 
+  cleanupRecording, 
+  setShowRecordingView,
+  styles 
+}) => (
+  <View style={styles.recordingContainer}>
+    <StatusBar style="light" hidden={true} />
+    
+    {/* Full-screen wireframe design */}
+    <LinearGradient
+      colors={['#1c1c1c', '#2d2d2d']}
+      style={styles.recordingBackground}
+    >
+      {/* Episode artwork */}
+      {selectedEpisode?.artwork && (
+        <Image 
+          source={{ uri: selectedEpisode.artwork }} 
+          style={styles.recordingArtwork}
+          resizeMode="cover"
+        />
+      )}
+      
+      {/* Progress timeline */}
+      <View style={styles.recordingTimelineContainer}>
+        <View style={styles.recordingTimeline}>
+          <View 
+            style={[
+              styles.recordingTimelineFill, 
+              { width: `${duration && clipStart !== null && clipEnd !== null ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
+            ]} 
+          />
+        </View>
+        <View style={styles.recordingTimeLabels}>
+          <Text style={styles.recordingTimeText}>
+            {formatTime(Math.max(0, clipStart !== null ? position - clipStart : 0))}
+          </Text>
+          <Text style={styles.recordingTimeText}>{formatTime(clipStart !== null && clipEnd !== null ? clipEnd - clipStart : 0)}</Text>
+        </View>
+      </View>
+      
+      {/* Recording waveform */}
+      <View style={styles.recordingWaveform}>
+        {Array.from({ length: 15 }, (_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.recordingWaveformBar,
+              {
+                height: Math.random() * 40 + 10,
+                opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
+              }
+            ]}
+          />
+        ))}
+      </View>
+      
+      {/* Episode info */}
+      <View style={styles.recordingEpisodeInfo}>
+        <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
+          {selectedEpisode?.title || 'Episode'}
+        </Text>
+        <Text style={styles.recordingPodcastName}>
+          {selectedEpisode?.podcastName || podcastTitle || 'Podcast'}
+        </Text>
+      </View>
+      
+      {/* Replace the complex captionContainer with this simple overlay */}
+      {captionsEnabled && preparedTranscript && (
+        <>
+          {__DEV__ && console.log('🎬 Rendering caption overlay with:', {
+            captionsEnabled,
+            hasTranscript: !!preparedTranscript,
+            position,
+            clipStart,
+            wordsCount: preparedTranscript?.words?.length
+          })}
+          <SimpleCaptionOverlay
+            transcript={preparedTranscript}
+            currentTimeMs={position}
+            clipStartMs={clipStart}
+          />
+        </>
+      )}
+      
+      {/* Debug info for captions */}
+      {__DEV__ && (
+        <View style={{ position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, borderRadius: 5 }}>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Captions: {captionsEnabled ? 'ON' : 'OFF'}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Transcript: {preparedTranscript ? 'YES' : 'NO'}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Words: {preparedTranscript?.words?.length || 0}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Position: {Math.round(position)}ms
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            ClipStart: {clipStart || 'null'}ms
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Relative: {Math.round(position - (clipStart || 0))}ms
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            Should Show: {captionsEnabled && preparedTranscript ? 'YES' : 'NO'}
+          </Text>
+        </View>
+      )}
+
+      {/* Control buttons - positioned over waveform when not recording */}
+      {!isRecording && (
+        <View style={styles.recordingButtonOverlay}>
+          <View style={styles.recordingButtonRow}>
+            <TouchableOpacity 
+              style={styles.recordingButtonWide}
+              onPress={startVideoRecording}
+            >
+              <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
+              <Text style={styles.recordingButtonText}>Start Recording</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.recordingCancelButton}
+              onPress={async () => {
+                await cleanupRecording();
+                setShowRecordingView(false);
+              }}
+            >
+              <Text style={styles.recordingCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Status text */}
+          {recordingStatus && typeof recordingStatus === 'string' ? (
+            <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
+          ) : null}
+        </View>
+      )}
+    </LinearGradient>
+  </View>
+);
+
 // Real Voice Manager for Captions
 class VoiceManager {
   static isListening = false;
@@ -553,22 +809,102 @@ export default function App() {
   // Add a new state variable for the currently loading podcast
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
 
-  // Add state for popular business podcasts
+  // Add state for popular business podcasts with fallback emojis and cached artwork
+  const [popularPodcastsArtwork, setPopularPodcastsArtwork] = useState({});
+  
+  // Load cached artwork on app startup
+  useEffect(() => {
+    const loadCachedArtwork = async () => {
+      try {
+        const cached = await AsyncStorage.getItem('popular_podcasts_artwork');
+        if (cached) {
+          setPopularPodcastsArtwork(JSON.parse(cached));
+          console.log('🎨 Loaded cached artwork for popular podcasts');
+        }
+      } catch (error) {
+        console.log('❌ Error loading cached artwork:', error);
+      }
+    };
+    
+    loadCachedArtwork();
+  }, []);
+  
   const popularBusinessPodcasts = [
-    'The Indicator from Planet Money',
-    'How I Built This with Guy Raz',
-    'This Is Working with Daniel Roth',
-    'Acquired',
-    'WorkLife with Adam Grant',
-    'Masters of Scale',
-    'The Ed Mylett Show',
-    'The Tony Robbins Podcast',
-    'The GaryVee Audio Experience',
-    'The Dave Ramsey Show',
-    'Marketplace',
-    'Freakonomics Radio',
-    'Planet Money',
-    'Business Wars'
+    { 
+      name: 'The Indicator from Planet Money', 
+      fallbackEmoji: '📊',
+      category: 'Finance' 
+    },
+    { 
+      name: 'How I Built This with Guy Raz', 
+      fallbackEmoji: '💡',
+      category: 'Ideas' 
+    },
+    { 
+      name: 'This Is Working with Daniel Roth', 
+      fallbackEmoji: '💡',
+      category: 'Work' 
+    },
+    { 
+      name: 'Acquired', 
+      fallbackEmoji: '💰',
+      category: 'Finance' 
+    },
+    { 
+      name: 'WorkLife with Adam Grant', 
+      fallbackEmoji: '💼',
+      category: 'Work' 
+    },
+    { 
+      name: 'Masters of Scale', 
+      fallbackEmoji: '🚀',
+      category: 'Ideas' 
+    },
+    { 
+      name: 'The Ed Mylett Show', 
+      fallbackEmoji: '🎯',
+      category: 'Motivation' 
+    },
+    { 
+      name: 'The Tony Robbins Podcast', 
+      fallbackEmoji: '🎯',
+      category: 'Motivation' 
+    },
+    { 
+      name: 'The GaryVee Audio Experience', 
+      fallbackEmoji: '💡',
+      category: 'Ideas' 
+    },
+    { 
+      name: 'The Dave Ramsey Show', 
+      fallbackEmoji: '💰',
+      category: 'Finance' 
+    },
+    { 
+      name: 'Marketplace', 
+      fallbackEmoji: '📰',
+      category: 'News' 
+    },
+    { 
+      name: 'Freakonomics Radio', 
+      fallbackEmoji: '💡',
+      category: 'Ideas' 
+    },
+    { 
+      name: 'Planet Money', 
+      fallbackEmoji: '📊',
+      category: 'Finance' 
+    },
+    { 
+      name: 'Business Wars', 
+      fallbackEmoji: '⚔️',
+      category: 'Business' 
+    },
+    { 
+      name: 'Hello Monday', 
+      fallbackEmoji: '💡',
+      category: 'Work' 
+    }
   ];
 
   // Add state for episode notes bottom sheet
@@ -583,11 +919,8 @@ export default function App() {
 
   // Caption state variables
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
-  const [currentCaptionText, setCurrentCaptionText] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [captionText, setCaptionText] = useState('');
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
-  const [allCaptionWords, setAllCaptionWords] = useState([]); // Store all words with timestamps
+  const [preparedTranscript, setPreparedTranscript] = useState(null);
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
 
@@ -611,6 +944,47 @@ export default function App() {
   const [allEpisodes, setAllEpisodes] = useState([]);
   const [showLoadMore, setShowLoadMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Function to fetch artwork for all popular podcasts
+  const fetchPopularPodcastsArtwork = async () => {
+    console.log('🎨 Fetching artwork for popular podcasts...');
+    const artworkCache = {};
+    
+    try {
+      // Fetch artwork for each popular podcast
+      for (const podcast of popularBusinessPodcasts) {
+        try {
+          // Use the existing search function to get podcast data
+          const searchResults = await handlePodcastSearch(podcast.name, true); // silent search
+          if (searchResults && searchResults.length > 0) {
+            const podcastData = searchResults[0];
+            if (podcastData.artwork) {
+              artworkCache[podcast.name] = podcastData.artwork;
+              console.log('✅ Found artwork for:', podcast.name);
+            }
+          }
+        } catch (error) {
+          console.log('❌ Failed to fetch artwork for:', podcast.name, error.message);
+        }
+      }
+      
+      // Update state with fetched artwork
+      setPopularPodcastsArtwork(artworkCache);
+      
+      // Cache the artwork for future app launches
+      try {
+        await AsyncStorage.setItem('popular_podcasts_artwork', JSON.stringify(artworkCache));
+        console.log('💾 Cached artwork for future use');
+      } catch (error) {
+        console.log('❌ Error caching artwork:', error);
+      }
+      
+      console.log('🎨 Updated artwork cache with', Object.keys(artworkCache).length, 'podcasts');
+      
+    } catch (error) {
+      console.log('❌ Error fetching popular podcasts artwork:', error);
+    }
+  };
 
   // NOW define loadPodcastFeed INSIDE the component where it can access state:
   // Cache management functions
@@ -1158,16 +1532,6 @@ export default function App() {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
-          
-          // Update captions during recording
-          if (isRecording && allCaptionWords.length > 0) {
-            console.log('🎬 Recording in progress, updating captions at time:', status.positionMillis || 0);
-            updateCaptionsForTime(status.positionMillis || 0);
-          } else if (isRecording) {
-            console.log('🎬 Recording but no caption words available');
-          } else if (allCaptionWords.length > 0) {
-            console.log('🎬 Not recording, but have caption words. Current time:', status.positionMillis || 0);
-          }
         }
       });
       
@@ -1252,8 +1616,6 @@ export default function App() {
     setClipStart(null);
     setClipEnd(null);
     setCaptionsEnabled(false);
-    setCaptionText('');
-    setAllCaptionWords([]);
   };
 
   const handleSetClipPoint = () => {
@@ -1343,8 +1705,6 @@ export default function App() {
     setIsSelectionMode(false);
     setSelectionStep('idle');
     setCaptionsEnabled(false);
-    setCaptionText('');
-    setAllCaptionWords([]);
   };
 
   const handleSetClipEnd = () => {
@@ -1582,7 +1942,6 @@ export default function App() {
     if (captionsEnabled) {
       console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
       setIsGeneratingCaptions(true);
-      setCaptionText('Generating captions...');
       
       // Show processing modal with step-by-step feedback
       setShowProcessingModal(true);
@@ -1596,17 +1955,15 @@ export default function App() {
           // Step 2: Submit job with AssemblyAI's built-in trimming
           setProcessingStep('Sending clip to transcription service...');
           console.log('🎬 Submitting to Assembly with timing parameters');
-          const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+          const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer b9399f83f15a4c65a0a00f3c9876f2c9',
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
               audio_url: trimResponse.audioUrl, // Original podcast URL
-              audio_start_from: Math.floor(trimResponse.startTime * 1000), // AssemblyAI expects milliseconds
-              audio_end_at: Math.floor(trimResponse.endTime * 1000),
-              word_boost: [], // Enable word-level timestamps
+              audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
+              audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
               punctuate: true,
               format_text: true
             })
@@ -1627,15 +1984,14 @@ export default function App() {
         while (attempts < 24) { // 2 minutes max (24 * 5 seconds)
           await new Promise(resolve => setTimeout(resolve, 5000));
           
-          const checkResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${job.id}`, {
-            headers: { 'Authorization': 'Bearer b9399f83f15a4c65a0a00f3c9876f2c9' }
+          const checkResponse = await fetch(`https://audio-trimmer-service-production.up.railway.app/api/transcript/${job.id}`, {
+            headers: { 'Content-Type': 'application/json' }
           });
           
           const result = await checkResponse.json();
           
           if (result.status === 'completed') {
             setProcessingStep('Preparing captions for recording...');
-            const captionText = result.text || '';
             const words = result.words || [];
             console.log('🎬 Assembly completed! Captions ready');
             
@@ -1648,20 +2004,35 @@ export default function App() {
                 return wordStartMs >= clipStartMs && wordStartMs <= clipEndMs;
               });
               
-              // Store all words for time-based progression
-              setAllCaptionWords(clipWords);
-              console.log('🎬 Captions ready for', clipWords.length, 'words');
+              // Normalize the filtered word objects to use consistent property names
+              const normalizedClipWords = clipWords.map(word => ({
+                ...word,
+                startMs: word.start, // Ensure startMs property exists
+                endMs: word.end || (word.start + 100) // Ensure endMs property exists
+              }));
               
-              // Show initial caption (first 80 characters)
-              const initialCaption = clipWords.map(word => word.text).join(' ').substring(0, 80);
-              console.log('🎬 Initial caption:', initialCaption);
-              setCaptionText(initialCaption);
+              // Store prepared transcript with ONLY the filtered words for the clip
+              const normalizedResult = {
+                ...result,
+                words: normalizedClipWords
+              };
+              
+              // Store prepared transcript for simple caption overlay
+              setPreparedTranscript(normalizedResult);
+              console.log('🎬 Captions ready for', clipWords.length, 'words');
             } else {
-              // Fallback: use the full text but limit to 80 characters
+              // Fallback: use the full text
               console.log('🎬 No words data, using full text fallback');
-              const trimmedCaption = captionText.substring(0, 80);
-              console.log('🎬 Using fallback caption:', trimmedCaption);
-              setCaptionText(trimmedCaption);
+              // Normalize even for fallback
+              const normalizedResult = {
+                ...result,
+                words: (result.words || []).map(word => ({
+                  ...word,
+                  startMs: word.start,
+                  endMs: word.end || (word.start + 100)
+                }))
+              };
+              setPreparedTranscript(normalizedResult);
             }
             break;
           }
@@ -1680,7 +2051,7 @@ export default function App() {
       } catch (error) {
         console.log('Caption error:', error);
         setCaptionsEnabled(false);
-        setCaptionText('');
+        setPreparedTranscript(null);
         Alert.alert('Caption Error', 'Continuing without captions');
       }
       
@@ -1689,10 +2060,11 @@ export default function App() {
     } else {
       // Captions disabled - clear any existing caption data
       console.log('🎬 Captions disabled - proceeding without captions');
-      setCaptionText('');
-      setAllCaptionWords([]);
+      setPreparedTranscript(null);
       setIsGeneratingCaptions(false);
     }
+
+
 
     // Proceed with existing video creation
     // Stop audio playback when entering Create Video mode
@@ -1718,7 +2090,7 @@ export default function App() {
   const getCaptionStatusText = () => {
     if (!captionsEnabled) return '';
     if (isGeneratingCaptions) return 'Generating captions...';
-    if (captionText) return 'Captions ready';
+    if (preparedTranscript) return 'Captions ready';
     return '';
   };
 
@@ -1770,26 +2142,7 @@ export default function App() {
     }
   };
 
-  // Update captions based on current playback time
-  const updateCaptionsForTime = (currentTimeMs) => {
-    if (allCaptionWords.length === 0) {
-      return;
-    }
-    
-    // Find words that should be visible at current time
-    const visibleWords = allCaptionWords.filter(word => {
-      const wordStart = word.start;
-      const wordEnd = word.end || (word.start + 500); // Assume 500ms duration if no end time
-      const shouldShow = currentTimeMs >= wordStart && currentTimeMs <= wordEnd + 2000;
-      return shouldShow;
-    });
-    
-    if (visibleWords.length > 0) {
-      const currentCaption = visibleWords.map(word => word.text).join(' ');
-      const trimmedCaption = currentCaption.substring(0, 80);
-      setCaptionText(trimmedCaption);
-    }
-  };
+
 
   const startVideoRecording = async () => {
     try {
@@ -1846,29 +2199,8 @@ export default function App() {
         await stopVideoRecording();
       }, clipEnd - clipStart); // Use actual clip duration
       
-      // Update captions every 500ms during recording
-      let recordingActive = true; // Local variable to track recording state
-      const captionUpdateInterval = setInterval(() => {
-        if (recordingActive && allCaptionWords.length > 0) {
-          const currentTime = clipStart + (Date.now() - recordingStartTime);
-          updateCaptionsForTime(currentTime);
-        } else {
-          // Only log once when conditions aren't met
-          if (!recordingActive) {
-            console.log('🎬 Timer stopped - recording completed');
-            clearInterval(captionUpdateInterval);
-          }
-        }
-      }, 500);
-      
       // Store recording start time for timer-based updates
       const recordingStartTime = Date.now();
-      
-              return () => {
-          clearTimeout(recordingTimer);
-          clearInterval(captionUpdateInterval);
-          recordingActive = false;
-        };
       
     } catch (error) {
       console.error('Recording error:', error);
@@ -1952,7 +2284,7 @@ export default function App() {
         console.log('🧹 Cleaning up voice recognition...');
         await VoiceManager.stopListening();
         setIsListening(false);
-        setCurrentCaptionText('');
+
       }
     } catch (error) {
       console.log('Cleanup recording error:', error.message);
@@ -2095,28 +2427,33 @@ export default function App() {
   };
 
   // Refactor handlePodcastSearch to handle both URLs and free text
-  const handlePodcastSearch = async (queryOverride) => {
+  const handlePodcastSearch = async (queryOverride, silent = false) => {
     const query = (typeof queryOverride === 'string' ? queryOverride : searchTerm).trim();
     if (!query) return;
 
     // If input looks like a URL, try to load as feed
     if (/^https?:\/\//i.test(query)) {
-      setIsSearching(true);
+      if (!silent) setIsSearching(true);
       await loadPodcastFeed(query);
-      setIsSearching(false);
+      if (!silent) setIsSearching(false);
       return;
     }
 
     // Otherwise, treat as search query
-    setIsSearching(true);
+    if (!silent) setIsSearching(true);
     const results = await searchPodcasts(query);
-    setSearchResults(results);
-    setIsSearching(false);
+    if (!silent) {
+      setSearchResults(results);
+      setIsSearching(false);
+    }
 
-    // If only one result, auto-select it and load its feed
-    if (results.length === 1) {
+    // If only one result and not silent, auto-select it and load its feed
+    if (results.length === 1 && !silent) {
       await handleSelectPodcast(results[0]);
     }
+    
+    // Return results for silent searches
+    return results;
   };
 
   // Add function to handle selecting a podcast from search
@@ -2135,6 +2472,9 @@ export default function App() {
       // Load the podcast feed using existing function
       await loadPodcastFeed(podcast.feedUrl);
       
+      // Fetch artwork for popular podcasts in the background
+      fetchPopularPodcastsArtwork();
+      
       // Exit search mode
       setSearchTerm('');
       setSearchResults([]);
@@ -2152,15 +2492,7 @@ export default function App() {
     setIsSearching(false);
   };
 
-  // Utility functions
-  const formatTime = (millis) => {
-    if (typeof millis !== 'number' || isNaN(millis) || millis < 0) {
-      return '0:00';
-    }
-    const minutes = Math.floor(millis / 60000);
-    const seconds = Math.floor((millis % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+
 
   const handleProgressBarPress = (e) => {
     if (duration > 0) {
@@ -2211,124 +2543,27 @@ export default function App() {
       }
     });
 
-  // Recording view component - UPDATED to hide controls during recording
-  const RecordingView = () => (
-    <View style={styles.recordingContainer}>
-      <StatusBar style="light" hidden={true} />
-      
-      {/* Full-screen wireframe design */}
-      <LinearGradient
-        colors={['#1c1c1c', '#2d2d2d']}
-        style={styles.recordingBackground}
-      >
-        {/* Episode artwork */}
-        {selectedEpisode?.artwork && (
-          <Image 
-            source={{ uri: selectedEpisode.artwork }} 
-            style={styles.recordingArtwork}
-            resizeMode="cover"
-          />
-        )}
-        
-        {/* Progress timeline */}
-        <View style={styles.recordingTimelineContainer}>
-          <View style={styles.recordingTimeline}>
-            <View 
-              style={[
-                styles.recordingTimelineFill, 
-                { width: `${duration && clipStart !== null && clipEnd !== null ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
-              ]} 
-            />
-          </View>
-          <View style={styles.recordingTimeLabels}>
-            <Text style={styles.recordingTimeText}>
-              {formatTime(Math.max(0, clipStart !== null ? position - clipStart : 0))}
-            </Text>
-            <Text style={styles.recordingTimeText}>{formatTime(clipStart !== null && clipEnd !== null ? clipEnd - clipStart : 0)}</Text>
-          </View>
-        </View>
-        
-        {/* Recording waveform */}
-        <View style={styles.recordingWaveform}>
-          {Array.from({ length: 15 }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.recordingWaveformBar,
-                {
-                  height: Math.random() * 40 + 10,
-                  opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
-                }
-              ]}
-            />
-          ))}
-        </View>
-        
-        {/* Episode info */}
-        <View style={styles.recordingEpisodeInfo}>
-          <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
-            {selectedEpisode?.title || 'Episode'}
-          </Text>
-          <Text style={styles.recordingPodcastName}>
-            {selectedEpisode?.podcastName || podcastTitle || 'Podcast'}
-          </Text>
-        </View>
-        
-        {/* Caption display - positioned closer to episode info */}
-        {captionsEnabled && captionText && typeof captionText === 'string' && (
-          <View style={styles.captionOverlay}>
-            <Text style={styles.captionText}>
-              {captionText.slice(0, 80)}
-            </Text>
-            {captionText.length > 80 && (
-              <Text style={styles.captionText}>
-                {captionText.slice(80, 160)}
-              </Text>
-            )}
-            {captionText.length > 160 && (
-              <Text style={styles.captionText}>
-                {captionText.slice(160, 240)}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Control buttons - positioned over waveform when not recording */}
-        {!isRecording && (
-          <View style={styles.recordingButtonOverlay}>
-            <View style={styles.recordingButtonRow}>
-              <TouchableOpacity 
-                style={styles.recordingButtonWide}
-                onPress={startVideoRecording}
-              >
-                <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
-                <Text style={styles.recordingButtonText}>Start Recording</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.recordingCancelButton}
-                onPress={async () => {
-                  await cleanupRecording();
-                  setShowRecordingView(false);
-                }}
-              >
-                <Text style={styles.recordingCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {/* Status text */}
-            {recordingStatus && typeof recordingStatus === 'string' ? (
-              <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
-            ) : null}
-          </View>
-        )}
-      </LinearGradient>
-    </View>
-  );
-
   // Show recording view when active
   if (showRecordingView) {
-    return <RecordingView />;
+    return (
+      <RecordingView 
+        selectedEpisode={selectedEpisode}
+        podcastTitle={podcastTitle}
+        duration={duration}
+        clipStart={clipStart}
+        clipEnd={clipEnd}
+        position={position}
+        isPlaying={isPlaying}
+        captionsEnabled={captionsEnabled}
+        preparedTranscript={preparedTranscript}
+        isRecording={isRecording}
+        recordingStatus={recordingStatus}
+        startVideoRecording={startVideoRecording}
+        cleanupRecording={cleanupRecording}
+        setShowRecordingView={setShowRecordingView}
+        styles={styles}
+      />
+    );
   }
 
   // 3. Clean up the render conditional (remove debug wrapper)
@@ -2396,6 +2631,8 @@ export default function App() {
   const composedGesture = selectedEpisode 
     ? scrollGesture // Only allow scroll when on episode detail page
     : Gesture.Race(swipeBackGesture, scrollGesture); // Allow both when not on episode detail page
+
+
 
 
 
@@ -2527,13 +2764,29 @@ export default function App() {
                   {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
                     <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
                       <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                      <View style={styles.pillRow}>
-                        {popularBusinessPodcasts.slice(0, 15).map((title, idx) => (
-                          <TouchableOpacity key={title + idx} onPress={async () => {
-                            setSearchTerm(title);
-                            await handlePodcastSearch(title);
-                          }} style={styles.popularPodcastPill}>
-                            <Text style={styles.popularPodcastPillText}>{title}</Text>
+                      <View style={styles.popularPodcastsList}>
+                        {popularBusinessPodcasts.map((podcast, idx) => (
+                          <TouchableOpacity 
+                            key={podcast.name + idx} 
+                            onPress={async () => {
+                              setSearchTerm(podcast.name);
+                              await handlePodcastSearch(podcast.name);
+                            }} 
+                            style={styles.popularPodcastItem}
+                          >
+                            {popularPodcastsArtwork[podcast.name] ? (
+                              <Image 
+                                source={{ uri: popularPodcastsArtwork[podcast.name] }} 
+                                style={styles.popularPodcastArtwork}
+                                defaultSource={require('./assets/logo1.png')}
+                              />
+                            ) : (
+                              <Text style={styles.popularPodcastEmoji}>{podcast.fallbackEmoji}</Text>
+                            )}
+                            <View style={styles.popularPodcastInfo}>
+                              <Text style={styles.popularPodcastName}>{podcast.name}</Text>
+                              <Text style={styles.popularPodcastCategory}>{podcast.category}</Text>
+                            </View>
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -2920,8 +3173,7 @@ export default function App() {
                                   setCaptionsEnabled(newValue);
                                   if (!newValue) {
                                     // Clear caption data when disabling
-                                    setCaptionText('');
-                                    setAllCaptionWords([]);
+                                    setPreparedTranscript(null);
                                   }
                                 }}
                                 disabled={isGeneratingCaptions}
@@ -3043,6 +3295,12 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 20,
+  },
+  mainScrollView: {
+    flex: 1,
+  },
+  mainScrollContent: {
+    paddingBottom: 40, // Add some bottom padding for better scrolling
   },
   
   // Header styles
@@ -4152,28 +4410,46 @@ suggestionTagText: {
     marginBottom: 10,
     textDecorationLine: 'underline',
   },
-  pillRow: {
+  popularPodcastsList: {
+    paddingBottom: 20, // Add bottom padding to ensure content is visible
+  },
+  popularPodcastItem: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  popularPodcastPill: {
-    backgroundColor: '#404040',
-    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#555555',
+    borderColor: '#404040',
     marginBottom: 8,
-    marginRight: 8,
   },
-  popularPodcastPillText: {
-    color: '#f4f4f4',
-    fontSize: 13,
-    fontWeight: '500',
+  popularPodcastEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+    width: 32,
     textAlign: 'center',
-    numberOfLines: 1,
-    ellipsizeMode: 'tail',
+  },
+  popularPodcastArtwork: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    marginRight: 12,
+    backgroundColor: '#404040',
+  },
+  popularPodcastInfo: {
+    flex: 1,
+  },
+  popularPodcastName: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  popularPodcastCategory: {
+    color: '#b4b4b4',
+    fontSize: 12,
+    fontWeight: '500',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -4359,18 +4635,7 @@ suggestionTagText: {
     paddingHorizontal: 20,
     minHeight: 120,
   },
-  captionText: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '500',
-    fontFamily: 'Georgia',
-    textAlign: 'center',
-    textShadowColor: '#000000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-    lineHeight: 28,
-    marginBottom: 6,
-  },
+
 });
 
 const waveformStyles = StyleSheet.create({

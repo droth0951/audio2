@@ -32,18 +32,54 @@ module.exports = async function handler(req, res) {
     
     console.log('🎵 Timing info:', { startSeconds, endSeconds, durationSeconds });
 
-    // No longer needed - AssemblyAI handles the trimming with timing parameters
-
-    // Don't actually trim the audio - just return the original URL with timing info
-    console.log('🎵 Returning timing info for AssemblyAI trimming');
+    // Actually trim the audio file to save AssemblyAI credits
+    console.log('🎵 Trimming audio file to save AssemblyAI credits...');
+    
+    // Download the audio file
+    const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+    const audioBuffer = Buffer.from(audioResponse.data);
+    
+    // Create temporary files
+    const tempDir = join(tmpdir(), 'audio-trimmer');
+    await mkdir(tempDir, { recursive: true });
+    
+    const inputPath = join(tempDir, `input-${Date.now()}.mp3`);
+    const outputPath = join(tempDir, `output-${Date.now()}.mp3`);
+    
+    // Write input file
+    await writeFile(inputPath, audioBuffer);
+    
+    // Trim the audio using ffmpeg
+    await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .setStartTime(startSeconds)
+        .setDuration(durationSeconds)
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    
+    // Read the trimmed file
+    const trimmedAudioBuffer = await readFile(outputPath);
+    
+    // Upload to a temporary storage (you might want to use a proper service like AWS S3)
+    // For now, we'll return the original URL with timing parameters
+    // TODO: Implement proper file hosting for trimmed clips
+    
+    // Clean up temporary files
+    await unlink(inputPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+    
+    console.log('🎵 Audio trimmed successfully, but using AssemblyAI trimming for now');
     
     return res.json({ 
       success: true,
-      audioUrl: audioUrl, // Original podcast URL
+      audioUrl: audioUrl, // Still using original URL for now
       startTime: startSeconds, // In seconds
       endTime: endSeconds,
       duration: durationSeconds,
-      message: `Audio clip: ${startSeconds}s to ${endSeconds}s (${durationSeconds}s duration)`
+      message: `Audio clip: ${startSeconds}s to ${endSeconds}s (${durationSeconds}s duration) - Using AssemblyAI trimming`
     });
     
   } catch (error) {
