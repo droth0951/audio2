@@ -13,6 +13,7 @@ import {
   Pressable,
   FlatList,
   Switch,
+  Linking,
 } from 'react-native';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
@@ -63,19 +64,56 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
 
     const clipRelativeTime = currentTimeMs - clipStartMs;
     const visibleWords = [];
-    const LOOKAHEAD_MS = 1500;
+    const LOOKAHEAD_MS = 1500; // Reduced to be more precise
+    const LOOKBACK_MS = 800;   // Reduced to be more precise
+    
+    // Debug: Log the timing calculation
+    if (__DEV__) {
+      console.log('🎬 Timing calculation:', {
+        currentTimeMs,
+        clipStartMs,
+        clipRelativeTime,
+        totalWords: transcript.words.length
+      });
+    }
     
     for (const word of transcript.words) {
-      // Adjust word timing to be relative to clip start
-      const wordTimeRelativeToClip = word.startMs - clipStartMs;
+      // Word timestamps are now relative to clip start (0-based) after normalization
+      const wordTimeRelativeToClip = word.startMs;
       
-      if (clipRelativeTime >= wordTimeRelativeToClip - 200 && 
+      if (clipRelativeTime >= wordTimeRelativeToClip - LOOKBACK_MS && 
           clipRelativeTime <= wordTimeRelativeToClip + LOOKAHEAD_MS) {
         visibleWords.push(word.text);
       }
+      
+          // Debug: Log all words to see what's happening
+    if (__DEV__) {
+      console.log('🎬 Word check:', {
+        word: word.text,
+        wordStartMs: word.startMs,
+        clipRelativeTime,
+        lookback: wordTimeRelativeToClip - LOOKBACK_MS,
+        lookahead: wordTimeRelativeToClip + LOOKAHEAD_MS,
+        isVisible: clipRelativeTime >= wordTimeRelativeToClip - LOOKBACK_MS && clipRelativeTime <= wordTimeRelativeToClip + LOOKAHEAD_MS
+      });
+    }
     }
     
-    const newText = visibleWords.slice(0, 6).join(' ');
+    // Debug: Log the first few words and their timings
+    if (__DEV__ && transcript.words.length > 0) {
+      console.log('🎬 Caption timing debug:', {
+        clipRelativeTime,
+        clipStartMs,
+        currentTimeMs,
+        firstWord: transcript.words[0],
+        secondWord: transcript.words[1],
+        thirdWord: transcript.words[2],
+        visibleWordsCount: visibleWords.length
+      });
+    }
+    
+    const newText = visibleWords.slice(0, 4).join(' '); // Reduced from 6 to 4 words for more focused captions
+    
     setCurrentText(newText);
     
     // Debug logging
@@ -89,8 +127,8 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
           const firstWord = transcript.words[0];
           const lastWord = transcript.words[transcript.words.length - 1];
           console.log('🎬 Word timing debug:', {
-            firstWord: { text: firstWord.text, startMs: firstWord.startMs, relativeToClip: firstWord.startMs - clipStartMs },
-            lastWord: { text: lastWord.text, startMs: lastWord.startMs, relativeToClip: lastWord.startMs - clipStartMs },
+            firstWord: { text: firstWord.text, startMs: firstWord.startMs, relativeToClip: firstWord.startMs },
+            lastWord: { text: lastWord.text, startMs: lastWord.startMs, relativeToClip: lastWord.startMs },
             clipStartMs,
             clipRelativeTime
           });
@@ -1820,19 +1858,30 @@ export default function App() {
           textAlign: 'center',
           marginBottom: 16,
         }}>
-          Recording Instructions
+          Ready to make your Audio2 clip!
         </Text>
         
         <Text style={{
           color: '#b4b4b4',
           fontSize: 14,
           lineHeight: 20,
-          marginBottom: 20,
+          marginBottom: 16,
         }}>
           • Keep your screen on during recording{`\n`}
           • Don't switch apps or lock your phone{`\n`}
           • The recording will start automatically{`\n`}
           • Your clip will be saved to Photos when complete
+        </Text>
+        
+        <Text style={{
+          color: '#d97706',
+          fontSize: 12,
+          lineHeight: 16,
+          marginBottom: 20,
+          textAlign: 'center',
+          fontStyle: 'italic',
+        }}>
+          iOS will ask for screen recording permission. Tap "Start Recording" to allow Audio2 to capture your screen and audio for the video clip.
         </Text>
         
         <TouchableOpacity 
@@ -1947,27 +1996,27 @@ export default function App() {
       setShowProcessingModal(true);
       setProcessingStep('Preparing your audio clip...');
       
-              try {
-          // Step 1: Get timing info from Railway
-          setProcessingStep('Preparing your audio clip...');
-          const trimResponse = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
-          
-          // Step 2: Submit job with AssemblyAI's built-in trimming
-          setProcessingStep('Sending clip to transcription service...');
-          console.log('🎬 Submitting to Assembly with timing parameters');
-          const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              audio_url: trimResponse.audioUrl, // Original podcast URL
-              audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
-              audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
-              punctuate: true,
-              format_text: true
-            })
-          });
+      try {
+        // Step 1: Get timing info from Railway
+        setProcessingStep('Preparing your audio clip...');
+        const trimResponse = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
+        
+        // Step 2: Submit job with AssemblyAI's built-in trimming
+        setProcessingStep('Sending clip to transcription service...');
+        console.log('🎬 Submitting to Assembly with timing parameters');
+        const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            audio_url: trimResponse.audioUrl, // Original podcast URL
+            audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
+            audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
+            punctuate: true,
+            format_text: true
+          })
+        });
           
           const job = await submitResponse.json();
           console.log('🎬 Assembly response:', JSON.stringify(job, null, 2));
@@ -1981,7 +2030,19 @@ export default function App() {
         // Step 2: Wait and check (simple polling)
         setProcessingStep('Transcribing your clip...');
         let attempts = 0;
+        
         while (attempts < 24) { // 2 minutes max (24 * 5 seconds)
+          // Update with engaging message based on timing
+          if (attempts === 1) {
+            setProcessingStep('Transcribing: This part is super interesting!');
+          } else if (attempts === 2) {
+            setProcessingStep('Transcribing: Ohhh, genius point...');
+          } else if (attempts === 4) {
+            setProcessingStep('Transcribing: Almost there, almost there...');
+          } else if (attempts >= 6) {
+            setProcessingStep('Transcribing: This is taking awhile; I swear I\'m working');
+          }
+          
           await new Promise(resolve => setTimeout(resolve, 5000));
           
           const checkResponse = await fetch(`https://audio-trimmer-service-production.up.railway.app/api/transcript/${job.id}`, {
@@ -1990,52 +2051,60 @@ export default function App() {
           
           const result = await checkResponse.json();
           
-          if (result.status === 'completed') {
-            setProcessingStep('Preparing captions for recording...');
-            const words = result.words || [];
-            console.log('🎬 Assembly completed! Captions ready');
-            
-            if (words.length > 0) {
-              // Filter words to only include those within the selected clip time range
-              const clipWords = words.filter(word => {
-                const wordStartMs = word.start; // Assembly timestamps in milliseconds
-                const clipStartMs = clipStart; // clipStart is already in milliseconds
-                const clipEndMs = clipEnd; // clipEnd is already in milliseconds
-                return wordStartMs >= clipStartMs && wordStartMs <= clipEndMs;
-              });
+                      if (result.status === 'completed') {
+              setProcessingStep('Done!');
+              const words = result.words || [];
+              console.log('🎬 Assembly completed! Captions ready');
               
-              // Normalize the filtered word objects to use consistent property names
-              const normalizedClipWords = clipWords.map(word => ({
-                ...word,
-                startMs: word.start, // Ensure startMs property exists
-                endMs: word.end || (word.start + 100) // Ensure endMs property exists
-              }));
-              
-              // Store prepared transcript with ONLY the filtered words for the clip
-              const normalizedResult = {
-                ...result,
-                words: normalizedClipWords
-              };
-              
-              // Store prepared transcript for simple caption overlay
-              setPreparedTranscript(normalizedResult);
-              console.log('🎬 Captions ready for', clipWords.length, 'words');
-            } else {
-              // Fallback: use the full text
-              console.log('🎬 No words data, using full text fallback');
-              // Normalize even for fallback
-              const normalizedResult = {
-                ...result,
-                words: (result.words || []).map(word => ({
+              if (words.length > 0) {
+                // AssemblyAI only transcribes the specified window, so all words should be within our clip
+                // Timestamps from AssemblyAI are relative to the clip start (0-based)
+                console.log('🎬 Using all words from AssemblyAI window (no filtering needed)');
+                
+                // Normalize the word objects to use consistent property names
+                // AssemblyAI returns timestamps relative to original audio, need to adjust to clip start
+                const normalizedWords = words.map(word => ({
                   ...word,
-                  startMs: word.start,
-                  endMs: word.end || (word.start + 100)
-                }))
-              };
-              setPreparedTranscript(normalizedResult);
+                  startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
+                  endMs: (word.end || (word.start + 100)) - clipStart
+                }));
+                
+                // Store prepared transcript with all words from the AssemblyAI window
+                const normalizedResult = {
+                  ...result,
+                  words: normalizedWords
+                };
+                
+                // Store prepared transcript for simple caption overlay
+                setPreparedTranscript(normalizedResult);
+                console.log('🎬 Captions ready for', words.length, 'words');
+                
+                // Debug: Log the timestamps
+                if (__DEV__ && words.length > 0) {
+                  console.log('🎬 AssemblyAI window timestamps debug:', {
+                    firstWord: words[0],
+                    firstWordNormalized: normalizedWords[0],
+                    lastWord: words[words.length - 1],
+                    totalWords: words.length,
+                    clipStart,
+                    clipEnd
+                  });
+                }
+              } else {
+                // Fallback: use the full text
+                console.log('🎬 No words data, using full text fallback');
+                const normalizedResult = {
+                  ...result,
+                  words: (result.words || []).map(word => ({
+                    ...word,
+                    startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
+                    endMs: (word.end || (word.start + 100)) - clipStart
+                  }))
+                };
+                setPreparedTranscript(normalizedResult);
+              }
+              break;
             }
-            break;
-          }
           
           if (result.status === 'error') {
             throw new Error('Transcription failed');
@@ -2094,7 +2163,7 @@ export default function App() {
     return '';
   };
 
-  // Audio trimming function - now returns timing info for AssemblyAI
+  // Audio trimming function - returns timing info for AssemblyAI
   const trimAudioToClip = async (audioUrl, startMs, endMs) => {
     try {
       console.log('🎵 Getting timing info for clip:', startMs, 'to', endMs, 'ms');
@@ -2151,7 +2220,14 @@ export default function App() {
       // Request Photos permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Photos access is needed to save videos');
+        Alert.alert(
+          'Permission Required', 
+          'Audio2 needs access to your Photos to save your video clips so you can share them on social media.\n\nPlease go to Settings > Audio2 > Photos and select "All Photos".',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
         return;
       }
 
@@ -2210,8 +2286,11 @@ export default function App() {
       // Show helpful error message
       Alert.alert(
         'Recording Error',
-        `Could not start screen recording: ${error.message}`,
-        [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
+        `Could not start screen recording: ${error.message}\n\nMake sure you've granted screen recording permission to Audio2 in Settings > Screen Recording.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setShowRecordingView(false) },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+        ]
       );
     }
   };
@@ -2250,8 +2329,8 @@ export default function App() {
         setRecordingStatus('Video saved to Photos!');
         
         Alert.alert(
-          'Video Created!',
-          'Your podcast clip has been saved to Photos. You can now share it on social media.',
+          'Video Created Successfully!',
+          'Your podcast clip has been saved to Photos. You can now share it on LinkedIn, Instagram, Teams, iMessage, or anywhere else!',
           [
             { text: 'OK', onPress: () => {
               setShowRecordingView(false);
