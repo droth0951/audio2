@@ -1,4 +1,10 @@
-# Audio2 Time Units - MANDATORY DEVELOPER GUIDE
+# Time Units Guide - Audio2 Development
+
+## 🚨 CRITICAL: TIMING ISSUES
+**If you're working on caption timing or utterance synchronization, check this document FIRST:**
+📋 **[Utterance Timing Guide](./utterance_timing_guide.md)** - The most fragile part of the caption system
+
+## Overview
 
 *Save this as `docs/TIME-UNITS.md` in your project root*
 

@@ -1,6 +1,10 @@
 # Audio2 Caption Sync Debugging Guide
 
-## 🚨 Common Symptom: Caption Text Doesn't Match Audio
+## 🚨 CRITICAL: TIMING ISSUES
+**If captions show wrong text or timing is off, check this FIRST:**
+📋 **[Utterance Timing Guide](./utterance_timing_guide.md)** - The most fragile part of the caption system
+
+## Common Symptom: Caption Text Doesn't Match Audio
 **Problem**: Audio says "X" but caption shows "Y" - completely different words.
 
 ## 🔍 Debug Steps:

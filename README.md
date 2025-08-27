@@ -24,3 +24,19 @@ npx expo start
 - [AI Agent Instructions](docs/ai-instructions.md)
 - [Experiments](docs/experiments/)
 - [TODOs](docs/todo.md) 
+
+## 🚨 Troubleshooting
+
+### Caption Timing Issues
+If captions show wrong text or don't sync with audio:
+1. **Check the [Utterance Timing Guide](docs/utterance_timing_guide.md)** - The most common cause of timing problems
+2. **Review [Caption Sync Debugging](docs/caption_sync_debugging.md)** - Step-by-step debugging process
+3. **Verify [Time Units Guide](docs/time_units_guide.md)** - Understanding how timing works
+
+### Screen Recording Issues
+If screen recordings show blank captions:
+- Check z-index values for caption components
+- Verify captions are rendered in RecordingView component
+- Ensure proper audio session configuration
+
+## Development 

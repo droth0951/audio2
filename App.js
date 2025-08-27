@@ -255,6 +255,9 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       // UTTERANCE-BASED CAPTION SYSTEM
   // Uses complete speaker phrases instead of individual words for natural flow
   // Falls back to word-based approach if no utterances available
+  // 
+  // 🚨 CRITICAL: If you modify this timing logic, check docs/utterance_timing_guide.md
+  // This is the most fragile part of the caption system and breaks easily.
   
   // Helper function to normalize text capitalization based on grammar rules
   const normalizeTextCapitalization = (text) => {
@@ -979,6 +982,7 @@ export default function App() {
   
   // Video recording state
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingActive, setIsRecordingActive] = useState(false); // 🔧 NEW: Separate state for monitoring
   const [showRecordingView, setShowRecordingView] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState('');
   
@@ -2471,8 +2475,9 @@ export default function App() {
       await ScreenRecorder.startRecording(micEnabled);
       
       setIsRecording(true);
+      setIsRecordingActive(true); // 🔧 NEW: Start monitoring
       setRecordingStatus('Recording in progress...');
-      console.log('🎬 Recording started! isRecording set to true');
+      console.log('🎬 Recording started! isRecording set to true, monitoring active');
       
 
       
@@ -2486,6 +2491,27 @@ export default function App() {
       recordingTimerRef.current = setTimeout(async () => {
         await stopVideoRecording();
       }, clipEnd - clipStart); // Use actual clip duration
+      
+      // Add audio playback monitoring to detect interruptions
+      window.audioStatusCheckInterval = setInterval(async () => {
+        if (sound && isRecordingActive) { // 🔧 NEW: Use isRecordingActive instead of isRecording
+          try {
+            const status = await sound.getStatusAsync();
+                         if (!status.isPlaying && status.positionMillis >= clipEnd) {
+               // Audio finished naturally, stop recording
+               clearInterval(window.audioStatusCheckInterval);
+               await stopVideoRecording();
+             } else if (!status.isPlaying && status.positionMillis < clipEnd) {
+               // Audio stopped unexpectedly, stop recording
+               console.log('🎬 Audio playback interrupted, stopping recording');
+               clearInterval(window.audioStatusCheckInterval);
+               await stopVideoRecording();
+             }
+          } catch (error) {
+            console.log('🎬 Error checking audio status:', error);
+          }
+        }
+      }, 1000); // Check every second
       
       // Store recording start time for timer-based updates
       const recordingStartTime = Date.now();
@@ -2515,12 +2541,21 @@ export default function App() {
 
   const stopVideoRecording = async () => {
     try {
-            setRecordingStatus('Stopping recording...');
+      setRecordingStatus('Stopping recording...');
+      
+      // 🔧 NEW: Stop monitoring first
+      setIsRecordingActive(false);
       
       // Clear the recording timer
       if (recordingTimerRef.current) {
         clearTimeout(recordingTimerRef.current);
         recordingTimerRef.current = null;
+      }
+      
+      // Clear audio status check interval
+      if (window.audioStatusCheckInterval) {
+        clearInterval(window.audioStatusCheckInterval);
+        window.audioStatusCheckInterval = null;
       }
       
       // DISABLED: Old Voice API cleanup - now using Assembly
@@ -2572,6 +2607,7 @@ export default function App() {
       setRecordingStatus(`Error: ${error.message}`);
     } finally {
       setIsRecording(false);
+      setIsRecordingActive(false); // 🔧 NEW: Ensure monitoring is stopped
     }
   };
 
@@ -2584,6 +2620,16 @@ export default function App() {
         recordingTimerRef.current = null;
         console.log('🧹 Cleared recording timer');
       }
+      
+      // Clear any audio status check intervals
+      if (window.audioStatusCheckInterval) {
+        clearInterval(window.audioStatusCheckInterval);
+        window.audioStatusCheckInterval = null;
+        console.log('🧹 Cleared audio status check interval');
+      }
+      
+      // 🔧 NEW: Stop monitoring state
+      setIsRecordingActive(false);
       
       if (isRecording) {
         await ScreenRecorder.stopRecording();
