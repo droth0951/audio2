@@ -252,10 +252,41 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       });
     }
     
-    // UTTERANCE-BASED CAPTION SYSTEM
-    // Uses complete speaker phrases instead of individual words for natural flow
-    // Falls back to word-based approach if no utterances available
-    const getCurrentUtterance = (transcript, currentRelativeTimeMs) => {
+      // UTTERANCE-BASED CAPTION SYSTEM
+  // Uses complete speaker phrases instead of individual words for natural flow
+  // Falls back to word-based approach if no utterances available
+  
+  // Helper function to normalize text capitalization based on grammar rules
+  const normalizeTextCapitalization = (text) => {
+    if (!text) return text;
+    
+    // Split into sentences
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    
+    return sentences.map(sentence => {
+      // Skip if empty
+      if (!sentence.trim()) return sentence;
+      
+      // Check if it's a proper noun or should start with capital
+      const firstWord = sentence.trim().split(' ')[0];
+      const shouldCapitalize = 
+        // Proper nouns (common ones)
+        ['I', 'I\'m', 'I\'ll', 'I\'ve', 'I\'d', 'I\'m', 'I\'ll', 'I\'ve', 'I\'d'].includes(firstWord) ||
+        // Names, places, etc. (you can expand this list)
+        ['Yeah', 'Yes', 'No', 'Well', 'So', 'Now', 'Then', 'Here', 'There'].includes(firstWord) ||
+        // If it's already capitalized and seems intentional
+        firstWord[0] === firstWord[0].toUpperCase();
+      
+      if (shouldCapitalize) {
+        return sentence;
+      } else {
+        // Lowercase the first letter
+        return sentence.charAt(0).toLowerCase() + sentence.slice(1);
+      }
+    }).join(' ');
+  };
+  
+  const getCurrentUtterance = (transcript, currentRelativeTimeMs) => {
       if (!transcript?.utterances || transcript.utterances.length === 0) {
         return getCurrentWords(transcript, currentRelativeTimeMs); // Fallback
       }
@@ -263,7 +294,7 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       // If we're at the very beginning (first 500ms), show first utterance
       if (currentRelativeTimeMs <= 500 && transcript.utterances.length > 0) {
         return {
-          text: transcript.utterances[0].text,
+          text: normalizeTextCapitalization(transcript.utterances[0].text),
           speaker: transcript.utterances[0].speaker
         };
       }
@@ -276,7 +307,7 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       
       if (currentUtterance) {
         return {
-          text: currentUtterance.text,
+          text: normalizeTextCapitalization(currentUtterance.text),
           speaker: currentUtterance.speaker
         };
       }
@@ -309,6 +340,15 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
   }, [transcript, currentTimeMs, clipStartMs]);
 
   if (!currentSegment?.text?.trim()) return null;
+
+  // Debug log to see if captions are being rendered
+  if (__DEV__) {
+    console.log('🎬 RENDERING CAPTION:', {
+      text: currentSegment.text,
+      speaker: currentSegment.speaker,
+      hasText: !!currentSegment.text?.trim()
+    });
+  }
 
   return (
     <View style={styles.speakerCaptionContainer}>
@@ -409,7 +449,8 @@ const RecordingView = ({
             hasTranscript: !!preparedTranscript,
             position,
             clipStart,
-            wordsCount: preparedTranscript?.words?.length
+            wordsCount: preparedTranscript?.words?.length,
+            isRecording // Add recording status to debug
           })}
           <SimpleCaptionOverlay
             transcript={preparedTranscript}
@@ -4934,7 +4975,7 @@ suggestionTagText: {
     left: 30,
     right: 60,
     alignItems: 'center',
-    zIndex: 100,
+    zIndex: 1000, // Increased z-index to ensure captions appear in screen recording
   },
   speakerCaptionBubble: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
