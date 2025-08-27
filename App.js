@@ -122,6 +122,217 @@ const BoldCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
 };
 */
 
+// WORD-BASED NATURAL CHUNKING - Uses individual word timings for rhythm
+const WordBasedChunkedCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
+  const [currentChunk, setCurrentChunk] = useState(null);
+
+  // Configuration for natural chunking based on individual words
+  const CHUNK_CONFIG = {
+    MAX_WORDS_PER_CHUNK: 8,     // Hard limit - never exceed
+    PAUSE_THRESHOLD_MS: 600,    // 0.6s+ gap between words = natural break
+    PUNCTUATION_BREAK_MS: 400,  // Pause after punctuation = sentence break
+    LOOKAHEAD_MS: 300,          // Show captions slightly early
+    MIN_DISPLAY_MS: 1500,       // Minimum time to show each chunk
+  };
+
+  // ✅ Create natural chunks based on individual word gaps and pauses
+  const createNaturalWordChunks = (words) => {
+    if (!words || words.length === 0) return [];
+    
+    const chunks = [];
+    let currentChunkWords = [];
+    
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const nextWord = words[i + 1];
+      
+      // Add current word to chunk
+      currentChunkWords.push(word);
+      
+      // Decide if we should end the chunk here
+      let shouldEndChunk = false;
+      let breakReason = '';
+      
+      // 1. Hard limit: Never exceed MAX_WORDS_PER_CHUNK
+      if (currentChunkWords.length >= CHUNK_CONFIG.MAX_WORDS_PER_CHUNK) {
+        shouldEndChunk = true;
+        breakReason = 'max_words';
+      }
+      // 2. Natural pause: Gap between words indicates natural break
+      else if (nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PAUSE_THRESHOLD_MS) {
+        shouldEndChunk = true;
+        breakReason = 'long_pause';
+      }
+      // 3. Punctuation + pause: Sentence boundaries
+      else if (word.text.match(/[.!?]$/) && nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PUNCTUATION_BREAK_MS) {
+        shouldEndChunk = true;
+        breakReason = 'punctuation_pause';
+      }
+      // 4. Natural comma breaks with pause
+      else if (word.text.match(/[,;]$/) && nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PAUSE_THRESHOLD_MS) {
+        shouldEndChunk = true;
+        breakReason = 'comma_pause';
+      }
+      // 5. Speaker change (if we have speaker data)
+      else if (nextWord && word.speaker && nextWord.speaker && word.speaker !== nextWord.speaker) {
+        shouldEndChunk = true;
+        breakReason = 'speaker_change';
+      }
+      // 6. End of transcript: Always end the final chunk
+      else if (i === words.length - 1) {
+        shouldEndChunk = true;
+        breakReason = 'end_of_transcript';
+      }
+      
+      // Create chunk if we decided to end it
+      if (shouldEndChunk) {
+        const chunkText = currentChunkWords.map(w => w.text).join(' ');
+        const chunkStartMs = currentChunkWords[0].startMs;
+        const chunkEndMs = Math.max(
+          currentChunkWords[currentChunkWords.length - 1].endMs,
+          chunkStartMs + CHUNK_CONFIG.MIN_DISPLAY_MS
+        );
+        
+        chunks.push({
+          text: chunkText,
+          startMs: chunkStartMs,
+          endMs: chunkEndMs,
+          words: [...currentChunkWords], // Copy the words
+          wordCount: currentChunkWords.length,
+          chunkIndex: chunks.length,
+          breakReason: breakReason, // For debugging
+          speaker: currentChunkWords[0]?.speaker
+        });
+        
+        // Debug log for natural chunks
+        if (__DEV__) {
+          console.log(`🎯 Natural chunk ${chunks.length}:`, {
+            text: chunkText.substring(0, 50) + (chunkText.length > 50 ? '...' : ''),
+            wordCount: currentChunkWords.length,
+            duration: Math.round((chunkEndMs - chunkStartMs) / 1000 * 10) / 10 + 's',
+            breakReason: breakReason,
+            gap: nextWord ? Math.round(nextWord.startMs - word.endMs) + 'ms' : 'end'
+          });
+        }
+        
+        // Reset for next chunk
+        currentChunkWords = [];
+      }
+    }
+    
+    return chunks;
+  };
+
+  // ✅ Get current chunk using word-level timing precision
+  const getCurrentChunk = (transcript, currentRelativeTimeMs) => {
+    if (!transcript?.words || transcript.words.length === 0) {
+      return null;
+    }
+    
+    // Create natural rhythm chunks from individual words
+    const chunks = createNaturalWordChunks(transcript.words);
+    
+    if (chunks.length === 0) return null;
+    
+    // ✅ Find current chunk based on precise word timings (no overlaps, correct order)
+    // Show first chunk immediately when recording starts (currentRelativeTimeMs <= 500ms)
+    let currentChunk = null;
+    
+    if (currentRelativeTimeMs <= 500 && chunks.length > 0) {
+      // Show first chunk immediately when recording starts
+      currentChunk = chunks[0];
+    } else {
+      // Find chunk based on timing
+      currentChunk = chunks.find(chunk => 
+        currentRelativeTimeMs >= (chunk.startMs - CHUNK_CONFIG.LOOKAHEAD_MS) && 
+        currentRelativeTimeMs <= chunk.endMs
+      );
+    }
+    
+    if (currentChunk) {
+      return {
+        text: normalizeTextCapitalization(currentChunk.text),
+        speaker: currentChunk.speaker,
+        chunkIndex: currentChunk.chunkIndex,
+        wordCount: currentChunk.wordCount,
+        breakReason: currentChunk.breakReason
+      };
+    }
+    
+    return null;
+  };
+
+  // Helper function to normalize text capitalization
+  const normalizeTextCapitalization = (text) => {
+    if (!text) return text;
+    
+    // For natural chunks, preserve most capitalization
+    const firstWord = text.trim().split(' ')[0];
+    
+    // Always capitalize sentence starts and proper nouns
+    if (firstWord.match(/^[A-Z]/) || 
+        ['I', 'Gmail', 'Google', 'YouTube', 'Apple', 'Microsoft', 'JSOC', 'Delta', 'Rangers'].includes(firstWord)) {
+      return text;
+    }
+    
+    // For clear mid-sentence chunks (starting with lowercase connectors)
+    if (['and', 'but', 'or', 'so', 'because', 'that', 'which', 'when', 'where', 'who'].includes(firstWord.toLowerCase())) {
+      return text.charAt(0).toLowerCase() + text.slice(1);
+    }
+    
+    return text; // Default: preserve original
+  };
+
+  useEffect(() => {
+    if (!transcript || typeof currentTimeMs !== 'number') {
+      setCurrentChunk(null);
+      return;
+    }
+
+    // Calculate current time relative to clip start (all in milliseconds)
+    const clipRelativeTimeMs = currentTimeMs - clipStartMs;
+    
+    // ✅ Get current chunk using natural word-based rhythm
+    const chunk = getCurrentChunk(transcript, clipRelativeTimeMs);
+    
+    setCurrentChunk(chunk);
+    
+    // Debug logging for current chunk
+    if (__DEV__ && chunk?.text) {
+      console.log('🎬 Natural word chunk:', {
+        text: chunk.text.substring(0, 40) + (chunk.text.length > 40 ? '...' : ''),
+        wordCount: chunk.wordCount,
+        chunkIndex: chunk.chunkIndex,
+        breakReason: chunk.breakReason,
+        clipRelativeTimeMs
+      });
+    }
+    
+  }, [transcript, currentTimeMs, clipStartMs]);
+
+  // Debug: Log the current chunk to see why it might not be rendering
+  if (__DEV__) {
+    console.log('🎬 Caption render check:', {
+      hasCurrentChunk: !!currentChunk,
+      currentChunkText: currentChunk?.text,
+      currentChunkTextTrimmed: currentChunk?.text?.trim(),
+      willRender: !!(currentChunk?.text?.trim())
+    });
+  }
+  
+  if (!currentChunk?.text?.trim()) return null;
+
+  return (
+    <View style={styles.wordChunkedCaptionContainer}>
+      <View style={styles.wordChunkedCaptionBubble}>
+        <Text style={styles.wordChunkedCaptionText}>
+          {currentChunk.text}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 // SPEAKER-AWARE CAPTION OVERLAY
 const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
   const [currentSegment, setCurrentSegment] = useState(null);
@@ -455,7 +666,7 @@ const RecordingView = ({
             wordsCount: preparedTranscript?.words?.length,
             isRecording // Add recording status to debug
           })}
-          <SimpleCaptionOverlay
+          <WordBasedChunkedCaptionOverlay
             transcript={preparedTranscript}
             currentTimeMs={position}
             clipStartMs={clipStart}
@@ -2271,6 +2482,16 @@ export default function App() {
                 setPreparedTranscript(normalizedResult);
                 console.log('🎬 Captions ready for', words.length, 'words');
                 
+                // Debug: Check if normalization worked
+                if (__DEV__ && normalizedWords.length > 0) {
+                  console.log('🎬 Normalization check:', {
+                    originalFirstWordStart: words[0].start,
+                    normalizedFirstWordStart: normalizedWords[0].startMs,
+                    clipStart,
+                    shouldBeZero: words[0].start - clipStart
+                  });
+                }
+                
                 // Debug: Log what we're storing in the transcript
                 console.log('🔍 Stored Transcript Structure:', {
                   hasWords: !!normalizedResult.words,
@@ -2292,7 +2513,10 @@ export default function App() {
                     lastWord: words[words.length - 1],
                     totalWords: words.length,
                     clipStart,
-                    clipEnd
+                    clipEnd,
+                    firstWordStartMs: words[0].start,
+                    firstWordStartMsNormalized: normalizedWords[0].startMs,
+                    expectedFirstWordStartMs: words[0].start - clipStart
                   });
                 }
               } else {
@@ -2313,7 +2537,7 @@ export default function App() {
                   words: (result.words || []).map(word => ({
                     ...word,
                     startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
-                    endMs: (word.end || (word.start + 100)) - clipStart
+                    endMs: word.end || (word.start + 100)
                   })),
                   utterances: processedUtterances
                 };
@@ -5055,6 +5279,79 @@ suggestionTagText: {
     textAlign: 'center',
     lineHeight: 22,
     letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+  },
+
+  // Natural Rhythm Caption Styles (follows speech patterns)
+  naturalCaptionContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    zIndex: 1000, // High z-index for screen recording
+  },
+  naturalCaptionBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    maxWidth: '85%',                 // Constraint: Prevent edge-to-edge
+    minHeight: 50,                   // Minimum height for stability
+    justifyContent: 'center',        // Center text vertically
+  },
+  naturalCaptionText: {
+    color: '#ffffff',
+    fontSize: 17,                    // Optimized for readability
+    fontWeight: '700',               
+    textAlign: 'center',
+    lineHeight: 22,                  // Tight line spacing for max 4 lines
+    letterSpacing: 0.2,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+    maxHeight: 88,                   // Height constraint: 4 lines * 22px = 88px
+    includeFontPadding: false,       // Remove extra padding
+  },
+
+  // Word-Based Natural Chunked Caption Styles
+  wordChunkedCaptionContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  wordChunkedCaptionBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    maxWidth: '88%',                 // Prevent edge-to-edge text
+    maxHeight: 92,                   // Height limit: ~4 lines max
+  },
+  wordChunkedCaptionText: {
+    color: '#ffffff',
+    fontSize: 16,                    // Smaller font for better line control
+    fontWeight: '700',               
+    textAlign: 'center',
+    lineHeight: 21,                  // Tight spacing: 4 lines = 84px + padding = ~92px
+    letterSpacing: 0.2,
     textShadowColor: 'rgba(0, 0, 0, 0.9)',
     textShadowOffset: { width: 1, height: 2 },
     textShadowRadius: 4,

@@ -76,16 +76,16 @@ startMs: utterance.start - clipStartMs - clipStartMs
 // Result: Negative timestamps, wrong utterances selected
 ```
 
-### 2. Using Absolute Timestamps
+### 2. Using Absolute Timestamps (When Not Using audio_start_from)
 ```javascript
-// WRONG - Using AssemblyAI's original timestamps:
+// WRONG - Using AssemblyAI's original timestamps without audio_start_from:
 currentRelativeTimeMs >= utterance.start  // This is absolute time!
 // Result: Captions never match because timing is off by clipStart
 ```
 
-### 3. Skipping Normalization
+### 3. Skipping Normalization (When Not Using audio_start_from)
 ```javascript
-// WRONG - Not normalizing at all:
+// WRONG - Not normalizing when not using audio_start_from:
 const processedUtterances = response.utterances || [];
 // Result: Captions show wrong text because timing is absolute
 ```
@@ -136,7 +136,7 @@ console.log('🎯 UTTERANCE CAPTION CHECK:', {
 Before considering utterance timing "working":
 
 1. **AssemblyAI Response**: Contains `utterances` array with `start` and `end` timestamps
-2. **Normalization**: `startMs` and `endMs` are calculated as `original - clipStartMs`
+2. **Normalization**: `startMs` and `endMs` are the original values (AssemblyAI already made them relative)
 3. **Timing Range**: `startMs` should be around 0-1000ms, not negative
 4. **Utterance Selection**: Correct utterance shows for current audio position
 5. **First Utterance**: Shows immediately when recording starts (0-500ms)
@@ -163,7 +163,7 @@ Before considering utterance timing "working":
 3. Ensure normalization didn't break the array
 
 ### If timing is completely off:
-1. Check for double normalization
+1. Check for double normalization (subtracting clipStartMs when AssemblyAI already did it)
 2. Verify `clipStartMs` value
 3. Ensure AssemblyAI request includes `audio_start_from` and `audio_end_at`
 
