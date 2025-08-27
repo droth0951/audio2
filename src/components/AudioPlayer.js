@@ -281,6 +281,11 @@ const AudioPlayer = ({
               {selectedEpisode?.description || 'No description available.'}
             </Text>
           </View>
+          
+          {/* Helper Text */}
+          <Text style={styles.helperText}>
+            Drag on the timeline above or use the fine-tuning buttons to select where to start your clip.
+          </Text>
         </>
       )}
     </View>
@@ -586,6 +591,14 @@ const styles = StyleSheet.create({
     color: '#b4b4b4',
     fontSize: 14,
     lineHeight: 20,
+  },
+  helperText: {
+    color: '#ff8c00', // Orange color
+    fontSize: 12, // Small type
+    textAlign: 'center',
+    marginTop: 15,
+    paddingHorizontal: 20,
+    lineHeight: 16,
   },
 });
 Y

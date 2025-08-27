@@ -13,6 +13,9 @@ export async function requestTranscript(audioUrl: string, startMs: number, endMs
       audio_end_at: endMs,
       punctuate: true,
       format_text: true,
+      speaker_labels: true,           // Enable speaker detection
+      speakers_expected: 2,           // Most podcasts have 2 speakers
+      word_boost: []
     }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);

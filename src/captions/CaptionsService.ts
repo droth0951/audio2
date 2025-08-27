@@ -72,7 +72,9 @@ export async function requestTranscript(request: TranscriptRequest): Promise<Tra
       audio_end_at: aaiEndMs,
       punctuate: true,
       format_text: true,
-      speaker_labels: false
+      speaker_labels: true,           // Enable speaker detection for better captions
+      speakers_expected: 2,           // Most podcasts have 2 speakers
+      word_boost: []
     };
 
     const result = await requestTranscriptAPI(payload);

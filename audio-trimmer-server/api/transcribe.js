@@ -27,6 +27,7 @@ module.exports = async (req, res) => {
     }
     
     console.log(`AAI window(ms): ${startMs} → ${endMs} dur=${duration}`);
+    console.log(`🎬 Sending to AssemblyAI: ${audio_url} (clipped to ${startMs}-${endMs}ms)`);
     
     // Request transcript from AssemblyAI
     const response = await axios.post('https://api.assemblyai.com/v2/transcript', {
@@ -35,6 +36,8 @@ module.exports = async (req, res) => {
       audio_end_at: endMs,
       punctuate: punctuate !== undefined ? punctuate : true,
       format_text: format_text !== undefined ? format_text : true,
+      speaker_labels: true,           // Enable speaker detection
+      speakers_expected: 2,           // Most podcasts have 2 speakers
       word_boost: [],
     }, {
       headers: {

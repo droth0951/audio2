@@ -44,128 +44,280 @@ const formatTime = (millis) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// Simple Caption Overlay Component
-const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
+// OLD VERSION - Commented out for rollback
+/*
+// Bold-Style Caption Constants
+const CAPTION_TIMING = {
+  LOOKAHEAD_MS: 1000,  // Was 150ms - now catches words much earlier
+  LOOKBACK_MS: 2000,   // Was 400ms - now keeps them much longer
+  MAX_WORDS: 4         // Was 3 - now shows more text
+};
+
+// Bold Caption Overlay Component
+const BoldCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
   const [currentText, setCurrentText] = useState('');
+  const [highlightedWord, setHighlightedWord] = useState('');
+  const fadeAnim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
     if (!transcript?.words?.length || typeof currentTimeMs !== 'number') {
-      if (__DEV__) {
-        console.log('🎬 Caption overlay: No transcript or invalid time', {
-          hasTranscript: !!transcript,
-          hasWords: !!transcript?.words?.length,
-          currentTimeMs,
-          clipStartMs
-        });
-      }
       setCurrentText('');
+      setHighlightedWord('');
       return;
     }
 
     const clipRelativeTime = currentTimeMs - clipStartMs;
+    
+    // Create 2-3 word chunks (LEAN: reuse existing timing logic)
     const visibleWords = [];
-    const LOOKAHEAD_MS = 1500; // Reduced to be more precise
-    const LOOKBACK_MS = 800;   // Reduced to be more precise
-    
-    // Debug: Log the timing calculation
-    if (__DEV__) {
-      console.log('🎬 Timing calculation:', {
-        currentTimeMs,
-        clipStartMs,
-        clipRelativeTime,
-        totalWords: transcript.words.length
-      });
-    }
-    
     for (const word of transcript.words) {
-      // Word timestamps are now relative to clip start (0-based) after normalization
-      const wordTimeRelativeToClip = word.startMs;
-      
-      if (clipRelativeTime >= wordTimeRelativeToClip - LOOKBACK_MS && 
-          clipRelativeTime <= wordTimeRelativeToClip + LOOKAHEAD_MS) {
-        visibleWords.push(word.text);
-      }
-      
-          // Debug: Log all words to see what's happening
-    if (__DEV__) {
-      console.log('🎬 Word check:', {
-        word: word.text,
-        wordStartMs: word.startMs,
-        clipRelativeTime,
-        lookback: wordTimeRelativeToClip - LOOKBACK_MS,
-        lookahead: wordTimeRelativeToClip + LOOKAHEAD_MS,
-        isVisible: clipRelativeTime >= wordTimeRelativeToClip - LOOKBACK_MS && clipRelativeTime <= wordTimeRelativeToClip + LOOKAHEAD_MS
-      });
-    }
-    }
-    
-    // Debug: Log the first few words and their timings
-    if (__DEV__ && transcript.words.length > 0) {
-      console.log('🎬 Caption timing debug:', {
-        clipRelativeTime,
-        clipStartMs,
-        currentTimeMs,
-        firstWord: transcript.words[0],
-        secondWord: transcript.words[1],
-        thirdWord: transcript.words[2],
-        visibleWordsCount: visibleWords.length
-      });
-    }
-    
-    const newText = visibleWords.slice(0, 4).join(' '); // Reduced from 6 to 4 words for more focused captions
-    
-    setCurrentText(newText);
-    
-    // Debug logging
-    if (__DEV__) {
-      if (newText) {
-        console.log('🎬 Caption text:', newText, 'at time:', currentTimeMs, 'clipRelative:', clipRelativeTime);
-      } else {
-        console.log('🎬 No caption text at time:', currentTimeMs, 'clipRelative:', clipRelativeTime, 'words checked:', transcript.words.length);
-        // Log first few word timings for debugging
-        if (transcript.words.length > 0) {
-          const firstWord = transcript.words[0];
-          const lastWord = transcript.words[transcript.words.length - 1];
-          console.log('🎬 Word timing debug:', {
-            firstWord: { text: firstWord.text, startMs: firstWord.startMs, relativeToClip: firstWord.startMs },
-            lastWord: { text: lastWord.text, startMs: lastWord.startMs, relativeToClip: lastWord.startMs },
-            clipStartMs,
-            clipRelativeTime
-          });
-        }
+      const wordTime = word.startMs;
+      if (clipRelativeTime >= wordTime - CAPTION_TIMING.LOOKAHEAD_MS && 
+          clipRelativeTime <= wordTime + CAPTION_TIMING.LOOKBACK_MS) {
+        visibleWords.push(word);
       }
     }
+    
+    // Take first 2-3 words for Bold style
+    const chunkWords = visibleWords.slice(0, CAPTION_TIMING.MAX_WORDS);
+    const newText = chunkWords.map(w => w.text).join(' ');
+    
+    // Find highlighted word
+    const currentWord = chunkWords.find(word =>
+      clipRelativeTime >= word.startMs && clipRelativeTime <= word.startMs + 500
+    );
+    
+    if (newText !== currentText) {
+      setCurrentText(newText);
+      // Simple fade animation
+      RNAnimated.timing(fadeAnim, {
+        toValue: newText ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+    
+    setHighlightedWord(currentWord?.text || '');
     
   }, [transcript, currentTimeMs, clipStartMs]);
 
   if (!currentText.trim()) return null;
 
   return (
-    <View style={{
-      position: 'absolute',
-      bottom: 100,
-      left: 20,
-      right: 20,
-      alignItems: 'center',
-      zIndex: 100,
-    }}>
-      <Text style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        color: '#ffffff',
-        fontSize: 18,
-        fontWeight: '600',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 10,
-        textAlign: 'center',
-        lineHeight: 24,
-        maxWidth: '90%',
-        textShadowColor: '#000000',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 3,
-      }}>
-        {currentText}
-      </Text>
+    <RNAnimated.View style={[styles.boldCaptionContainer, { opacity: fadeAnim }]}>
+      <View style={styles.boldBubble}>
+        <Text style={styles.boldText}>
+          {currentText.split(' ').map((word, index) => (
+            <Text 
+              key={index}
+              style={word === highlightedWord ? styles.highlightedWord : {}}
+            >
+              {word}{index < currentText.split(' ').length - 1 ? ' ' : ''}
+            </Text>
+          ))}
+        </Text>
+      </View>
+    </RNAnimated.View>
+  );
+};
+*/
+
+// SPEAKER-AWARE CAPTION OVERLAY
+const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
+  const [currentSegment, setCurrentSegment] = useState(null);
+
+  // Use speaker-aware segments
+  const getCurrentSegment = (transcript, currentRelativeTimeMs) => {
+    if (!transcript?.segments || transcript.segments.length === 0) {
+      console.log('⚠️ No segments available, falling back to words');
+      return getCurrentWords(transcript, currentRelativeTimeMs);
+    }
+    
+    const currentSegment = transcript.segments.find(segment => 
+      currentRelativeTimeMs >= segment.start && 
+      currentRelativeTimeMs <= segment.end
+    );
+    
+    if (currentSegment) {
+      console.log(`🎯 Current segment:`, {
+        speaker: currentSegment.speaker,
+        text: currentSegment.text,
+        start: currentSegment.start,
+        end: currentSegment.end,
+        currentTime: currentRelativeTimeMs
+      });
+      
+      return currentSegment.text;
+    }
+    
+    return '';
+  };
+
+  // Get current caption with context words
+  const getCurrentCaptionWithContext = (transcript, currentRelativeTimeMs) => {
+    if (!transcript?.words || transcript.words.length === 0) return '';
+    
+    // Find the primary active word
+    const activeWord = transcript.words.find(word => 
+      currentRelativeTimeMs >= word.startMs && 
+      currentRelativeTimeMs <= word.endMs
+    );
+    
+    if (!activeWord) return '';
+    
+    // Get context around the active word
+    const activeIndex = transcript.words.indexOf(activeWord);
+    const startIndex = Math.max(0, activeIndex - 1);     // 1 word before
+    const endIndex = Math.min(transcript.words.length - 1, activeIndex + 1); // 1 word after
+    
+    const contextWords = transcript.words.slice(startIndex, endIndex + 1);
+    
+    return contextWords.map(word => {
+      // Highlight the active word
+      return word === activeWord ? `**${word.text}**` : word.text;
+    }).join(' ');
+  };
+
+  // Fallback to word-based approach
+  const getCurrentWords = (transcript, currentRelativeTimeMs) => {
+    if (!transcript?.words || transcript.words.length === 0) {
+      return '';
+    }
+    
+    // Find which word we're currently on
+    let currentWordIndex = -1;
+    
+    for (let i = 0; i < transcript.words.length; i++) {
+      const word = transcript.words[i];
+      if (currentRelativeTimeMs >= word.startMs && currentRelativeTimeMs <= word.endMs) {
+        currentWordIndex = i;
+        break;
+      }
+    }
+    
+    // If we found a current word, show it plus next 2
+    if (currentWordIndex !== -1) {
+      const wordsToShow = transcript.words.slice(currentWordIndex, currentWordIndex + 3);
+      const text = wordsToShow.map(w => w.text).join(' ');
+      return text;
+    }
+    
+    // If no current word, find the next word to come
+    const nextWordIndex = transcript.words.findIndex(word => word.startMs > currentRelativeTimeMs);
+    if (nextWordIndex !== -1) {
+      const wordsToShow = transcript.words.slice(nextWordIndex, nextWordIndex + 3);
+      const text = wordsToShow.map(w => w.text).join(' ');
+      return text;
+    }
+    
+    return '';
+  };
+
+  useEffect(() => {
+    if (!transcript || typeof currentTimeMs !== 'number') {
+      setCurrentSegment(null);
+      return;
+    }
+
+    // Calculate current time relative to clip start (all in milliseconds)
+    const clipRelativeTimeMs = currentTimeMs - clipStartMs;
+    
+    // Debug logging
+    if (__DEV__) {
+      console.log('🎬 SpeakerCaption debug:', {
+        currentTimeMs,
+        clipStartMs,
+        clipRelativeTimeMs,
+        hasSegments: !!transcript?.segments?.length,
+        hasWords: !!transcript?.words?.length,
+        totalSegments: transcript?.segments?.length || 0,
+        firstSegment: transcript?.segments?.[0],
+        firstWord: transcript?.words?.[0]
+      });
+      
+      // Add this debug log in your caption rendering:
+      console.log('🎯 Caption Timing Debug:', {
+        audioPosition: currentTimeMs,           // What audio player shows
+        clipStart: clipStartMs,             // Your clip start point  
+        relativeTime: clipRelativeTimeMs, // Time within clip
+        firstWordTime: transcript.words?.[0]?.startMs, // First word timing
+        shouldShow: transcript.words?.filter(w => 
+          clipRelativeTimeMs >= w.startMs && 
+          clipRelativeTimeMs <= w.endMs
+        ).map(w => w.text),
+        contextWords: transcript.words?.filter(w => 
+          clipRelativeTimeMs >= w.startMs - 500 && 
+          clipRelativeTimeMs <= w.endMs + 500
+        ).map(w => w.text)
+      });
+    }
+    
+    // UTTERANCE-BASED CAPTION SYSTEM
+    // Uses complete speaker phrases instead of individual words for natural flow
+    // Falls back to word-based approach if no utterances available
+    const getCurrentUtterance = (transcript, currentRelativeTimeMs) => {
+      if (!transcript?.utterances || transcript.utterances.length === 0) {
+        return getCurrentWords(transcript, currentRelativeTimeMs); // Fallback
+      }
+      
+      // If we're at the very beginning (first 500ms), show first utterance
+      if (currentRelativeTimeMs <= 500 && transcript.utterances.length > 0) {
+        return {
+          text: transcript.utterances[0].text,
+          speaker: transcript.utterances[0].speaker
+        };
+      }
+      
+      // Find current utterance based on timing
+      const currentUtterance = transcript.utterances.find(utterance => 
+        currentRelativeTimeMs >= utterance.startMs && 
+        currentRelativeTimeMs <= utterance.endMs
+      );
+      
+      if (currentUtterance) {
+        return {
+          text: currentUtterance.text,
+          speaker: currentUtterance.speaker
+        };
+      }
+      
+      return { text: '', speaker: null };
+    };
+
+    const currentCaption = getCurrentUtterance(transcript, clipRelativeTimeMs);
+    
+    console.log('🎯 UTTERANCE CAPTION CHECK:', {
+      relativeTime: clipRelativeTimeMs,
+      hasUtterances: !!transcript?.utterances?.length,
+      utteranceCount: transcript?.utterances?.length || 0,
+      currentUtterance: currentCaption,
+      fallbackToWords: !transcript?.utterances?.length,
+      showingFirstUtterance: clipRelativeTimeMs <= 500 && transcript?.utterances?.length > 0
+    });
+    
+    setCurrentSegment(currentCaption.text ? currentCaption : null);
+    
+    // Debug logging for current caption
+    if (__DEV__ && currentCaption.text) {
+      console.log('🎬 Current utterance caption:', {
+        text: currentCaption.text,
+        speaker: currentCaption.speaker,
+        clipRelativeTimeMs
+      });
+    }
+    
+  }, [transcript, currentTimeMs, clipStartMs]);
+
+  if (!currentSegment?.text?.trim()) return null;
+
+  return (
+    <View style={styles.speakerCaptionContainer}>
+      <View style={styles.speakerCaptionBubble}>
+        {/* Caption text - moved to top where A/B labels were */}
+        <Text style={styles.speakerCaptionText}>
+          {currentSegment.text}
+        </Text>
+      </View>
     </View>
   );
 };
@@ -267,32 +419,7 @@ const RecordingView = ({
         </>
       )}
       
-      {/* Debug info for captions */}
-      {__DEV__ && (
-        <View style={{ position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, borderRadius: 5 }}>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Captions: {captionsEnabled ? 'ON' : 'OFF'}
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Transcript: {preparedTranscript ? 'YES' : 'NO'}
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Words: {preparedTranscript?.words?.length || 0}
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Position: {Math.round(position)}ms
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            ClipStart: {clipStart || 'null'}ms
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Relative: {Math.round(position - (clipStart || 0))}ms
-          </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            Should Show: {captionsEnabled && preparedTranscript ? 'YES' : 'NO'}
-          </Text>
-        </View>
-      )}
+      {/* Debug info for captions - REMOVED */}
 
       {/* Control buttons - positioned over waveform when not recording */}
       {!isRecording && (
@@ -843,6 +970,9 @@ export default function App() {
 
   // Add a ref for the TextInput
   const textInputRef = useRef(null);
+
+  // Add a ref for the recording timer
+  const recordingTimerRef = useRef(null);
 
   // Add a new state variable for the currently loading podcast
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
@@ -1622,19 +1752,7 @@ export default function App() {
     }
   };
 
-  const handleSkip5Backward = async () => {
-    if (sound) {
-      const newPosition = Math.max(0, position - 5000);
-      await sound.setPositionAsync(newPosition);
-    }
-  };
 
-  const handleSkip5Forward = async () => {
-    if (sound && duration) {
-      const newPosition = Math.min(duration, position + 5000);
-      await sound.setPositionAsync(newPosition);
-    }
-  };
 
   const handleSkip1Backward = async () => {
     if (sound) {
@@ -2002,6 +2120,8 @@ export default function App() {
         const trimResponse = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
         
         // Step 2: Submit job with AssemblyAI's built-in trimming
+        // NOTE: We send the full podcast URL but use audio_start_from/audio_end_at
+        // AssemblyAI handles the clipping server-side (more efficient than downloading/re-uploading)
         setProcessingStep('Sending clip to transcription service...');
         console.log('🎬 Submitting to Assembly with timing parameters');
         const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
@@ -2014,7 +2134,10 @@ export default function App() {
             audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
             audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
             punctuate: true,
-            format_text: true
+            format_text: true,
+            speaker_labels: true,           // Enable speaker detection
+            speakers_expected: 2,           // Most podcasts have 2 speakers
+            word_boost: []
           })
         });
           
@@ -2053,6 +2176,20 @@ export default function App() {
           
                       if (result.status === 'completed') {
               setProcessingStep('Done!');
+              
+              // After AssemblyAI completes, log the raw response structure:
+              console.log('🔍 AssemblyAI Raw Response Structure:', {
+                hasUtterances: !!result.utterances,
+                utterancesLength: result.utterances?.length || 0,
+                hasSegments: !!result.segments, 
+                segmentsLength: result.segments?.length || 0,
+                hasWords: !!result.words,
+                wordsLength: result.words?.length || 0,
+                speakerLabels: result.speaker_labels,
+                firstUtterance: result.utterances?.[0],
+                firstSegment: result.segments?.[0]
+              });
+              
               const words = result.words || [];
               console.log('🎬 Assembly completed! Captions ready');
               
@@ -2069,15 +2206,38 @@ export default function App() {
                   endMs: (word.end || (word.start + 100)) - clipStart
                 }));
                 
-                // Store prepared transcript with all words from the AssemblyAI window
+                // Process utterances like words - normalize timestamps
+                const processedUtterances = result.utterances?.map(utterance => ({
+                  ...utterance,
+                  startMs: utterance.start - clipStart,  // Normalize to clip-relative time
+                  endMs: utterance.end - clipStart,      // Normalize to clip-relative time
+                  text: utterance.text,
+                  speaker: utterance.speaker
+                })) || [];
+
+                // Store prepared transcript with both words and utterances
                 const normalizedResult = {
                   ...result,
-                  words: normalizedWords
+                  words: normalizedWords,
+                  utterances: processedUtterances  // Add this
                 };
                 
                 // Store prepared transcript for simple caption overlay
                 setPreparedTranscript(normalizedResult);
                 console.log('🎬 Captions ready for', words.length, 'words');
+                
+                // Debug: Log what we're storing in the transcript
+                console.log('🔍 Stored Transcript Structure:', {
+                  hasWords: !!normalizedResult.words,
+                  wordsLength: normalizedResult.words?.length || 0,
+                  hasSegments: !!normalizedResult.segments,
+                  segmentsLength: normalizedResult.segments?.length || 0,
+                  hasUtterances: !!normalizedResult.utterances,
+                  utterancesLength: normalizedResult.utterances?.length || 0,
+                  firstWord: normalizedResult.words?.[0],
+                  firstUtterance: normalizedResult.utterances?.[0],
+                  firstSegment: normalizedResult.segments?.[0]
+                });
                 
                 // Debug: Log the timestamps
                 if (__DEV__ && words.length > 0) {
@@ -2093,13 +2253,24 @@ export default function App() {
               } else {
                 // Fallback: use the full text
                 console.log('🎬 No words data, using full text fallback');
+                
+                // Process utterances for fallback case too
+                const processedUtterances = result.utterances?.map(utterance => ({
+                  ...utterance,
+                  startMs: utterance.start - clipStart,
+                  endMs: utterance.end - clipStart,
+                  text: utterance.text,
+                  speaker: utterance.speaker
+                })) || [];
+                
                 const normalizedResult = {
                   ...result,
                   words: (result.words || []).map(word => ({
                     ...word,
                     startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
                     endMs: (word.end || (word.start + 100)) - clipStart
-                  }))
+                  })),
+                  utterances: processedUtterances
                 };
                 setPreparedTranscript(normalizedResult);
               }
@@ -2271,7 +2442,7 @@ export default function App() {
       await sound.playAsync();
       
       // Stop recording after clip duration
-      const recordingTimer = setTimeout(async () => {
+      recordingTimerRef.current = setTimeout(async () => {
         await stopVideoRecording();
       }, clipEnd - clipStart); // Use actual clip duration
       
@@ -2282,6 +2453,12 @@ export default function App() {
       console.error('Recording error:', error);
       setRecordingStatus(`Error: ${error.message}`);
       setIsRecording(false);
+      
+      // Clear the recording timer if it was set
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       
       // Show helpful error message
       Alert.alert(
@@ -2297,7 +2474,13 @@ export default function App() {
 
   const stopVideoRecording = async () => {
     try {
-      setRecordingStatus('Stopping recording...');
+            setRecordingStatus('Stopping recording...');
+      
+      // Clear the recording timer
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       
       // DISABLED: Old Voice API cleanup - now using Assembly
       // if (isListening) {
@@ -2313,9 +2496,10 @@ export default function App() {
         playsInSilentModeIOS: true,
       });
       
-      // Pause audio
-      if (sound && isPlaying) {
+      // Pause audio - always pause when stopping recording
+      if (sound) {
         await sound.pauseAsync();
+        setIsPlaying(false);
       }
       
       // Stop recording and get the URI
@@ -2353,9 +2537,23 @@ export default function App() {
   // Cleanup function to handle recording state when exiting
   const cleanupRecording = async () => {
     try {
+      // Clear the recording timer
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        console.log('🧹 Cleared recording timer');
+      }
+      
       if (isRecording) {
         await ScreenRecorder.stopRecording();
         console.log('Cleaned up recording state');
+      }
+      
+      // Stop audio playback when cleaning up
+      if (sound) {
+        await sound.pauseAsync();
+        setIsPlaying(false);
+        console.log('🎵 Audio stopped during cleanup');
       }
       
       // Clean up voice recognition if it's active
@@ -3136,8 +3334,12 @@ export default function App() {
                       {/* PLAYBACK Section */}
                       <View style={styles.controlSection}>
                         <View style={styles.playbackControls}>
-                          <TouchableOpacity style={styles.skipButton} onPress={handleSkipBackward}>
-                            <MaterialCommunityIcons name="rewind-15" size={20} color="#f4f4f4" />
+                          <TouchableOpacity style={styles.skipTextButton} onPress={handleSkip1Backward}>
+                            <Text style={styles.skipText}>-1s</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity style={styles.skipTextButton} onPress={handleSkipBackward}>
+                            <Text style={styles.skipText}>-15s</Text>
                           </TouchableOpacity>
                           
                           <TouchableOpacity style={styles.largePlayButton} onPress={handleTogglePlayback}>
@@ -3148,34 +3350,17 @@ export default function App() {
                             />
                           </TouchableOpacity>
                           
-                          <TouchableOpacity style={styles.skipButton} onPress={handleSkipForward}>
-                            <MaterialCommunityIcons name="fast-forward-15" size={20} color="#f4f4f4" />
+                          <TouchableOpacity style={styles.skipTextButton} onPress={handleSkipForward}>
+                            <Text style={styles.skipText}>+15s</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity style={styles.skipTextButton} onPress={handleSkip1Forward}>
+                            <Text style={styles.skipText}>+1s</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
 
-                      {/* Fine Tune Controls */}
-                      {/* <View style={styles.fineTuneControls}>
-                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Backward}>
-                          <MaterialCommunityIcons name="rewind-5" size={16} color="#f4f4f4" />
-                          <Text style={styles.fineTuneButtonText}>-5s</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Forward}>
-                          <MaterialCommunityIcons name="fast-forward-5" size={16} color="#f4f4f4" />
-                          <Text style={styles.fineTuneButtonText}>+5s</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Backward}>
-                          <MaterialCommunityIcons name="rewind" size={16} color="#f4f4f4" />
-                          <Text style={styles.fineTuneButtonText}>-1s</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Forward}>
-                          <MaterialCommunityIcons name="fast-forward" size={16} color="#f4f4f4" />
-                          <Text style={styles.fineTuneButtonText}>+1s</Text>
-                        </TouchableOpacity>
-                      </View> */}
+
 
                       {/* CLIP SELECTION Section */}
                       <View style={styles.controlSection}>
@@ -3192,30 +3377,7 @@ export default function App() {
                               <Text style={styles.startClipButtonText}>End Clip</Text>
                             </TouchableOpacity>
                             
-                            {/* Fine Tune Controls - Only during selection */}
-                            <View style={styles.fineTuneControls}>
-                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Backward}>
-                                <MaterialCommunityIcons name="rewind-5" size={16} color="#f4f4f4" />
-                                <Text style={styles.fineTuneButtonText}>-5s</Text>
-                              </TouchableOpacity>
-                              
-                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip5Forward}>
-                                <MaterialCommunityIcons name="fast-forward-5" size={16} color="#f4f4f4" />
-                                <Text style={styles.fineTuneButtonText}>+5s</Text>
-                              </TouchableOpacity>
-                              
-                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Backward}>
-                                <MaterialCommunityIcons name="rewind" size={16} color="#f4f4f4" />
-                                <Text style={styles.fineTuneButtonText}>-1s</Text>
-                              </TouchableOpacity>
-                              
-                              <TouchableOpacity style={styles.fineTuneButton} onPress={handleSkip1Forward}>
-                                <MaterialCommunityIcons name="fast-forward" size={16} color="#f4f4f4" />
-                                <Text style={styles.fineTuneButtonText}>+1s</Text>
-                              </TouchableOpacity>
-                            </View>
-                            
-                            {/* Cancel Button - Below fine tune controls */}
+                            {/* Cancel Button */}
                             <TouchableOpacity style={styles.cancelButton} onPress={handleClearSelection}>
                               <MaterialCommunityIcons name="close" size={16} color="#f4f4f4" />
                               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -3289,6 +3451,11 @@ export default function App() {
                         <Text style={styles.episodeNotesButtonText}>Episode Notes</Text>
                         <MaterialCommunityIcons name="chevron-up" size={20} color="#d97706" />
                       </TouchableOpacity>
+                      
+                      {/* Helper Text */}
+                      <Text style={styles.helperText}>
+                        Drag the timeline or use the fine-tuning buttons to select the start of your clip. Then hit "Start Clip Selection" to continue.
+                      </Text>
                     </ScrollView>
                   )}
                 </>
@@ -3633,36 +3800,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 30, // Increased for larger play button
+    gap: 15, // Reduced for tighter spacing around play button
   },
   
-  // FINE TUNE Section
-  fineTuneControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 16, // Add spacing from the button above
-  },
-  fineTuneButton: {
-    backgroundColor: '#404040',
-    paddingVertical: 8, // Reduced from 10
-    paddingHorizontal: 10, // Reduced from 12
-    borderRadius: 12, // Reduced from 16
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 60, // Reduced from 70
-    borderWidth: 1,
-    borderColor: '#555555',
-  },
-  fineTuneButtonText: {
-    color: '#f4f4f4',
-    fontSize: 11, // Reduced from 12
-    fontWeight: '500',
-    marginLeft: 4,
-  },
+
   
   // CLIP SELECTION Section
   clipStatusContainer: {
@@ -3930,6 +4071,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#555555',
     minWidth: 60,
+  },
+  
+  // Clean UI - Smaller Skip Buttons for +/- 1s
+  smallSkipButton: {
+    backgroundColor: '#404040',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#555555',
+    minWidth: 40,
+  },
+  
+  // Clean UI - Text-based Skip Buttons for left side
+  skipTextButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 50,
+  },
+  skipText: {
+    color: '#d97706',
+    fontSize: 16,
+    fontWeight: '700',
   },
   skipButtonText: {
     color: '#f4f4f4',
@@ -4569,6 +4738,14 @@ suggestionTagText: {
     fontSize: 16,
     fontWeight: '600',
   },
+  helperText: {
+    color: '#b4b4b4', // Light grey color
+    fontSize: 12, // Small type
+    textAlign: 'center',
+    marginTop: 25, // Increased from 15 to move it down
+    paddingHorizontal: 20,
+    lineHeight: 16,
+  },
   
   // Episode Loading Spinner styles
   episodeLoadingOverlay: {
@@ -4710,6 +4887,90 @@ suggestionTagText: {
     marginBottom: 20,
     paddingHorizontal: 20,
     minHeight: 120,
+  },
+
+  // Bold Caption Styles
+  boldCaptionContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 30,
+    right: 60,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  boldBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  boldText: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 26,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+  },
+  highlightedWord: {
+    color: '#d97706',
+    textShadowColor: 'rgba(217, 119, 6, 0.8)',
+    textShadowRadius: 6,
+  },
+
+  // Speaker-Aware Caption Styles
+  speakerCaptionContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 30,
+    right: 60,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  speakerCaptionBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    minWidth: 200,
+  },
+  speakerLabel: {
+    color: '#d97706',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  speakerCaptionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 22,
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
   },
 
 });
