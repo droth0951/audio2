@@ -18,6 +18,7 @@ import {
   ScrollView,
   AppState,
 } from 'react-native';
+import { captionService } from './CaptionService';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
@@ -126,36 +127,9 @@ const BoldCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
 
 // REMOVED: WordBasedChunkedCaptionOverlay - Too complex, causing bugs
 
-// SIMPLIFIED CAPTION OVERLAY - Focus on reliability
+// SIMPLIFIED CAPTION OVERLAY - Uses CaptionService for reliability
 const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
   const [currentCaption, setCurrentCaption] = useState('');
-
-  // Simple word-based caption system
-  const getCurrentCaption = (transcript, currentRelativeTimeMs) => {
-    if (!transcript?.words || transcript.words.length === 0) {
-      return '';
-    }
-    
-    // Find the current word being spoken
-    const currentWord = transcript.words.find(word => 
-      currentRelativeTimeMs >= word.startMs && 
-      currentRelativeTimeMs <= word.endMs
-    );
-    
-    if (!currentWord) {
-      // If no current word, find the next word to come
-      const nextWord = transcript.words.find(word => word.startMs > currentRelativeTimeMs);
-      if (nextWord) {
-        return nextWord.text;
-      }
-      return '';
-    }
-    
-    // Show current word plus next 2 words for context
-    const currentIndex = transcript.words.indexOf(currentWord);
-    const wordsToShow = transcript.words.slice(currentIndex, currentIndex + 3);
-    return wordsToShow.map(w => w.text).join(' ');
-  };
 
   useEffect(() => {
     if (!transcript || typeof currentTimeMs !== 'number') {
@@ -163,46 +137,29 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       return;
     }
 
-    // Calculate current time relative to clip start (all in milliseconds)
-    const clipRelativeTimeMs = currentTimeMs - clipStartMs;
+    // Use CaptionService for all caption logic
+    const { text, isActive, speaker } = captionService.getCurrentCaption(currentTimeMs);
     
+    if (isActive && text) {
+      setCurrentCaption(text);
+    } else {
+      setCurrentCaption('');
+    }
+
     // Debug logging
-    if (__DEV__) {
-      console.log('🎬 SpeakerCaption debug:', {
+    if (__DEV__ && text) {
+      console.log('🎬 CaptionService result:', {
+        text,
+        isActive,
+        speaker,
         currentTimeMs,
-        clipStartMs,
-        clipRelativeTimeMs,
-        hasSegments: !!transcript?.segments?.length,
-        hasWords: !!transcript?.words?.length,
-        totalSegments: transcript?.segments?.length || 0,
-        firstSegment: transcript?.segments?.[0],
-        firstWord: transcript?.words?.[0]
-      });
-      
-      // Add this debug log in your caption rendering:
-      console.log('🎯 Caption Timing Debug:', {
-        audioPosition: currentTimeMs,           // What audio player shows
-        clipStart: clipStartMs,             // Your clip start point  
-        relativeTime: clipRelativeTimeMs, // Time within clip
-        firstWordTime: transcript.words?.[0]?.startMs, // First word timing
-        shouldShow: transcript.words?.filter(w => 
-          clipRelativeTimeMs >= w.startMs && 
-          clipRelativeTimeMs <= w.endMs
-        ).map(w => w.text),
-        contextWords: transcript.words?.filter(w => 
-          clipRelativeTimeMs >= w.startMs - 500 && 
-          clipRelativeTimeMs <= w.endMs + 500
-        ).map(w => w.text)
+        clipStartMs
       });
     }
-    
-    // Update the current caption
-    const caption = getCurrentCaption(transcript, clipRelativeTimeMs);
-    setCurrentCaption(caption);
+
   }, [transcript, currentTimeMs, clipStartMs]);
 
-  // Don't render if no caption
-  if (!currentCaption?.trim()) return null;
+  if (!currentCaption.trim()) return null;
 
   return (
     <View style={styles.speakerCaptionContainer}>
@@ -1626,6 +1583,7 @@ export default function App() {
     setClipStart(null);
     setClipEnd(null);
     setIsPreviewMode(false);
+    captionService.reset(); // Reset CaptionService when going back
     if (sound) {
       sound.unloadAsync();
       setSound(null);
@@ -1682,6 +1640,7 @@ export default function App() {
     setClipStart(null);
     setClipEnd(null);
     setCaptionsEnabled(false);
+    captionService.reset(); // Reset CaptionService when clearing clip
   };
 
   const handleSetClipPoint = () => {
@@ -1771,6 +1730,7 @@ export default function App() {
     setIsSelectionMode(false);
     setSelectionStep('idle');
     setCaptionsEnabled(false);
+    captionService.reset(); // Reset CaptionService when clearing selection
   };
 
   const handleSetClipEnd = () => {
@@ -2132,9 +2092,17 @@ export default function App() {
                   utterances: processedUtterances  // Add this
                 };
                 
+                // Set up CaptionService with the transcript
+                captionService.setTranscript(normalizedResult, clipStart, clipEnd);
+                
                 // Store prepared transcript for simple caption overlay
                 setPreparedTranscript(normalizedResult);
                 console.log('🎬 Captions ready for', words.length, 'words');
+                
+                // Debug info
+                if (__DEV__) {
+                  console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
+                }
                 
                 // Debug: Check if normalization worked
                 if (__DEV__ && normalizedWords.length > 0) {
@@ -2195,6 +2163,9 @@ export default function App() {
                   })),
                   utterances: processedUtterances
                 };
+                
+                // Set up CaptionService with the transcript
+                captionService.setTranscript(normalizedResult, clipStart, clipEnd);
                 setPreparedTranscript(normalizedResult);
               }
               break;
@@ -2215,6 +2186,7 @@ export default function App() {
         console.log('Caption error:', error);
         setCaptionsEnabled(false);
         setPreparedTranscript(null);
+        captionService.reset(); // Reset CaptionService on error
         Alert.alert('Caption Error', 'Continuing without captions');
       }
       
@@ -2224,6 +2196,7 @@ export default function App() {
       // Captions disabled - clear any existing caption data
       console.log('🎬 Captions disabled - proceeding without captions');
       setPreparedTranscript(null);
+      captionService.reset(); // Reset CaptionService when captions disabled
       setIsGeneratingCaptions(false);
     }
 
@@ -2255,6 +2228,16 @@ export default function App() {
     if (isGeneratingCaptions) return 'Generating captions...';
     if (preparedTranscript) return 'Captions ready';
     return '';
+  };
+
+  // Test function for CaptionService (temporary debugging)
+  const testCaptions = () => {
+    console.log('🧪 Caption Test:', {
+      enabled: captionsEnabled,
+      currentTime: position,
+      debugInfo: captionService.getDebugInfo(),
+      currentCaption: captionService.getCurrentCaption(position)
+    });
   };
 
   // Audio trimming function - returns timing info for AssemblyAI
