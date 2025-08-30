@@ -33,6 +33,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
+import * as KeepAwake from 'expo-keep-awake';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -2300,6 +2301,10 @@ export default function App() {
     try {
       console.log('🧹 Emergency recording cleanup (preserving audio state)...');
       
+      // 🔋 DEACTIVATE WAKE LOCK in emergency cleanup
+      KeepAwake.deactivateKeepAwake();
+      console.log('🔋 Emergency wake lock deactivation');
+      
       // Clear ONLY recording timers (not audio position tracking)
       if (recordingTimerRef.current) {
         clearTimeout(recordingTimerRef.current);
@@ -2366,6 +2371,10 @@ export default function App() {
         playsInSilentModeIOS: true,
       });
 
+      // 🔋 ACTIVATE WAKE LOCK - Prevent device sleep during recording
+      KeepAwake.activateKeepAwake();
+      console.log('🔋 Wake lock activated - device will stay awake during recording');
+
       setRecordingStatus('Starting recording...');
       
       // 🎯 KEY: Set isRecording=true BEFORE starting ReplayKit
@@ -2418,6 +2427,10 @@ export default function App() {
       setRecordingStatus(`Error: ${error.message}`);
       setIsRecording(false); // Reset on error
       
+      // 🔋 DEACTIVATE WAKE LOCK on error
+      KeepAwake.deactivateKeepAwake();
+      console.log('🔋 Wake lock deactivated due to recording error');
+      
       Alert.alert(
         'Recording Error',
         `Could not start screen recording: ${error.message}`,
@@ -2440,6 +2453,10 @@ export default function App() {
       console.log('⚠️ Recording not active or cleanup in progress');
       return;
     }
+    
+    // 🔋 DEACTIVATE WAKE LOCK - Allow device to sleep again
+    KeepAwake.deactivateKeepAwake();
+    console.log('🔋 Wake lock deactivated - device can sleep again');
     
     // Clean up recording flags
     if (sound) {
@@ -2510,12 +2527,21 @@ export default function App() {
       console.error('Stop recording error:', error);
       setRecordingStatus(`Error: ${error.message}`);
       setIsRecording(false); // Reset on error
+      
+      // 🔋 DEACTIVATE WAKE LOCK on error
+      KeepAwake.deactivateKeepAwake();
+      console.log('🔋 Wake lock deactivated due to stop recording error');
     }
   };
 
   // Cleanup function to handle recording state when exiting
   const cleanupRecording = async () => {
     console.log('🧹 cleanupRecording called');
+    
+    // 🔋 DEACTIVATE WAKE LOCK during cleanup
+    KeepAwake.deactivateKeepAwake();
+    console.log('🔋 Wake lock deactivated during cleanup');
+    
     try {
       // Clear the recording timer
       if (recordingTimerRef.current) {
