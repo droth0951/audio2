@@ -14,6 +14,9 @@ import {
   FlatList,
   Switch,
   Linking,
+  Modal,
+  ScrollView,
+  AppState,
 } from 'react-native';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
@@ -28,7 +31,6 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
 // import { useFonts } from 'expo-font';
 
@@ -122,306 +124,37 @@ const BoldCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
 };
 */
 
-// WORD-BASED NATURAL CHUNKING - Uses individual word timings for rhythm
-const WordBasedChunkedCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
-  const [currentChunk, setCurrentChunk] = useState(null);
+// REMOVED: WordBasedChunkedCaptionOverlay - Too complex, causing bugs
 
-  // Configuration for natural chunking based on individual words
-  const CHUNK_CONFIG = {
-    MAX_WORDS_PER_CHUNK: 8,     // Hard limit - never exceed
-    PAUSE_THRESHOLD_MS: 600,    // 0.6s+ gap between words = natural break
-    PUNCTUATION_BREAK_MS: 400,  // Pause after punctuation = sentence break
-    LOOKAHEAD_MS: 300,          // Show captions slightly early
-    MIN_DISPLAY_MS: 1500,       // Minimum time to show each chunk
-  };
-
-  // ✅ Create natural chunks based on individual word gaps and pauses
-  const createNaturalWordChunks = (words) => {
-    if (!words || words.length === 0) return [];
-    
-    const chunks = [];
-    let currentChunkWords = [];
-    
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const nextWord = words[i + 1];
-      
-      // Add current word to chunk
-      currentChunkWords.push(word);
-      
-      // Decide if we should end the chunk here
-      let shouldEndChunk = false;
-      let breakReason = '';
-      
-      // 1. Hard limit: Never exceed MAX_WORDS_PER_CHUNK
-      if (currentChunkWords.length >= CHUNK_CONFIG.MAX_WORDS_PER_CHUNK) {
-        shouldEndChunk = true;
-        breakReason = 'max_words';
-      }
-      // 2. Natural pause: Gap between words indicates natural break
-      else if (nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PAUSE_THRESHOLD_MS) {
-        shouldEndChunk = true;
-        breakReason = 'long_pause';
-      }
-      // 3. Punctuation + pause: Sentence boundaries
-      else if (word.text.match(/[.!?]$/) && nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PUNCTUATION_BREAK_MS) {
-        shouldEndChunk = true;
-        breakReason = 'punctuation_pause';
-      }
-      // 4. Natural comma breaks with pause
-      else if (word.text.match(/[,;]$/) && nextWord && (nextWord.startMs - word.endMs) >= CHUNK_CONFIG.PAUSE_THRESHOLD_MS) {
-        shouldEndChunk = true;
-        breakReason = 'comma_pause';
-      }
-      // 5. Speaker change (if we have speaker data)
-      else if (nextWord && word.speaker && nextWord.speaker && word.speaker !== nextWord.speaker) {
-        shouldEndChunk = true;
-        breakReason = 'speaker_change';
-      }
-      // 6. End of transcript: Always end the final chunk
-      else if (i === words.length - 1) {
-        shouldEndChunk = true;
-        breakReason = 'end_of_transcript';
-      }
-      
-      // Create chunk if we decided to end it
-      if (shouldEndChunk) {
-        const chunkText = currentChunkWords.map(w => w.text).join(' ');
-        const chunkStartMs = currentChunkWords[0].startMs;
-        const chunkEndMs = Math.max(
-          currentChunkWords[currentChunkWords.length - 1].endMs,
-          chunkStartMs + CHUNK_CONFIG.MIN_DISPLAY_MS
-        );
-        
-        chunks.push({
-          text: chunkText,
-          startMs: chunkStartMs,
-          endMs: chunkEndMs,
-          words: [...currentChunkWords], // Copy the words
-          wordCount: currentChunkWords.length,
-          chunkIndex: chunks.length,
-          breakReason: breakReason, // For debugging
-          speaker: currentChunkWords[0]?.speaker
-        });
-        
-        // Debug log for natural chunks
-        if (__DEV__) {
-          console.log(`🎯 Natural chunk ${chunks.length}:`, {
-            text: chunkText.substring(0, 50) + (chunkText.length > 50 ? '...' : ''),
-            wordCount: currentChunkWords.length,
-            duration: Math.round((chunkEndMs - chunkStartMs) / 1000 * 10) / 10 + 's',
-            breakReason: breakReason,
-            gap: nextWord ? Math.round(nextWord.startMs - word.endMs) + 'ms' : 'end'
-          });
-        }
-        
-        // Reset for next chunk
-        currentChunkWords = [];
-      }
-    }
-    
-    return chunks;
-  };
-
-  // ✅ Get current chunk using word-level timing precision
-  const getCurrentChunk = (transcript, currentRelativeTimeMs) => {
-    if (!transcript?.words || transcript.words.length === 0) {
-      return null;
-    }
-    
-    // Create natural rhythm chunks from individual words
-    const chunks = createNaturalWordChunks(transcript.words);
-    
-    if (chunks.length === 0) return null;
-    
-    // ✅ Find current chunk based on precise word timings (no overlaps, correct order)
-    // Show first chunk immediately when recording starts (currentRelativeTimeMs <= 500ms)
-    let currentChunk = null;
-    
-    if (currentRelativeTimeMs <= 500 && chunks.length > 0) {
-      // Show first chunk immediately when recording starts
-      currentChunk = chunks[0];
-    } else {
-      // Find chunk based on timing
-      currentChunk = chunks.find(chunk => 
-        currentRelativeTimeMs >= (chunk.startMs - CHUNK_CONFIG.LOOKAHEAD_MS) && 
-        currentRelativeTimeMs <= chunk.endMs
-      );
-    }
-    
-    if (currentChunk) {
-      return {
-        text: normalizeTextCapitalization(currentChunk.text),
-        speaker: currentChunk.speaker,
-        chunkIndex: currentChunk.chunkIndex,
-        wordCount: currentChunk.wordCount,
-        breakReason: currentChunk.breakReason
-      };
-    }
-    
-    return null;
-  };
-
-  // Helper function to normalize text capitalization
-  const normalizeTextCapitalization = (text) => {
-    if (!text) return text;
-    
-    // For natural chunks, preserve most capitalization
-    const firstWord = text.trim().split(' ')[0];
-    
-    // Always capitalize sentence starts and proper nouns
-    if (firstWord.match(/^[A-Z]/) || 
-        ['I', 'Gmail', 'Google', 'YouTube', 'Apple', 'Microsoft', 'JSOC', 'Delta', 'Rangers'].includes(firstWord)) {
-      return text;
-    }
-    
-    // For clear mid-sentence chunks (starting with lowercase connectors)
-    if (['and', 'but', 'or', 'so', 'because', 'that', 'which', 'when', 'where', 'who'].includes(firstWord.toLowerCase())) {
-      return text.charAt(0).toLowerCase() + text.slice(1);
-    }
-    
-    return text; // Default: preserve original
-  };
-
-  useEffect(() => {
-    if (!transcript || typeof currentTimeMs !== 'number') {
-      setCurrentChunk(null);
-      return;
-    }
-
-    // Calculate current time relative to clip start (all in milliseconds)
-    const clipRelativeTimeMs = currentTimeMs - clipStartMs;
-    
-    // ✅ Get current chunk using natural word-based rhythm
-    const chunk = getCurrentChunk(transcript, clipRelativeTimeMs);
-    
-    setCurrentChunk(chunk);
-    
-    // Debug logging for current chunk
-    if (__DEV__ && chunk?.text) {
-      console.log('🎬 Natural word chunk:', {
-        text: chunk.text.substring(0, 40) + (chunk.text.length > 40 ? '...' : ''),
-        wordCount: chunk.wordCount,
-        chunkIndex: chunk.chunkIndex,
-        breakReason: chunk.breakReason,
-        clipRelativeTimeMs
-      });
-    }
-    
-  }, [transcript, currentTimeMs, clipStartMs]);
-
-  // Debug: Log the current chunk to see why it might not be rendering
-  if (__DEV__) {
-    console.log('🎬 Caption render check:', {
-      hasCurrentChunk: !!currentChunk,
-      currentChunkText: currentChunk?.text,
-      currentChunkTextTrimmed: currentChunk?.text?.trim(),
-      willRender: !!(currentChunk?.text?.trim())
-    });
-  }
-  
-  if (!currentChunk?.text?.trim()) return null;
-
-  return (
-    <View style={styles.wordChunkedCaptionContainer}>
-      <View style={styles.wordChunkedCaptionBubble}>
-        <Text style={styles.wordChunkedCaptionText}>
-          {currentChunk.text}
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-// SPEAKER-AWARE CAPTION OVERLAY
+// SIMPLIFIED CAPTION OVERLAY - Focus on reliability
 const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
-  const [currentSegment, setCurrentSegment] = useState(null);
+  const [currentCaption, setCurrentCaption] = useState('');
 
-  // Use speaker-aware segments
-  const getCurrentSegment = (transcript, currentRelativeTimeMs) => {
-    if (!transcript?.segments || transcript.segments.length === 0) {
-      console.log('⚠️ No segments available, falling back to words');
-      return getCurrentWords(transcript, currentRelativeTimeMs);
-    }
-    
-    const currentSegment = transcript.segments.find(segment => 
-      currentRelativeTimeMs >= segment.start && 
-      currentRelativeTimeMs <= segment.end
-    );
-    
-    if (currentSegment) {
-      console.log(`🎯 Current segment:`, {
-        speaker: currentSegment.speaker,
-        text: currentSegment.text,
-        start: currentSegment.start,
-        end: currentSegment.end,
-        currentTime: currentRelativeTimeMs
-      });
-      
-      return currentSegment.text;
-    }
-    
-    return '';
-  };
-
-  // Get current caption with context words
-  const getCurrentCaptionWithContext = (transcript, currentRelativeTimeMs) => {
-    if (!transcript?.words || transcript.words.length === 0) return '';
-    
-    // Find the primary active word
-    const activeWord = transcript.words.find(word => 
-      currentRelativeTimeMs >= word.startMs && 
-      currentRelativeTimeMs <= word.endMs
-    );
-    
-    if (!activeWord) return '';
-    
-    // Get context around the active word
-    const activeIndex = transcript.words.indexOf(activeWord);
-    const startIndex = Math.max(0, activeIndex - 1);     // 1 word before
-    const endIndex = Math.min(transcript.words.length - 1, activeIndex + 1); // 1 word after
-    
-    const contextWords = transcript.words.slice(startIndex, endIndex + 1);
-    
-    return contextWords.map(word => {
-      // Highlight the active word
-      return word === activeWord ? `**${word.text}**` : word.text;
-    }).join(' ');
-  };
-
-  // Fallback to word-based approach
-  const getCurrentWords = (transcript, currentRelativeTimeMs) => {
+  // Simple word-based caption system
+  const getCurrentCaption = (transcript, currentRelativeTimeMs) => {
     if (!transcript?.words || transcript.words.length === 0) {
       return '';
     }
     
-    // Find which word we're currently on
-    let currentWordIndex = -1;
+    // Find the current word being spoken
+    const currentWord = transcript.words.find(word => 
+      currentRelativeTimeMs >= word.startMs && 
+      currentRelativeTimeMs <= word.endMs
+    );
     
-    for (let i = 0; i < transcript.words.length; i++) {
-      const word = transcript.words[i];
-      if (currentRelativeTimeMs >= word.startMs && currentRelativeTimeMs <= word.endMs) {
-        currentWordIndex = i;
-        break;
+    if (!currentWord) {
+      // If no current word, find the next word to come
+      const nextWord = transcript.words.find(word => word.startMs > currentRelativeTimeMs);
+      if (nextWord) {
+        return nextWord.text;
       }
+      return '';
     }
     
-    // If we found a current word, show it plus next 2
-    if (currentWordIndex !== -1) {
-      const wordsToShow = transcript.words.slice(currentWordIndex, currentWordIndex + 3);
-      const text = wordsToShow.map(w => w.text).join(' ');
-      return text;
-    }
-    
-    // If no current word, find the next word to come
-    const nextWordIndex = transcript.words.findIndex(word => word.startMs > currentRelativeTimeMs);
-    if (nextWordIndex !== -1) {
-      const wordsToShow = transcript.words.slice(nextWordIndex, nextWordIndex + 3);
-      const text = wordsToShow.map(w => w.text).join(' ');
-      return text;
-    }
-    
-    return '';
+    // Show current word plus next 2 words for context
+    const currentIndex = transcript.words.indexOf(currentWord);
+    const wordsToShow = transcript.words.slice(currentIndex, currentIndex + 3);
+    return wordsToShow.map(w => w.text).join(' ');
   };
 
   useEffect(() => {
@@ -597,12 +330,12 @@ const RecordingView = ({
   <View style={styles.recordingContainer}>
     <StatusBar style="light" hidden={true} />
     
-    {/* Full-screen wireframe design */}
+    {/* Full-screen wireframe design - ALWAYS VISIBLE */}
     <LinearGradient
       colors={['#1c1c1c', '#2d2d2d']}
       style={styles.recordingBackground}
     >
-      {/* Episode artwork */}
+      {/* Episode artwork - ALWAYS VISIBLE */}
       {selectedEpisode?.artwork && (
         <Image 
           source={{ uri: selectedEpisode.artwork }} 
@@ -611,77 +344,57 @@ const RecordingView = ({
         />
       )}
       
-      {/* Progress timeline */}
+      {/* Progress timeline - ALWAYS VISIBLE */}
       <View style={styles.recordingTimelineContainer}>
         <View style={styles.recordingTimeline}>
           <View 
             style={[
               styles.recordingTimelineFill, 
-              { width: `${duration && clipStart !== null && clipEnd !== null ? ((position - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
+              { width: `${duration ? (Math.min(Math.max(0, position - clipStart), clipEnd - clipStart) / (clipEnd - clipStart)) * 100 : 0}%` }
             ]} 
           />
         </View>
         <View style={styles.recordingTimeLabels}>
-          <Text style={styles.recordingTimeText}>
-            {formatTime(Math.max(0, clipStart !== null ? position - clipStart : 0))}
-          </Text>
-          <Text style={styles.recordingTimeText}>{formatTime(clipStart !== null && clipEnd !== null ? clipEnd - clipStart : 0)}</Text>
+          <Text style={styles.recordingTimeText}>{formatTime(Math.min(Math.max(0, position - clipStart), clipEnd - clipStart))}</Text>
+          <Text style={styles.recordingTimeText}>{formatTime(clipEnd - clipStart)}</Text>
         </View>
       </View>
       
-      {/* Recording waveform */}
-      <View style={styles.recordingWaveform}>
-        {Array.from({ length: 15 }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.recordingWaveformBar,
-              {
-                height: Math.random() * 40 + 10,
-                opacity: isPlaying ? 0.8 + Math.random() * 0.2 : 0.3
-              }
-            ]}
-          />
-        ))}
-      </View>
+      {/* Animated waveform - ALWAYS VISIBLE */}
+      <AnimatedWaveform 
+        isPlaying={isPlaying}
+        size="large"
+        color="#d97706"
+        style={styles.recordingWaveform}
+        isRecording={isRecording} // Pass recording state for optimized animation
+      />
       
-      {/* Episode info */}
+      {/* Episode info - ALWAYS VISIBLE */}
       <View style={styles.recordingEpisodeInfo}>
         <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
-          {selectedEpisode?.title || 'Episode'}
+          {selectedEpisode?.title}
         </Text>
         <Text style={styles.recordingPodcastName}>
-          {selectedEpisode?.podcastName || podcastTitle || 'Podcast'}
+          {podcastTitle || 'The Town with Matthew Belloni'}
         </Text>
       </View>
-      
-      {/* Replace the complex captionContainer with this simple overlay */}
-      {captionsEnabled && preparedTranscript && (
-        <>
-          {__DEV__ && console.log('🎬 Rendering caption overlay with:', {
-            captionsEnabled,
-            hasTranscript: !!preparedTranscript,
-            position,
-            clipStart,
-            wordsCount: preparedTranscript?.words?.length,
-            isRecording // Add recording status to debug
-          })}
-          <WordBasedChunkedCaptionOverlay
-            transcript={preparedTranscript}
-            currentTimeMs={position}
-            clipStartMs={clipStart}
-          />
-        </>
-      )}
-      
-      {/* Debug info for captions - REMOVED */}
 
-      {/* Control buttons - positioned over waveform when not recording */}
+      {/* Captions - ALWAYS VISIBLE WHEN ENABLED */}
+      {captionsEnabled && preparedTranscript && (
+        <SimpleCaptionOverlay
+          transcript={preparedTranscript}
+          currentTimeMs={position}
+          clipStartMs={clipStart}
+        />
+      )}
+
+      {/* 🎯 KEY FIX: ONLY show controls when NOT actively recording */}
       {!isRecording && (
-        <View style={styles.recordingButtonOverlay}>
-          <View style={styles.recordingButtonRow}>
+        <>
+          {/* Control buttons - HIDDEN DURING RECORDING */}
+          <View style={styles.recordingControls}>
             <TouchableOpacity 
-              style={styles.recordingButtonWide}
+              style={styles.recordingButton}
               onPress={startVideoRecording}
             >
               <MaterialCommunityIcons name="record" size={24} color="#f4f4f4" />
@@ -689,25 +402,24 @@ const RecordingView = ({
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.recordingCancelButton}
-              onPress={async () => {
-                await cleanupRecording();
-                setShowRecordingView(false);
-              }}
+              style={styles.cancelButton}
+              onPress={() => setShowRecordingView(false)}
             >
-              <Text style={styles.recordingCancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
           
-          {/* Status text */}
-          {recordingStatus && typeof recordingStatus === 'string' ? (
+          {/* Status text - HIDDEN DURING RECORDING */}
+          {recordingStatus ? (
             <Text style={styles.recordingStatusText}>{recordingStatus}</Text>
           ) : null}
-        </View>
+        </>
       )}
     </LinearGradient>
   </View>
 );
+          
+
 
 // Real Voice Manager for Captions
 class VoiceManager {
@@ -943,7 +655,8 @@ const AnimatedWaveform = ({
   isPlaying = false,
   size = 'large',
   color = '#d97706',
-  style 
+  style,
+  isRecording = false // NEW: Add recording mode for optimized animation
 }) => {
   const animatedValues = useRef([
     new RNAnimated.Value(0.4),
@@ -982,17 +695,21 @@ const AnimatedWaveform = ({
 
   useEffect(() => {
     if (isPlaying) {
+      // 🎯 OPTIMIZATION: Use slower, smoother animation during screen recording
+      const baseDuration = isRecording ? 800 : 400; // Slower for recording
+      const staggerDelay = isRecording ? 150 : 100;  // More spacing for recording
+      
       const animations = animatedValues.map((animValue, index) => {
         return RNAnimated.loop(
           RNAnimated.sequence([
             RNAnimated.timing(animValue, {
               toValue: 1,
-              duration: 400 + (index * 50),
+              duration: baseDuration + (index * 50),
               useNativeDriver: false,
             }),
             RNAnimated.timing(animValue, {
               toValue: 0.3,
-              duration: 400 + (index * 50),
+              duration: baseDuration + (index * 50),
               useNativeDriver: false,
             }),
           ])
@@ -1002,7 +719,7 @@ const AnimatedWaveform = ({
       animations.forEach((animation, index) => {
         setTimeout(() => {
           animation.start();
-        }, index * 100);
+        }, index * staggerDelay);
       });
 
       return () => {
@@ -1019,7 +736,7 @@ const AnimatedWaveform = ({
 
       RNAnimated.parallel(restAnimations).start();
     }
-  }, [isPlaying]);
+  }, [isPlaying, isRecording]); // Add isRecording to dependencies
 
   return (
     <View style={[waveformStyles.container, { height: config.containerHeight }, style]}>
@@ -1155,20 +872,7 @@ const HomeAnimatedWaveform = ({
 
 
 export default function App() {
-  // Temporarily disable custom font loading to fix the error
-  // const [fontsLoaded, fontError] = useFonts({
-  //   'Lobster': require('./assets/fonts/Lobster-Regular.ttf'),
-  // });
-
-  // Handle font loading error
-  // if (fontError) {
-  //   console.log('Font loading error:', fontError);
-  // }
-
-  // Show loading state while fonts are loading
-  // if (!fontsLoaded && !fontError) {
-  //   return null; // Still loading
-  // }
+  // Font loading disabled for now - using system fonts
 
   // Main app state
   const [episodes, setEpisodes] = useState([]);
@@ -1196,6 +900,28 @@ export default function App() {
   const [isRecordingActive, setIsRecordingActive] = useState(false); // 🔧 NEW: Separate state for monitoring
   const [showRecordingView, setShowRecordingView] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState('');
+  
+  // Caption-Safe Recording State Management
+  const [recordingCleanupState, setRecordingCleanupState] = useState({
+    isCleanupInProgress: false,
+    hadRecordingError: false
+  });
+
+  // App state listener - ONLY for recording cleanup (not audio position)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState) => {
+      console.log('🔄 App state changed:', nextAppState);
+      
+      // ONLY cleanup recording state on background, don't touch audio
+      if (nextAppState === 'background' && isRecording) {
+        console.log('⚠️ App backgrounded during recording - cleanup recording only');
+        await emergencyRecordingCleanup();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [isRecording]); // Only depend on isRecording, not audio states
   
   // URL input state
   const [urlInput, setUrlInput] = useState('');
@@ -1956,6 +1682,28 @@ export default function App() {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
+          
+          // Log position updates during recording
+          if (newSound._isRecording) {
+            console.log('🎵 Position update during recording:', {
+              position: status.positionMillis,
+              clipEnd: newSound._recordingClipEnd,
+              isRecording: newSound._isRecording,
+              shouldStop: status.positionMillis >= newSound._recordingClipEnd
+            });
+          }
+          
+          // Check if we need to stop recording
+          if (newSound._isRecording && status.positionMillis >= newSound._recordingClipEnd) {
+            console.log('🎵 Audio reached clip end - stopping recording', {
+              position: status.positionMillis,
+              clipEnd: newSound._recordingClipEnd,
+              isRecording: newSound._isRecording
+            });
+            newSound._isRecording = false;
+            newSound._recordingClipEnd = null;
+            stopVideoRecording();
+          }
         }
       });
       
@@ -2651,30 +2399,74 @@ export default function App() {
     }
   };
 
+  // Emergency cleanup - ONLY touches recording state, preserves audio/caption state
+  const emergencyRecordingCleanup = async () => {
+    if (recordingCleanupState.isCleanupInProgress) {
+      console.log('🔄 Cleanup already in progress');
+      return;
+    }
 
+    setRecordingCleanupState(prev => ({ ...prev, isCleanupInProgress: true }));
+    
+    try {
+      console.log('🧹 Emergency recording cleanup (preserving audio state)...');
+      
+      // Clear ONLY recording timers (not audio position tracking)
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      
+      if (window.audioStatusCheckInterval) {
+        clearInterval(window.audioStatusCheckInterval);
+        window.audioStatusCheckInterval = null;
+      }
+      
+      // Stop screen recording if active - use try/catch to prevent crashes
+      try {
+        await ScreenRecorder.stopRecording();
+        console.log('📹 Stopped active recording during cleanup');
+      } catch (error) {
+        console.log('⚠️ Error stopping recording during cleanup:', error.message);
+        // Don't throw - we're in cleanup mode
+      }
+      
+      // Reset ONLY recording-related state (preserve audio/caption state)
+      setIsRecording(false);
+      setIsRecordingActive(false);
+      setRecordingStatus('');
+      setShowRecordingView(false);
+      
+      // DON'T touch these - they affect captions:
+      // - Don't pause audio (let user control)
+      // - Don't reset audio position
+      // - Don't change currentTimeMs tracking
+      // - Don't modify sound playback state
+      
+    } catch (error) {
+      console.error('❌ Emergency cleanup failed:', error);
+      setRecordingCleanupState(prev => ({ ...prev, hadRecordingError: true }));
+    } finally {
+      setRecordingCleanupState(prev => ({ ...prev, isCleanupInProgress: false }));
+    }
+  };
 
   const startVideoRecording = async () => {
+    // Guard: Don't start if cleanup is in progress
+    if (recordingCleanupState.isCleanupInProgress) {
+      console.log('⚠️ Recording cleanup in progress, waiting...');
+      return;
+    }
+    
     try {
       setRecordingStatus('Requesting permissions...');
       
       // Request Photos permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required', 
-          'Audio2 needs access to your Photos to save your video clips so you can share them on social media.\n\nPlease go to Settings > Audio2 > Photos and select "All Photos".',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() }
-          ]
-        );
+        Alert.alert('Permission Required', 'Photos access is needed to save videos');
         return;
       }
-
-      // DISABLED: Old Voice API captions - now using Assembly
-      // if (captionsEnabled) {
-      //   // Old Voice API caption logic removed
-      // }
 
       setRecordingStatus('Setting up audio...');
       
@@ -2687,123 +2479,107 @@ export default function App() {
 
       setRecordingStatus('Starting recording...');
       
-      // Ensure no existing recording is in progress
-      try {
-        await ScreenRecorder.stopRecording();
-      } catch (error) {
-        // Ignore errors - this is just cleanup
-      }
+      // 🎯 KEY: Set isRecording=true BEFORE starting ReplayKit
+      setIsRecording(true);
       
       // Start screen recording with microphone disabled (we want app audio only)
       const micEnabled = false;
+      console.log('📹 Starting screen recording with mic disabled...');
       await ScreenRecorder.startRecording(micEnabled);
+      console.log('📹 Screen recording started successfully');
       
-      setIsRecording(true);
-      setIsRecordingActive(true); // 🔧 NEW: Start monitoring
       setRecordingStatus('Recording in progress...');
-      console.log('🎬 Recording started! isRecording set to true, monitoring active');
-      
-
       
       // Seek to clip start and play
-      console.log('🎬 Seeking to clip start:', clipStart, 'ms');
+      console.log('🎵 Seeking to clip start:', clipStart);
       await sound.setPositionAsync(clipStart);
-      console.log('🎬 Starting audio playback');
+      console.log('🎵 Starting audio playback');
       await sound.playAsync();
+      console.log('🎵 Audio playback started');
       
       // Stop recording after clip duration
+      const clipDuration = clipEnd - clipStart;
+      console.log('🎬 Starting recording timer:', { clipStart, clipEnd, clipDuration });
       recordingTimerRef.current = setTimeout(async () => {
+        console.log('⏰ Recording timer expired - stopping recording');
         await stopVideoRecording();
-      }, clipEnd - clipStart); // Use actual clip duration
+      }, clipDuration);
       
-      // Add audio playback monitoring to detect interruptions
-      window.audioStatusCheckInterval = setInterval(async () => {
-        if (sound && isRecordingActive) { // 🔧 NEW: Use isRecordingActive instead of isRecording
-          try {
-            const status = await sound.getStatusAsync();
-                         if (!status.isPlaying && status.positionMillis >= clipEnd) {
-               // Audio finished naturally, stop recording
-               clearInterval(window.audioStatusCheckInterval);
-               await stopVideoRecording();
-             } else if (!status.isPlaying && status.positionMillis < clipEnd) {
-               // Audio stopped unexpectedly, stop recording
-               console.log('🎬 Audio playback interrupted, stopping recording');
-               clearInterval(window.audioStatusCheckInterval);
-               await stopVideoRecording();
-             }
-          } catch (error) {
-            console.log('🎬 Error checking audio status:', error);
-          }
+      // Set a flag to indicate we're recording so the existing callback can handle stopping
+      sound._isRecording = true;
+      sound._recordingClipEnd = clipEnd;
+      console.log('🎬 Set recording flags:', { isRecording: sound._isRecording, clipEnd: sound._recordingClipEnd });
+      
+      // Add a periodic check to debug recording state
+      const debugInterval = setInterval(() => {
+        if (sound && sound._isRecording) {
+          console.log('🎬 Recording debug:', {
+            position: position,
+            clipEnd: sound._recordingClipEnd,
+            isRecording: sound._isRecording,
+            shouldStop: position >= sound._recordingClipEnd
+          });
+        } else {
+          clearInterval(debugInterval);
         }
-      }, 1000); // Check every second
-      
-      // Store recording start time for timer-based updates
-      const recordingStartTime = Date.now();
+      }, 1000);
       
     } catch (error) {
       console.error('Recording error:', error);
       setRecordingStatus(`Error: ${error.message}`);
-      setIsRecording(false);
+      setIsRecording(false); // Reset on error
       
-      // Clear the recording timer if it was set
-      if (recordingTimerRef.current) {
-        clearTimeout(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      
-      // Show helpful error message
       Alert.alert(
         'Recording Error',
-        `Could not start screen recording: ${error.message}\n\nMake sure you've granted screen recording permission to Audio2 in Settings > Screen Recording.`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => setShowRecordingView(false) },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
-        ]
+        `Could not start screen recording: ${error.message}`,
+        [{ text: 'OK', onPress: () => setShowRecordingView(false) }]
       );
     }
   };
 
   const stopVideoRecording = async () => {
+    console.log('🛑 stopVideoRecording called', {
+      isCleanupInProgress: recordingCleanupState.isCleanupInProgress,
+      isRecording: isRecording,
+      soundIsRecording: sound?._isRecording,
+      position: position,
+      clipEnd: clipEnd
+    });
+    
+    // Guard: Don't stop if cleanup is in progress, but allow stopping if sound recording flags are still set
+    if (recordingCleanupState.isCleanupInProgress || (!isRecording && !sound?._isRecording)) {
+      console.log('⚠️ Recording not active or cleanup in progress');
+      return;
+    }
+    
+    // Clean up recording flags
+    if (sound) {
+      sound._isRecording = false;
+      sound._recordingClipEnd = null;
+      console.log('🧹 Cleaned up recording flags');
+    }
+    
     try {
       setRecordingStatus('Stopping recording...');
       
-      // 🔧 NEW: Stop monitoring first
-      setIsRecordingActive(false);
-      
-      // Clear the recording timer
-      if (recordingTimerRef.current) {
-        clearTimeout(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      
-      // Clear audio status check interval
-      if (window.audioStatusCheckInterval) {
-        clearInterval(window.audioStatusCheckInterval);
-        window.audioStatusCheckInterval = null;
-      }
-      
-      // DISABLED: Old Voice API cleanup - now using Assembly
-      // if (isListening) {
-      //   await VoiceManager.stopListening();
-      //   setIsListening(false);
-      //   setCurrentCaptionText('');
-      // }
-      
-      // Reset audio session for playback
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-      });
-      
-      // Pause audio - always pause when stopping recording
-      if (sound) {
+      // Pause audio
+      if (sound && isPlaying) {
+        console.log('🎵 Pausing audio playback');
         await sound.pauseAsync();
         setIsPlaying(false);
       }
       
-      // Stop recording and get the URI
-      const outputUrl = await ScreenRecorder.stopRecording();
+      // Stop recording and get the URI - with crash protection
+      let outputUrl = null;
+      try {
+        console.log('📹 Attempting to stop screen recording...');
+        outputUrl = await ScreenRecorder.stopRecording();
+        console.log('📹 Recording stopped successfully, outputUrl:', outputUrl);
+      } catch (stopError) {
+        console.error('❌ Critical: Failed to stop recording:', stopError);
+        // This is the error that was causing crashes
+        throw new Error(`Stop recording failed: ${stopError.message}`);
+      }
       
       setRecordingStatus('Saving to Photos...');
       
@@ -2812,31 +2588,45 @@ export default function App() {
         await MediaLibrary.saveToLibraryAsync(outputUrl);
         setRecordingStatus('Video saved to Photos!');
         
+        setRecordingStatus('Video saved to Photos!');
+        
         Alert.alert(
-          'Video Created Successfully!',
-          'Your podcast clip has been saved to Photos. You can now share it on LinkedIn, Instagram, Teams, iMessage, or anywhere else!',
+          'Video Created!',
+          'Your podcast clip has been saved to Photos. You can now share it on social media.',
           [
-            { text: 'OK', onPress: () => {
+            { text: 'OK', onPress: async () => {
+              // Stop audio playback and reset position when returning to episode detail page
+              if (sound) {
+                await sound.pauseAsync();
+                setIsPlaying(false);
+                // Reset position to clip start so user can replay the clip
+                if (clipStart !== null) {
+                  await sound.setPositionAsync(clipStart);
+                  setPosition(clipStart);
+                }
+                console.log('🎵 Audio stopped and reset to clip start when returning to episode detail page');
+              }
               setShowRecordingView(false);
               setRecordingStatus('');
+              setIsRecording(false); // Reset recording state
             }}
           ]
         );
       } else {
-        setRecordingStatus('Failed to save recording');
+        setRecordingStatus('Failed to save recording. Try again.');
+        setIsRecording(false); // Reset on failure
       }
       
     } catch (error) {
       console.error('Stop recording error:', error);
       setRecordingStatus(`Error: ${error.message}`);
-    } finally {
-      setIsRecording(false);
-      setIsRecordingActive(false); // 🔧 NEW: Ensure monitoring is stopped
+      setIsRecording(false); // Reset on error
     }
   };
 
   // Cleanup function to handle recording state when exiting
   const cleanupRecording = async () => {
+    console.log('🧹 cleanupRecording called');
     try {
       // Clear the recording timer
       if (recordingTimerRef.current) {
@@ -2844,6 +2634,16 @@ export default function App() {
         recordingTimerRef.current = null;
         console.log('🧹 Cleared recording timer');
       }
+      
+      // Clean up recording flags
+      if (sound) {
+        sound._isRecording = false;
+        sound._recordingClipEnd = null;
+        console.log('🧹 Cleaned up recording flags');
+      }
+      
+      // Also reset the React state to match
+      setIsRecording(false);
       
       // Clear any audio status check intervals
       if (window.audioStatusCheckInterval) {
@@ -3080,6 +2880,20 @@ export default function App() {
     setIsSearching(false);
   };
 
+  // Component cleanup - only recording state
+  useEffect(() => {
+    return () => {
+      console.log('🧹 Component unmounting - cleanup recording state only');
+      // Clear timers but don't touch audio/caption state
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+      }
+      if (window.audioStatusCheckInterval) {
+        clearInterval(window.audioStatusCheckInterval);
+      }
+    };
+  }, []);
+
 
 
   const handleProgressBarPress = (e) => {
@@ -3131,28 +2945,7 @@ export default function App() {
       }
     });
 
-  // Show recording view when active
-  if (showRecordingView) {
-    return (
-      <RecordingView 
-        selectedEpisode={selectedEpisode}
-        podcastTitle={podcastTitle}
-        duration={duration}
-        clipStart={clipStart}
-        clipEnd={clipEnd}
-        position={position}
-        isPlaying={isPlaying}
-        captionsEnabled={captionsEnabled}
-        preparedTranscript={preparedTranscript}
-        isRecording={isRecording}
-        recordingStatus={recordingStatus}
-        startVideoRecording={startVideoRecording}
-        cleanupRecording={cleanupRecording}
-        setShowRecordingView={setShowRecordingView}
-        styles={styles}
-      />
-    );
-  }
+
 
   // 3. Clean up the render conditional (remove debug wrapper)
   // Simple swipe back handler
@@ -3234,6 +3027,79 @@ export default function App() {
   //   );
   // }
 
+  // Add state for about modal
+  const [showAboutModal, setShowAboutModal] = useState(false);
+
+  // About Modal Component
+  const AboutModal = () => (
+    <View style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 99999,
+    }}>
+      <View style={{
+        backgroundColor: '#2d2d2d',
+        borderRadius: 16,
+        padding: 24,
+        marginHorizontal: 20,
+        borderWidth: 2,
+        borderColor: '#d97706',
+        minWidth: 300,
+        maxWidth: 350,
+      }}>
+        <Text style={{
+          color: '#f4f4f4',
+          fontSize: 24,
+          fontWeight: '600',
+          textAlign: 'center',
+          marginBottom: 16,
+        }}>
+          About Audio2
+        </Text>
+        
+        <Text style={{
+          color: '#b4b4b4',
+          fontSize: 14,
+          lineHeight: 20,
+          marginBottom: 20,
+          textAlign: 'center',
+        }}>
+          Audio2 transforms podcast moments into shareable video clips for social media.{'\n\n'}
+          • Search any podcast by name or RSS feed{'\n'}
+          • Select precise start and end points{'\n'}
+          • Add automated captions{'\n'}
+          • Record screen with audio{'\n'}
+          • Save directly to Photos app{'\n\n'}
+          Perfect for Instagram Stories, TikTok, LinkedIn, and more!
+        </Text>
+        
+        <TouchableOpacity 
+          style={{
+            backgroundColor: '#d97706',
+            paddingVertical: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+          }}
+          onPress={() => setShowAboutModal(false)}
+        >
+          <Text style={{
+            color: '#f4f4f4',
+            fontSize: 14,
+            fontWeight: '600',
+          }}>
+            Got it!
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
@@ -3248,250 +3114,277 @@ export default function App() {
         >
           <GestureDetector gesture={composedGesture}>
             <Animated.View style={[animatedStyle, { flex: 1 }]}>
-              {loading && episodes.length === 0 && (
-                <View style={styles.loadingOverlay}>
-                  <ActivityIndicator size="large" color="#d97706" />
-                  <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
-                </View>
-              )}
-              {/* Show Episode List when no episode is selected */}
+              {/* Show recording view when active */}
+              {showRecordingView ? (
+                <RecordingView 
+                  selectedEpisode={selectedEpisode}
+                  podcastTitle={podcastTitle}
+                  duration={duration}
+                  clipStart={clipStart}
+                  clipEnd={clipEnd}
+                  position={position}
+                  isPlaying={isPlaying}
+                  captionsEnabled={captionsEnabled}
+                  preparedTranscript={preparedTranscript}
+                  isRecording={isRecording}
+                  recordingStatus={recordingStatus}
+                  startVideoRecording={startVideoRecording}
+                  cleanupRecording={cleanupRecording}
+                  setShowRecordingView={setShowRecordingView}
+                  styles={styles}
+                />
+              ) : (
+                <>
+                  {loading && episodes.length === 0 && (
+                    <View style={styles.loadingOverlay}>
+                      <ActivityIndicator size="large" color="#d97706" />
+                      <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
+                    </View>
+                  )}
+                            {/* Show Episode List when no episode is selected */}
               {!selectedEpisode && (
                 <>
-                  {/* Header */}
-                  <View style={styles.header}>
-                    <View style={styles.logoContainer}>
-                      <HomeAnimatedWaveform 
-                        isPlaying={isPlaying} 
-                        size="large"
-                        style={{ width: 200, height: 80, marginBottom: -8 }} // Overlap: negative margin
-                      />
-                      <Text
-                        style={{
-                          fontFamily: 'Lobster',
-                          fontSize: 48,
-                          color: '#f4f4f4',
-                          marginTop: -20, // Overlap: more negative margin
-                          textAlign: 'center',
-                          letterSpacing: 1,
-                        }}
-                      >
-                        Audio2
-                      </Text>
-                      <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
-                    </View>
-                  </View>
-
-                  {/* Enhanced Input Section with Search Toggle */}
-                  <View style={styles.inputSection}>
-                    <View style={styles.inputContainer}>
-                      <TextInput
-                        ref={textInputRef}
-                        style={styles.input}
-                        placeholder="Search podcasts or paste RSS feed URL"
-                        placeholderTextColor="#888"
-                        value={urlInput}
-                        blurOnSubmit={true}
-                        onChangeText={(text) => {
-                          console.log('📝 Input changed:', text);
-                          setUrlInput(text);
-                        }}
-                        onSubmitEditing={() => {
-                          console.log('⏎ Submit editing triggered');
-                          handlePodcastSearch(urlInput);
-                          textInputRef.current?.blur();
-                        }}
-                      />
-                    </View>
-                    <View style={styles.buttonContainer}>
-                      <Pressable 
-                        style={styles.submitButton} 
-                        onPress={() => {
-                          const query = urlInput.trim();
-                          if (query) {
-                            handlePodcastSearch(query);
-                            textInputRef.current?.blur();
-                          }
-                        }}
-                      >
-                        <Text style={styles.submitButtonText}>Search</Text>
-                      </Pressable>
-
-                    </View>
-                  </View>
-
-                  {/* Recent Podcasts (show when there are recent podcasts and no current episodes) */}
-                  {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
-                    <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
-                      <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                      <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.recentScrollView}
-                      >
-                        {recentPodcasts.map((podcast) => (
-                          <TouchableOpacity
-                            key={podcast.id}
-                            style={styles.recentPodcastItem}
-                            onPress={() => handleSelectPodcast(podcast)}
-                          >
-                            <Image 
-                              source={{ uri: podcast.artwork }} 
-                              style={styles.recentPodcastArtwork}
-                              defaultSource={require('./assets/logo1.png')}
-                            />
-                            <Text style={styles.recentPodcastName} numberOfLines={2}>
-                              {podcast.name}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Popular Business Podcasts (show when no episodes and no search results) */}
-                  {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
-                    <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
-                      <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
-                      <View style={styles.popularPodcastsList}>
-                        {popularBusinessPodcasts.map((podcast, idx) => (
-                          <TouchableOpacity 
-                            key={podcast.name + idx} 
-                            onPress={async () => {
-                              setSearchTerm(podcast.name);
-                              await handlePodcastSearch(podcast.name);
-                            }} 
-                            style={styles.popularPodcastItem}
-                          >
-                            {popularPodcastsArtwork[podcast.name] ? (
-                              <Image 
-                                source={{ uri: popularPodcastsArtwork[podcast.name] }} 
-                                style={styles.popularPodcastArtwork}
-                                defaultSource={require('./assets/logo1.png')}
-                              />
-                            ) : (
-                              <Text style={styles.popularPodcastEmoji}>{podcast.fallbackEmoji}</Text>
-                            )}
-                            <View style={styles.popularPodcastInfo}>
-                              <Text style={styles.popularPodcastName}>{podcast.name}</Text>
-                              <Text style={styles.popularPodcastCategory}>{podcast.category}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                   {searchResults.length > 0 && (
-  <View style={[styles.searchResultsSection, { paddingHorizontal: PADDING.horizontal }]}>
-    <Text style={styles.sectionTitle}>
-      Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
-    </Text>
-    {searchResults.map((podcast) => (
-      <TouchableOpacity
-        key={podcast.id}
-        style={styles.searchResultItem}
-        onPress={() => handleSelectPodcast(podcast)}
-      >
-        <Image 
-          source={{ uri: podcast.artwork }} 
-          style={styles.searchResultArtwork}
-          defaultSource={require('./assets/logo1.png')}
-        />
-        <View style={styles.searchResultInfo}>
-          <Text style={styles.searchResultName} numberOfLines={2}>
-            {podcast.name}
-          </Text>
-          <Text style={styles.searchResultArtist} numberOfLines={1}>
-            {podcast.artist}
-          </Text>
-          {podcast.genres.length > 0 && (
-            <Text style={styles.searchResultGenre} numberOfLines={1}>
-              {podcast.genres[0]}
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
-
-                  {/* Podcast Header */}
-                  {podcastTitle && episodes.length > 0 && (
-                    <View style={styles.podcastHeader}>
-                      <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
-                    </View>
-                  )}
-                  
-                  {/* Podcast Title when loading */}
-                  {podcastTitle && loading && episodes.length === 0 && (
-                    <View style={styles.podcastHeader}>
-                      <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
-                    </View>
-                  )}
-
-                  {/* Episodes List */}
+                  {/* Loading State */}
                   {loading ? (
-                    <Text style={styles.loadingText}>Loading episodes...</Text>
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color="#d97706" />
+                      <Text style={styles.loadingText}>Loading episodes...</Text>
+                    </View>
                   ) : (
-                    <>
-                      <FlatList
-                        data={episodes}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={({ item: episode }) => (
-                          <TouchableOpacity
-                            style={styles.episodeItem}
-                            onPress={() => playEpisode(episode)}
-                          >
-                            {episode.artwork ? (
-                              <Image 
-                                source={{ uri: episode.artwork }} 
-                                style={styles.episodeArtwork}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <View style={[styles.episodeArtwork, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
-                                <MaterialCommunityIcons name="music-note" size={24} color="#888" />
-                              </View>
-                            )}
-                            <View style={styles.episodeInfo}>
-                              <Text style={styles.episodeTitle} numberOfLines={2}>
-                                {episode.title}
-                              </Text>
-                              <Text style={styles.episodeDate}>
-                                {episode.pubDate ? (() => {
-                                  const date = new Date(episode.pubDate);
-                                  return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
-                                })() : ''}
-                              </Text>
+                    <FlatList
+                      data={episodes}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({ item: episode }) => (
+                        <TouchableOpacity
+                          style={styles.episodeItem}
+                          onPress={() => playEpisode(episode)}
+                        >
+                          {episode.artwork ? (
+                            <Image 
+                              source={{ uri: episode.artwork }} 
+                              style={styles.episodeArtwork}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.episodeArtwork, { backgroundColor: '#404040', justifyContent: 'center', alignItems: 'center' }]}>
+                              <MaterialCommunityIcons name="music-note" size={24} color="#888" />
                             </View>
+                          )}
+                          <View style={styles.episodeInfo}>
+                            <Text style={styles.episodeTitle} numberOfLines={2}>
+                              {episode.title}
+                            </Text>
+                            <Text style={styles.episodeDate}>
+                              {episode.pubDate ? (() => {
+                                const date = new Date(episode.pubDate);
+                                return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+                              })() : ''}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                      showsVerticalScrollIndicator={false}
+                      removeClippedSubviews={true}
+                      maxToRenderPerBatch={5}
+                      windowSize={10}
+                      initialNumToRender={5}
+                      ListHeaderComponent={() => (
+                        <>
+                          {/* Header */}
+                          <View style={styles.header}>
+                            <View style={styles.logoContainer}>
+                              <HomeAnimatedWaveform 
+                                isPlaying={isPlaying} 
+                                size="large"
+                                style={{ width: 200, height: 80, marginBottom: -8 }}
+                              />
+                              <TouchableOpacity onPress={() => setShowAboutModal(true)}>
+                                <Text
+                                  style={{
+                                    fontFamily: 'Lobster',
+                                    fontSize: 48,
+                                    color: '#f4f4f4',
+                                    marginTop: -20,
+                                    textAlign: 'center',
+                                    letterSpacing: 1,
+                                  }}
+                                >
+                                  Audio2
+                                </Text>
+                              </TouchableOpacity>
+                              <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
+                            </View>
+                          </View>
+
+                          {/* Enhanced Input Section with Search Toggle */}
+                          <View style={styles.inputSection}>
+                            <View style={styles.inputContainer}>
+                              <TextInput
+                                ref={textInputRef}
+                                style={styles.input}
+                                placeholder="Search podcasts or paste RSS feed URL"
+                                placeholderTextColor="#888"
+                                value={urlInput}
+                                blurOnSubmit={true}
+                                onChangeText={(text) => {
+                                  console.log('📝 Input changed:', text);
+                                  setUrlInput(text);
+                                }}
+                                onSubmitEditing={() => {
+                                  console.log('⏎ Submit editing triggered');
+                                  handlePodcastSearch(urlInput);
+                                  textInputRef.current?.blur();
+                                }}
+                              />
+                            </View>
+                            <View style={styles.buttonContainer}>
+                              <Pressable 
+                                style={styles.submitButton} 
+                                onPress={() => {
+                                  const query = urlInput.trim();
+                                  if (query) {
+                                    handlePodcastSearch(query);
+                                    textInputRef.current?.blur();
+                                  }
+                                }}
+                              >
+                                <Text style={styles.submitButtonText}>Search</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+
+                          {/* Recent Podcasts */}
+                          {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
+                            <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
+                              <Text style={styles.sectionTitle}>Recent Podcasts</Text>
+                              <ScrollView 
+                                horizontal 
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.recentScrollView}
+                              >
+                                {recentPodcasts.map((podcast) => (
+                                  <TouchableOpacity
+                                    key={podcast.id}
+                                    style={styles.recentPodcastItem}
+                                    onPress={() => handleSelectPodcast(podcast)}
+                                  >
+                                    <Image 
+                                      source={{ uri: podcast.artwork }} 
+                                      style={styles.recentPodcastArtwork}
+                                      defaultSource={require('./assets/logo1.png')}
+                                    />
+                                    <Text style={styles.recentPodcastName} numberOfLines={2}>
+                                      {podcast.name}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </View>
+                          )}
+
+                          {/* Popular Business Podcasts */}
+                          {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
+                            <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
+                              <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                              <View style={styles.popularPodcastsList}>
+                                {popularBusinessPodcasts.map((podcast, idx) => (
+                                  <TouchableOpacity 
+                                    key={podcast.name + idx} 
+                                    onPress={async () => {
+                                      setSearchTerm(podcast.name);
+                                      await handlePodcastSearch(podcast.name);
+                                    }} 
+                                    style={styles.popularPodcastItem}
+                                  >
+                                    {popularPodcastsArtwork[podcast.name] ? (
+                                      <Image 
+                                        source={{ uri: popularPodcastsArtwork[podcast.name] }} 
+                                        style={styles.popularPodcastArtwork}
+                                        defaultSource={require('./assets/logo1.png')}
+                                      />
+                                    ) : (
+                                      <Text style={styles.popularPodcastEmoji}>{podcast.fallbackEmoji}</Text>
+                                    )}
+                                    <View style={styles.popularPodcastInfo}>
+                                      <Text style={styles.popularPodcastName}>{podcast.name}</Text>
+                                      <Text style={styles.popularPodcastCategory}>{podcast.category}</Text>
+                                    </View>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Search Results */}
+                          {searchResults.length > 0 && (
+                            <View style={[styles.searchResultsSection, { paddingHorizontal: PADDING.horizontal }]}>
+                              <Text style={styles.sectionTitle}>
+                                Found {searchResults.length} podcast{searchResults.length !== 1 ? 's' : ''}
+                              </Text>
+                              {searchResults.map((podcast) => (
+                                <TouchableOpacity
+                                  key={podcast.id}
+                                  style={styles.searchResultItem}
+                                  onPress={() => handleSelectPodcast(podcast)}
+                                >
+                                  <Image 
+                                    source={{ uri: podcast.artwork }} 
+                                    style={styles.searchResultArtwork}
+                                    defaultSource={require('./assets/logo1.png')}
+                                  />
+                                  <View style={styles.searchResultInfo}>
+                                    <Text style={styles.searchResultName} numberOfLines={2}>
+                                      {podcast.name}
+                                    </Text>
+                                    <Text style={styles.searchResultArtist} numberOfLines={1}>
+                                      {podcast.artist}
+                                    </Text>
+                                    {podcast.genres.length > 0 && (
+                                      <Text style={styles.searchResultGenre} numberOfLines={1}>
+                                        {podcast.genres[0]}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Podcast Header */}
+                          {podcastTitle && episodes.length > 0 && (
+                            <View style={styles.podcastHeader}>
+                              <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
+                            </View>
+                          )}
+                          
+                          {/* Podcast Title when loading */}
+                          {podcastTitle && loading && episodes.length === 0 && (
+                            <View style={styles.podcastHeader}>
+                              <Text style={styles.podcastHeaderTitle}>{podcastTitle}</Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+                      ListFooterComponent={() => {
+                        console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore);
+                        return showLoadMore ? (
+                          <TouchableOpacity
+                            style={styles.submitButton}
+                            onPress={loadMoreEpisodes}
+                            disabled={isLoadingMore}
+                          >
+                            {isLoadingMore ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+                                <Text style={styles.submitButtonText}>Loading...</Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.submitButtonText}>Load More Episodes</Text>
+                            )}
                           </TouchableOpacity>
-                        )}
-                        showsVerticalScrollIndicator={false}
-                        removeClippedSubviews={true}
-                        maxToRenderPerBatch={5}
-                        windowSize={10}
-                        initialNumToRender={5}
-                        ListFooterComponent={() => {
-                          console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore);
-                          return showLoadMore ? (
-                            <TouchableOpacity
-                              style={styles.submitButton}
-                              onPress={loadMoreEpisodes}
-                              disabled={isLoadingMore}
-                            >
-                              {isLoadingMore ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                  <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
-                                  <Text style={styles.submitButtonText}>Loading...</Text>
-                                </View>
-                              ) : (
-                                <Text style={styles.submitButtonText}>Load More Episodes</Text>
-                              )}
-                            </TouchableOpacity>
-                          ) : null;
-                        }}
-                      />
-                    </>
+                        ) : null;
+                      }}
+                    />
                   )}
                 </>
               )}
@@ -3771,11 +3664,14 @@ export default function App() {
                   )}
                 </>
               )}
+            </>
+          )}
           </Animated.View>
         </GestureDetector>
       </LinearGradient>
               {showRecordingGuidance && <RecordingGuidanceModal />}
         {showProcessingModal && <ProcessingModal />}
+        {showAboutModal && <AboutModal />}
       
       {/* Episode Loading Spinner */}
       {isEpisodeLoading && (
@@ -3832,6 +3728,7 @@ export default function App() {
           </GestureDetector>
         </>
       )}
+      {showAboutModal && <AboutModal />}
     </SafeAreaView>
   </GestureHandlerRootView>
 );
@@ -4556,18 +4453,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   recordingWaveform: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
     marginBottom: 10,
-    height: 50,
-  },
-  recordingWaveformBar: {
-    width: 4,
-    backgroundColor: '#d97706',
-    borderRadius: 2,
-    minHeight: 10,
   },
   recordingEpisodeInfo: {
     alignItems: 'center',
