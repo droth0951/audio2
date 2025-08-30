@@ -316,6 +316,28 @@ const outputUrl = await ScreenRecorder.stopRecording();
 await MediaLibrary.saveToLibraryAsync(outputUrl);
 ```
 
+#### 🎯 FRAME RATE OPTIMIZATIONS (NEW):
+**Problem**: iOS screen recording runs at ~30fps, causing janky audiogram animation during recording.
+
+**Solution**: Optimized AnimatedWaveform component for recording mode:
+```javascript
+// Recording-optimized animation settings:
+const baseDuration = isRecording ? 800 : 400; // Slower for recording
+const staggerDelay = isRecording ? 150 : 100;  // More spacing for recording
+
+// Benefits:
+// - Smoother animation capture at 30fps
+// - Reduced visual jank during screen recording
+// - Better performance during recording process
+// - Maintains smooth 60fps animation in normal app usage
+```
+
+**Technical Details**:
+- iOS screen recording typically captures at 30fps (not 60fps like the app)
+- Faster animations appear choppy when recorded at lower frame rates
+- Slower, more deliberate animations look smoother in recorded output
+- Animation timing optimized specifically for recording mode
+
 ### Output Specifications CONFIRMED:
 
 #### Video Files (Device Tested):

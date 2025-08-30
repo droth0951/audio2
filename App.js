@@ -159,7 +159,7 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
 
   useEffect(() => {
     if (!transcript || typeof currentTimeMs !== 'number') {
-      setCurrentSegment(null);
+      setCurrentCaption('');
       return;
     }
 
@@ -196,113 +196,19 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       });
     }
     
-      // UTTERANCE-BASED CAPTION SYSTEM
-  // Uses complete speaker phrases instead of individual words for natural flow
-  // Falls back to word-based approach if no utterances available
-  // 
-  // 🚨 CRITICAL: If you modify this timing logic, check docs/utterance_timing_guide.md
-  // This is the most fragile part of the caption system and breaks easily.
-  
-  // Helper function to normalize text capitalization based on grammar rules
-  const normalizeTextCapitalization = (text) => {
-    if (!text) return text;
-    
-    // Split into sentences
-    const sentences = text.split(/(?<=[.!?])\s+/);
-    
-    return sentences.map(sentence => {
-      // Skip if empty
-      if (!sentence.trim()) return sentence;
-      
-      // Check if it's a proper noun or should start with capital
-      const firstWord = sentence.trim().split(' ')[0];
-      const shouldCapitalize = 
-        // Proper nouns (common ones)
-        ['I', 'I\'m', 'I\'ll', 'I\'ve', 'I\'d', 'I\'m', 'I\'ll', 'I\'ve', 'I\'d'].includes(firstWord) ||
-        // Names, places, etc. (you can expand this list)
-        ['Yeah', 'Yes', 'No', 'Well', 'So', 'Now', 'Then', 'Here', 'There'].includes(firstWord) ||
-        // If it's already capitalized and seems intentional
-        firstWord[0] === firstWord[0].toUpperCase();
-      
-      if (shouldCapitalize) {
-        return sentence;
-      } else {
-        // Lowercase the first letter
-        return sentence.charAt(0).toLowerCase() + sentence.slice(1);
-      }
-    }).join(' ');
-  };
-  
-  const getCurrentUtterance = (transcript, currentRelativeTimeMs) => {
-      if (!transcript?.utterances || transcript.utterances.length === 0) {
-        return getCurrentWords(transcript, currentRelativeTimeMs); // Fallback
-      }
-      
-      // If we're at the very beginning (first 500ms), show first utterance
-      if (currentRelativeTimeMs <= 500 && transcript.utterances.length > 0) {
-        return {
-          text: normalizeTextCapitalization(transcript.utterances[0].text),
-          speaker: transcript.utterances[0].speaker
-        };
-      }
-      
-      // Find current utterance based on timing
-      const currentUtterance = transcript.utterances.find(utterance => 
-        currentRelativeTimeMs >= utterance.startMs && 
-        currentRelativeTimeMs <= utterance.endMs
-      );
-      
-      if (currentUtterance) {
-        return {
-          text: normalizeTextCapitalization(currentUtterance.text),
-          speaker: currentUtterance.speaker
-        };
-      }
-      
-      return { text: '', speaker: null };
-    };
-
-    const currentCaption = getCurrentUtterance(transcript, clipRelativeTimeMs);
-    
-    console.log('🎯 UTTERANCE CAPTION CHECK:', {
-      relativeTime: clipRelativeTimeMs,
-      hasUtterances: !!transcript?.utterances?.length,
-      utteranceCount: transcript?.utterances?.length || 0,
-      currentUtterance: currentCaption,
-      fallbackToWords: !transcript?.utterances?.length,
-      showingFirstUtterance: clipRelativeTimeMs <= 500 && transcript?.utterances?.length > 0
-    });
-    
-    setCurrentSegment(currentCaption.text ? currentCaption : null);
-    
-    // Debug logging for current caption
-    if (__DEV__ && currentCaption.text) {
-      console.log('🎬 Current utterance caption:', {
-        text: currentCaption.text,
-        speaker: currentCaption.speaker,
-        clipRelativeTimeMs
-      });
-    }
-    
+    // Update the current caption
+    const caption = getCurrentCaption(transcript, clipRelativeTimeMs);
+    setCurrentCaption(caption);
   }, [transcript, currentTimeMs, clipStartMs]);
 
-  if (!currentSegment?.text?.trim()) return null;
-
-  // Debug log to see if captions are being rendered
-  if (__DEV__) {
-    console.log('🎬 RENDERING CAPTION:', {
-      text: currentSegment.text,
-      speaker: currentSegment.speaker,
-      hasText: !!currentSegment.text?.trim()
-    });
-  }
+  // Don't render if no caption
+  if (!currentCaption?.trim()) return null;
 
   return (
     <View style={styles.speakerCaptionContainer}>
       <View style={styles.speakerCaptionBubble}>
-        {/* Caption text - moved to top where A/B labels were */}
         <Text style={styles.speakerCaptionText}>
-          {currentSegment.text}
+          {currentCaption}
         </Text>
       </View>
     </View>
