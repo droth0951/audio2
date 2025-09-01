@@ -959,6 +959,33 @@ export default function App() {
   const [showLoadMore, setShowLoadMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Add these state variables for image caching
+  const [imageCache, setImageCache] = useState(new Map());
+  const [preloadingImages, setPreloadingImages] = useState(new Set());
+
+  // Preloading function for episode artwork
+  const preloadEpisodeArtwork = useCallback(async (episodes) => {
+    const artworkUrls = episodes
+      .map(ep => ep.artwork)
+      .filter(Boolean)
+      .slice(0, 8); // Preload first 8 episodes
+
+    console.log('🖼️ Starting background preload of', artworkUrls.length, 'images');
+    
+    // Preload in small batches to avoid overwhelming slow networks
+    const batchSize = 2;
+    for (let i = 0; i < artworkUrls.length; i += batchSize) {
+      const batch = artworkUrls.slice(i, i + batchSize);
+      await Promise.allSettled(
+        batch.map(uri => Image.prefetch(uri).catch(() => {}))
+      );
+      // Small delay between batches for slow networks
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+    
+    console.log('🖼️ Background preload complete');
+  }, []);
+
   // Function to fetch artwork for all popular podcasts
   const fetchPopularPodcastsArtwork = async () => {
     console.log('🎨 Fetching artwork for popular podcasts...');
@@ -1060,6 +1087,11 @@ export default function App() {
         setEpisodes(cachedEpisodes.slice(0, 5)); // Show only first 5 episodes
         setShowLoadMore(cachedEpisodes.length > 5);
         setCurrentRssFeed(feedUrl);
+        
+        // Trigger background preloading of episode artwork
+        setTimeout(() => {
+          preloadEpisodeArtwork(cachedEpisodes.slice(0, 5));
+        }, 1500); // Wait for UI to render first
         
         // Set podcast title from cache if available
         const cachedPodcastTitle = await AsyncStorage.getItem(`podcast_title_${feedUrl}`);
@@ -1255,6 +1287,11 @@ export default function App() {
       setEpisodes(episodes); // Show only first 5 episodes
       setShowLoadMore(allEpisodes.length > 5); // Show load more if there are more episodes
       setCurrentRssFeed(feedUrl);
+      
+      // Trigger background preloading of episode artwork
+      setTimeout(() => {
+        preloadEpisodeArtwork(episodes);
+      }, 1500); // Wait for UI to render first
       console.log('✅ Feed loaded successfully!');
       console.log('📝 First episode description:', episodes[0]?.description?.substring(0, 100) || 'No description');
       console.log('📊 Total episodes parsed:', allEpisodes.length);

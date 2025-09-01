@@ -166,7 +166,7 @@ export function detectParagraphs(words: Word[]): ParagraphBoundary[] {
     const gap = currWord.startMs - prevWord.endMs;
     
     // Check for paragraph break conditions
-    const endsWithPunctuation = prevWord.text.match(/[.?!]$/);
+    const endsWithPunctuation = prevWord.text.match(/[.?!]["')\]]*$/);
     const longGap = gap >= 1000;
     const shortGapWithPunctuation = gap >= 600 && endsWithPunctuation;
     
