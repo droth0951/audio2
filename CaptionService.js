@@ -107,6 +107,20 @@ class BulletproofCaptionService {
         };
       }
 
+      // CRITICAL FIX: If we're past the first utterance but before the next one,
+      // show the next upcoming utterance to prevent gaps
+      const nextUtterance = this.utterances.find(utterance => 
+        relativeTimeMs < utterance.startMs && utterance.startMs - relativeTimeMs <= 1000
+      );
+      
+      if (nextUtterance) {
+        return {
+          text: this.normalizeText(nextUtterance.text),
+          speaker: nextUtterance.speaker,
+          isActive: false // Indicate this is upcoming
+        };
+      }
+      
       // Graceful fallback: Find closest utterance
       const closestUtterance = this.findClosestUtterance(relativeTimeMs);
       if (closestUtterance) {
@@ -187,8 +201,13 @@ class BulletproofCaptionService {
       normalizedText = truncated + '...';
     }
     
-    // Normalize capitalization
-    return normalizedText.charAt(0).toUpperCase() + normalizedText.slice(1).toLowerCase();
+    // PRESERVE AssemblyAI's capitalization - don't force lowercase
+    // Only ensure first letter is capitalized if it isn't already
+    if (normalizedText.length > 0 && normalizedText.charAt(0) !== normalizedText.charAt(0).toUpperCase()) {
+      normalizedText = normalizedText.charAt(0).toUpperCase() + normalizedText.slice(1);
+    }
+    
+    return normalizedText;
   }
 
   // Debug information
