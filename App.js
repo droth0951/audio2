@@ -2942,8 +2942,9 @@ export default function App() {
   // Create swipe gesture that coordinates with ScrollView
   const swipeBackGesture = Gesture.Pan()
     .simultaneousWithExternalGesture(scrollGesture)
-    .activeOffsetX([50, 999]) // More forgiving activation threshold
-    .failOffsetY([-30, 30])
+    .activeOffsetX([80, 999]) // Higher activation threshold for more intentional swipes
+    .failOffsetY([-15, 15]) // Tighter vertical constraint for straighter swipes
+    .shouldCancelWhenOutside(true) // Cancel if finger goes outside bounds
     .onBegin((event) => {
       // (debug log removed)
     })
