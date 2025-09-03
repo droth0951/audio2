@@ -149,8 +149,9 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       setCurrentCaption('');
     }
 
-    // Debug logging
-    if (__DEV__ && text) {
+    // BULLETPROOF: Simplified debug logging
+    if (__DEV__) {
+      console.log('🎬 === BULLETPROOF CAPTION OVERLAY DEBUG ===');
       console.log('🎬 CaptionService result:', {
         text,
         isActive,
@@ -158,6 +159,9 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
         currentTimeMs,
         clipStartMs
       });
+      
+      // Log CaptionService debug info
+      console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
     }
 
   }, [transcript, currentTimeMs, clipStartMs]);
@@ -247,11 +251,21 @@ const RecordingView = ({
 
       {/* Captions - ALWAYS VISIBLE WHEN ENABLED */}
       {captionsEnabled && preparedTranscript && (
-        <SimpleCaptionOverlay
-          transcript={preparedTranscript}
-          currentTimeMs={position}
-          clipStartMs={clipStart}
-        />
+        <>
+          {/* BULLETPROOF: Enable CaptionService debug mode */}
+          {(() => {
+            captionService.setDebugMode(true);
+            return null;
+          })()}
+          <SimpleCaptionOverlay
+            transcript={preparedTranscript}
+            currentTimeMs={position}
+            clipStartMs={clipStart}
+          />
+          
+          {/* BULLETPROOF: Debug panel for development */}
+          <CaptionDebugPanel currentTimeMs={position} />
+        </>
       )}
 
       {/* 🎯 KEY FIX: ONLY show controls when NOT actively recording */}
@@ -2027,9 +2041,13 @@ export default function App() {
       }
     }
 
-    // LEAN caption generation
+    // BULLETPROOF: Reset CaptionService for new clip
     if (captionsEnabled) {
       console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
+      
+      // CRITICAL: Reset CaptionService state for new clip
+      captionService.reset();
+      
       setIsGeneratingCaptions(true);
       
       // Show processing modal with step-by-step feedback
@@ -2116,32 +2134,16 @@ export default function App() {
               console.log('🎬 Assembly completed! Captions ready');
               
               if (words.length > 0) {
-                // AssemblyAI only transcribes the specified window, so all words should be within our clip
-                // Timestamps from AssemblyAI are relative to the clip start (0-based)
-                console.log('🎬 Using all words from AssemblyAI window (no filtering needed)');
+                // BULLETPROOF: AssemblyAI already provides clip-relative timing when using audio_start_from
+                // DO NOT normalize timestamps - that causes double normalization issues
+                console.log('🎬 Using AssemblyAI response directly (timestamps already normalized)');
                 
-                // Normalize the word objects to use consistent property names
-                // AssemblyAI returns timestamps relative to original audio, need to adjust to clip start
-                const normalizedWords = words.map(word => ({
-                  ...word,
-                  startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
-                  endMs: (word.end || (word.start + 100)) - clipStart
-                }));
-                
-                // Process utterances like words - normalize timestamps
-                const processedUtterances = result.utterances?.map(utterance => ({
-                  ...utterance,
-                  startMs: utterance.start - clipStart,  // Normalize to clip-relative time
-                  endMs: utterance.end - clipStart,      // Normalize to clip-relative time
-                  text: utterance.text,
-                  speaker: utterance.speaker
-                })) || [];
-
-                // Store prepared transcript with both words and utterances
+                // Store the raw AssemblyAI response - no timestamp manipulation needed
                 const normalizedResult = {
                   ...result,
-                  words: normalizedWords,
-                  utterances: processedUtterances  // Add this
+                  // Keep original AssemblyAI structure - timestamps are already clip-relative
+                  words: result.words || [],
+                  utterances: result.utterances || []
                 };
                 
                 // Set up CaptionService with the transcript
@@ -2197,23 +2199,11 @@ export default function App() {
                 // Fallback: use the full text
                 console.log('🎬 No words data, using full text fallback');
                 
-                // Process utterances for fallback case too
-                const processedUtterances = result.utterances?.map(utterance => ({
-                  ...utterance,
-                  startMs: utterance.start - clipStart,
-                  endMs: utterance.end - clipStart,
-                  text: utterance.text,
-                  speaker: utterance.speaker
-                })) || [];
-                
+                // BULLETPROOF: Same approach - no timestamp manipulation
                 const normalizedResult = {
                   ...result,
-                  words: (result.words || []).map(word => ({
-                    ...word,
-                    startMs: word.start - clipStart, // Make timestamps relative to clip start (0-based)
-                    endMs: word.end || (word.start + 100)
-                  })),
-                  utterances: processedUtterances
+                  words: result.words || [],
+                  utterances: result.utterances || []
                 };
                 
                 // Set up CaptionService with the transcript
@@ -2282,7 +2272,28 @@ export default function App() {
     return '';
   };
 
-  // Test function for CaptionService (temporary debugging)
+  // BULLETPROOF: Debug component for development
+const CaptionDebugPanel = ({ currentTimeMs }) => {
+  if (!__DEV__) return null;
+  
+  const debugInfo = captionService.getDebugInfo();
+  const currentCaption = captionService.getCurrentCaption(currentTimeMs);
+  
+  return (
+    <View style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10 }}>
+      <Text style={{ color: 'white', fontSize: 12 }}>
+        {JSON.stringify({
+          relativeTime: currentTimeMs - debugInfo.clipStartMs,
+          currentCaption: currentCaption.text,
+          isActive: currentCaption.isActive,
+          utteranceCount: debugInfo.utteranceCount
+        }, null, 2)}
+      </Text>
+    </View>
+  );
+};
+
+// Test function for CaptionService (temporary debugging)
   const testCaptions = () => {
     console.log('🧪 Caption Test:', {
       enabled: captionsEnabled,
