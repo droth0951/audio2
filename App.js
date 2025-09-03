@@ -2269,48 +2269,20 @@ export default function App() {
                 setPreparedTranscript(normalizedResult);
                 console.log('🎬 Captions ready for', words.length, 'words');
                 
-                // Debug info
+                // BULLETPROOF: Debug info for new system
                 if (__DEV__) {
                   console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
                 }
                 
-                // Debug: Check if normalization worked
-                if (__DEV__ && normalizedWords.length > 0) {
-                  console.log('🎬 Normalization check:', {
-                    originalFirstWordStart: words[0].start,
-                    normalizedFirstWordStart: normalizedWords[0].startMs,
-                    clipStart,
-                    shouldBeZero: words[0].start - clipStart
-                  });
-                }
-                
-                // Debug: Log what we're storing in the transcript
+                // BULLETPROOF: Log what we're storing in the transcript
                 console.log('🔍 Stored Transcript Structure:', {
                   hasWords: !!normalizedResult.words,
                   wordsLength: normalizedResult.words?.length || 0,
-                  hasSegments: !!normalizedResult.segments,
-                  segmentsLength: normalizedResult.segments?.length || 0,
                   hasUtterances: !!normalizedResult.utterances,
                   utterancesLength: normalizedResult.utterances?.length || 0,
                   firstWord: normalizedResult.words?.[0],
-                  firstUtterance: normalizedResult.utterances?.[0],
-                  firstSegment: normalizedResult.segments?.[0]
+                  firstUtterance: normalizedResult.utterances?.[0]
                 });
-                
-                // Debug: Log the timestamps
-                if (__DEV__ && words.length > 0) {
-                  console.log('🎬 AssemblyAI window timestamps debug:', {
-                    firstWord: words[0],
-                    firstWordNormalized: normalizedWords[0],
-                    lastWord: words[words.length - 1],
-                    totalWords: words.length,
-                    clipStart,
-                    clipEnd,
-                    firstWordStartMs: words[0].start,
-                    firstWordStartMsNormalized: normalizedWords[0].startMs,
-                    expectedFirstWordStartMs: words[0].start - clipStart
-                  });
-                }
               } else {
                 // Fallback: use the full text
                 console.log('🎬 No words data, using full text fallback');
