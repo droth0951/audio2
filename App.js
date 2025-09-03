@@ -2063,32 +2063,63 @@ export default function App() {
         // NOTE: We send the full podcast URL but use audio_start_from/audio_end_at
         // AssemblyAI handles the clipping server-side (more efficient than downloading/re-uploading)
         setProcessingStep('Sending clip to transcription service...');
-        console.log('🎬 Submitting to Assembly with timing parameters');
+        
+        console.log('🎬 === ASSEMBLYAI SUBMISSION DEBUG ===');
+        const assemblyAIPayload = {
+          audio_url: trimResponse.audioUrl, // Original podcast URL
+          audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
+          audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
+          punctuate: true,
+          format_text: true,
+          speaker_labels: true,
+          speakers_expected: 2,
+          word_boost: []
+        };
+
+        console.log('🎬 AssemblyAI Request Payload:', {
+          audio_url: assemblyAIPayload.audio_url.substring(0, 100) + '...',
+          audio_start_from: assemblyAIPayload.audio_start_from,
+          audio_end_at: assemblyAIPayload.audio_end_at,
+          clip_duration_ms: assemblyAIPayload.audio_end_at - assemblyAIPayload.audio_start_from,
+          clip_duration_seconds: (assemblyAIPayload.audio_end_at - assemblyAIPayload.audio_start_from) / 1000,
+          start_time_seconds: assemblyAIPayload.audio_start_from / 1000,
+          end_time_seconds: assemblyAIPayload.audio_end_at / 1000,
+          speaker_labels: assemblyAIPayload.speaker_labels,
+          speakers_expected: assemblyAIPayload.speakers_expected
+        });
+
+        // Verify the timing makes sense for the selected episode
+        console.log('🎬 Episode Context Check:', {
+          selectedEpisodeTitle: selectedEpisode?.title?.substring(0, 50) + '...',
+          selectedEpisodeAudioUrl: selectedEpisode?.audioUrl?.substring(0, 100) + '...',
+          urlsMatch: assemblyAIPayload.audio_url === selectedEpisode?.audioUrl,
+          clipStartFormatted: formatTime(clipStart),
+          clipEndFormatted: formatTime(clipEnd)
+        });
+
         const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            audio_url: trimResponse.audioUrl, // Original podcast URL
-            audio_start_from: clipStart, // Use clipStart directly (already in milliseconds)
-            audio_end_at: clipEnd, // Use clipEnd directly (already in milliseconds)
-            punctuate: true,
-            format_text: true,
-            speaker_labels: true,           // Enable speaker detection
-            speakers_expected: 2,           // Most podcasts have 2 speakers
-            word_boost: []
-          })
+          body: JSON.stringify(assemblyAIPayload)
         });
           
-          const job = await submitResponse.json();
-          console.log('🎬 Assembly response:', JSON.stringify(job, null, 2));
-          
-          if (!job.id) {
-            throw new Error(`AssemblyAI submission failed: ${job.error || 'Unknown error'}`);
-          }
-          
-          console.log('🎬 Assembly job created:', job.id, 'Status:', job.status);
+        const job = await submitResponse.json();
+
+        console.log('🎬 AssemblyAI Job Created:', {
+          jobId: job.id,
+          status: job.status,
+          hasError: !!job.error,
+          error: job.error || 'None',
+          response: JSON.stringify(job, null, 2).substring(0, 200) + '...'
+        });
+        
+        if (!job.id) {
+          throw new Error(`AssemblyAI submission failed: ${job.error || 'Unknown error'}`);
+        }
+        
+        console.log('🎬 Assembly job created:', job.id, 'Status:', job.status);
         
         // Step 2: Wait and check (simple polling)
         setProcessingStep('Transcribing your clip...');
@@ -2116,6 +2147,65 @@ export default function App() {
           
                       if (result.status === 'completed') {
               setProcessingStep('Done!');
+              
+              console.log('🎬 === ASSEMBLYAI RESPONSE DEBUG ===');
+              console.log('🎬 AssemblyAI Completed Successfully');
+              
+              // Log the raw response structure
+              console.log('🎬 Raw Response Analysis:', {
+                hasText: !!result.text,
+                textLength: result.text?.length || 0,
+                textPreview: result.text?.substring(0, 100) + '...',
+                hasWords: !!result.words?.length,
+                wordCount: result.words?.length || 0,
+                hasUtterances: !!result.utterances?.length,
+                utteranceCount: result.utterances?.length || 0,
+                hasSpeakerLabels: !!result.speaker_labels
+              });
+              
+              // Log first few words to verify they match expected audio
+              if (result.words?.length > 0) {
+                console.log('🎬 First 5 Words from AssemblyAI:', 
+                  result.words.slice(0, 5).map(w => ({
+                    text: w.text,
+                    start: w.start,
+                    end: w.end,
+                    startSeconds: (w.start / 1000).toFixed(1),
+                    endSeconds: (w.end / 1000).toFixed(1)
+                  }))
+                );
+              }
+              
+              // Log utterance breakdown
+              if (result.utterances?.length > 0) {
+                console.log('🎬 Utterance Breakdown from AssemblyAI:', 
+                  result.utterances.map((u, i) => ({
+                    index: i,
+                    speaker: u.speaker,
+                    startSeconds: (u.start / 1000).toFixed(1),
+                    endSeconds: (u.end / 1000).toFixed(1),
+                    duration: ((u.end - u.start) / 1000).toFixed(1),
+                    textPreview: u.text.substring(0, 50) + '...'
+                  }))
+                );
+              }
+              
+              // CRITICAL: Compare what we requested vs what we got
+              console.log('🎬 Request vs Response Verification:', {
+                requestedStartMs: clipStart,
+                requestedEndMs: clipEnd,
+                requestedDuration: (clipEnd - clipStart) / 1000,
+                responseFirstWordMs: result.words?.[0]?.start || 'No words',
+                responseLastWordMs: result.words?.[result.words?.length - 1]?.end || 'No words',
+                responseDuration: result.words?.length > 0 ? 
+                  ((result.words[result.words.length - 1].end - result.words[0].start) / 1000).toFixed(1) : 'Unknown'
+              });
+              
+              // Most important: Does the returned text make sense for the selected clip?
+              console.log('🎬 CONTENT VERIFICATION:');
+              console.log('🎬 What AssemblyAI returned:', result.text?.substring(0, 200) + '...');
+              console.log('🎬 Expected audio content: [MANUAL VERIFICATION NEEDED]');
+              console.log('🎬 Do these match what you hear? ☝️');
               
               // After AssemblyAI completes, log the raw response structure:
               console.log('🔍 AssemblyAI Raw Response Structure:', {
