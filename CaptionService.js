@@ -90,45 +90,39 @@ class BulletproofCaptionService {
         }
       }
 
-      // SIMPLIFIED: Find the most appropriate utterance for the current time
-      let bestUtterance = null;
-      let bestScore = -1;
+      // SIMPLE: Find the utterance that should be active right now
+      const currentUtterance = this.utterances.find(utterance => 
+        relativeTimeMs >= utterance.startMs && relativeTimeMs <= utterance.endMs
+      );
       
-      for (const utterance of this.utterances) {
-        let score = 0;
-        
-        // If we're within the utterance's time range, it's perfect
-        if (relativeTimeMs >= utterance.startMs && relativeTimeMs <= utterance.endMs) {
-          score = 100;
-        }
-        // If we're just before the utterance starts, it's good
-        else if (relativeTimeMs < utterance.startMs && utterance.startMs - relativeTimeMs <= 1000) {
-          score = 50;
-        }
-        // If we're just after the utterance ends, it's acceptable
-        else if (relativeTimeMs > utterance.endMs && relativeTimeMs - utterance.endMs <= 1000) {
-          score = 25;
-        }
-        // Otherwise, calculate distance-based score
-        else {
-          const distanceToStart = Math.abs(relativeTimeMs - utterance.startMs);
-          const distanceToEnd = Math.abs(relativeTimeMs - utterance.endMs);
-          const minDistance = Math.min(distanceToStart, distanceToEnd);
-          score = Math.max(0, 100 - minDistance / 10); // Higher score for closer utterances
-        }
-        
-        if (score > bestScore) {
-          bestScore = score;
-          bestUtterance = utterance;
-        }
+      if (currentUtterance) {
+        return {
+          text: this.normalizeText(currentUtterance.text),
+          speaker: currentUtterance.speaker,
+          isActive: true
+        };
       }
       
-      if (bestUtterance) {
-        const isActive = relativeTimeMs >= bestUtterance.startMs && relativeTimeMs <= bestUtterance.endMs;
+      // If no current utterance, find the next one coming up
+      const nextUtterance = this.utterances.find(utterance => 
+        relativeTimeMs < utterance.startMs
+      );
+      
+      if (nextUtterance) {
         return {
-          text: this.normalizeText(bestUtterance.text),
-          speaker: bestUtterance.speaker,
-          isActive: isActive
+          text: this.normalizeText(nextUtterance.text),
+          speaker: nextUtterance.speaker,
+          isActive: false
+        };
+      }
+      
+      // If no next utterance, show the last one
+      const lastUtterance = this.utterances[this.utterances.length - 1];
+      if (lastUtterance) {
+        return {
+          text: this.normalizeText(lastUtterance.text),
+          speaker: lastUtterance.speaker,
+          isActive: false
         };
       }
 
