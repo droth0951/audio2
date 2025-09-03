@@ -2018,8 +2018,14 @@ export default function App() {
     </View>
   );
 
-  // 2. Clean up handleCreateVideo (remove debug logs)
+  // BULLETPROOF: Video creation with comprehensive error handling
   const handleCreateVideo = async () => {
+    // Guard: Prevent multiple simultaneous calls
+    if (isGeneratingCaptions) {
+      console.log('🎬 Already generating captions, ignoring duplicate call');
+      return;
+    }
+    
     if (clipStart === null || clipEnd === null) {
       Alert.alert('No Clip Selected', 'Please select start and end points first');
       return;
@@ -2315,11 +2321,25 @@ export default function App() {
         }
         
       } catch (error) {
-        console.log('Caption error:', error);
-        setCaptionsEnabled(false);
+        console.error('🎬 CRITICAL: Caption generation failed:', error);
+        console.error('🎬 Error details:', {
+          message: error.message,
+          stack: error.stack,
+          clipStart,
+          clipEnd,
+          selectedEpisode: selectedEpisode?.title
+        });
+        
+        // BULLETPROOF: Don't disable captions on error, just log and continue
         setPreparedTranscript(null);
         captionService.reset(); // Reset CaptionService on error
-        Alert.alert('Caption Error', 'Continuing without captions');
+        
+        // Show user-friendly error message
+        Alert.alert(
+          'Caption Generation Failed', 
+          'Continuing without captions. You can still record your clip.',
+          [{ text: 'OK' }]
+        );
       }
       
       setIsGeneratingCaptions(false);
