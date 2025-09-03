@@ -179,6 +179,27 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
   );
 };
 
+// BULLETPROOF: Debug component for development
+const CaptionDebugPanel = ({ currentTimeMs }) => {
+  if (!__DEV__) return null;
+  
+  const debugInfo = captionService.getDebugInfo();
+  const currentCaption = captionService.getCurrentCaption(currentTimeMs);
+  
+  return (
+    <View style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10 }}>
+      <Text style={{ color: 'white', fontSize: 12 }}>
+        {JSON.stringify({
+          relativeTime: currentTimeMs - debugInfo.clipStartMs,
+          currentCaption: currentCaption.text,
+          isActive: currentCaption.isActive,
+          utteranceCount: debugInfo.utteranceCount
+        }, null, 2)}
+      </Text>
+    </View>
+  );
+};
+
 // Recording View Component
 const RecordingView = ({ 
   selectedEpisode, 
@@ -2374,26 +2395,7 @@ export default function App() {
     return '';
   };
 
-  // BULLETPROOF: Debug component for development
-const CaptionDebugPanel = ({ currentTimeMs }) => {
-  if (!__DEV__) return null;
-  
-  const debugInfo = captionService.getDebugInfo();
-  const currentCaption = captionService.getCurrentCaption(currentTimeMs);
-  
-  return (
-    <View style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10 }}>
-      <Text style={{ color: 'white', fontSize: 12 }}>
-        {JSON.stringify({
-          relativeTime: currentTimeMs - debugInfo.clipStartMs,
-          currentCaption: currentCaption.text,
-          isActive: currentCaption.isActive,
-          utteranceCount: debugInfo.utteranceCount
-        }, null, 2)}
-      </Text>
-    </View>
-  );
-};
+
 
 // Test function for CaptionService (temporary debugging)
   const testCaptions = () => {
