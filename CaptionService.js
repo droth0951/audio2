@@ -73,6 +73,18 @@ class BulletproofCaptionService {
       // Calculate clip-relative time
       const relativeTimeMs = currentTimeMs - this.clipStartMs;
       
+      // DEBUG: Log timing information
+      if (this.debugMode) {
+        console.log('[CaptionService] Timing debug:', {
+          currentTimeMs,
+          clipStartMs: this.clipStartMs,
+          relativeTimeMs,
+          firstUtteranceStart: this.utterances[0]?.startMs,
+          firstUtteranceEnd: this.utterances[0]?.endMs,
+          utteranceCount: this.utterances.length
+        });
+      }
+      
       // Bounds checking
       if (relativeTimeMs < 0 || relativeTimeMs > (this.clipEndMs - this.clipStartMs)) {
         return { text: '', speaker: null, isActive: false };
