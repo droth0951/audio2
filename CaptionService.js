@@ -90,44 +90,45 @@ class BulletproofCaptionService {
         }
       }
 
-      // Find current utterance using sentence-level timing with some flexibility
-      const currentUtterance = this.utterances.find(utterance => {
-        // Add a small buffer (200ms) to make timing more forgiving
-        const startBuffer = Math.max(0, utterance.startMs - 200);
-        const endBuffer = utterance.endMs + 200;
+      // SIMPLIFIED: Find the most appropriate utterance for the current time
+      let bestUtterance = null;
+      let bestScore = -1;
+      
+      for (const utterance of this.utterances) {
+        let score = 0;
         
-        return relativeTimeMs >= startBuffer && relativeTimeMs <= endBuffer;
-      });
-
-      if (currentUtterance) {
-        return {
-          text: this.normalizeText(currentUtterance.text),
-          speaker: currentUtterance.speaker,
-          isActive: true
-        };
+        // If we're within the utterance's time range, it's perfect
+        if (relativeTimeMs >= utterance.startMs && relativeTimeMs <= utterance.endMs) {
+          score = 100;
+        }
+        // If we're just before the utterance starts, it's good
+        else if (relativeTimeMs < utterance.startMs && utterance.startMs - relativeTimeMs <= 1000) {
+          score = 50;
+        }
+        // If we're just after the utterance ends, it's acceptable
+        else if (relativeTimeMs > utterance.endMs && relativeTimeMs - utterance.endMs <= 1000) {
+          score = 25;
+        }
+        // Otherwise, calculate distance-based score
+        else {
+          const distanceToStart = Math.abs(relativeTimeMs - utterance.startMs);
+          const distanceToEnd = Math.abs(relativeTimeMs - utterance.endMs);
+          const minDistance = Math.min(distanceToStart, distanceToEnd);
+          score = Math.max(0, 100 - minDistance / 10); // Higher score for closer utterances
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestUtterance = utterance;
+        }
       }
-
-      // CRITICAL FIX: If we're past the first utterance but before the next one,
-      // show the next upcoming utterance to prevent gaps
-      const nextUtterance = this.utterances.find(utterance => 
-        relativeTimeMs < utterance.startMs && utterance.startMs - relativeTimeMs <= 1000
-      );
       
-      if (nextUtterance) {
+      if (bestUtterance) {
+        const isActive = relativeTimeMs >= bestUtterance.startMs && relativeTimeMs <= bestUtterance.endMs;
         return {
-          text: this.normalizeText(nextUtterance.text),
-          speaker: nextUtterance.speaker,
-          isActive: false // Indicate this is upcoming
-        };
-      }
-      
-      // Graceful fallback: Find closest utterance
-      const closestUtterance = this.findClosestUtterance(relativeTimeMs);
-      if (closestUtterance) {
-        return {
-          text: this.normalizeText(closestUtterance.text),
-          speaker: closestUtterance.speaker,
-          isActive: false  // Indicate this is a fallback
+          text: this.normalizeText(bestUtterance.text),
+          speaker: bestUtterance.speaker,
+          isActive: isActive
         };
       }
 
