@@ -78,21 +78,26 @@ class BulletproofCaptionService {
         return { text: '', speaker: null, isActive: false };
       }
 
-      // Show first utterance immediately when recording starts (0-500ms grace period)
-      if (relativeTimeMs <= 500) {
+      // Show first utterance immediately when recording starts (0-1000ms grace period)
+      if (relativeTimeMs <= 1000) {
         const firstUtterance = this.utterances[0];
-        return {
-          text: this.normalizeText(firstUtterance.text),
-          speaker: firstUtterance.speaker,
-          isActive: true
-        };
+        if (firstUtterance) {
+          return {
+            text: this.normalizeText(firstUtterance.text),
+            speaker: firstUtterance.speaker,
+            isActive: true
+          };
+        }
       }
 
-      // Find current utterance using sentence-level timing
-      const currentUtterance = this.utterances.find(utterance => 
-        relativeTimeMs >= utterance.startMs && 
-        relativeTimeMs <= utterance.endMs
-      );
+      // Find current utterance using sentence-level timing with some flexibility
+      const currentUtterance = this.utterances.find(utterance => {
+        // Add a small buffer (200ms) to make timing more forgiving
+        const startBuffer = Math.max(0, utterance.startMs - 200);
+        const endBuffer = utterance.endMs + 200;
+        
+        return relativeTimeMs >= startBuffer && relativeTimeMs <= endBuffer;
+      });
 
       if (currentUtterance) {
         return {
@@ -146,12 +151,44 @@ class BulletproofCaptionService {
   normalizeText(text) {
     if (!text) return '';
     
-    // Clean up text formatting
-    return text
+    // CRITICAL: Enforce 2-line maximum (approximately 60 characters)
+    let normalizedText = text
       .trim()
       .replace(/\s+/g, ' ')                    // Normalize whitespace
-      .replace(/([.!?])\s*([a-z])/g, '$1 $2')  // Fix sentence spacing
-      .charAt(0).toUpperCase() + text.slice(1).toLowerCase(); // Normalize capitalization
+      .replace(/([.!?])\s*([a-z])/g, '$1 $2'); // Fix sentence spacing
+    
+    // Enforce character limit for 2-line display
+    if (normalizedText.length > 60) {
+      // Find last complete sentence that fits
+      const sentences = normalizedText.split(/[.!?]+/);
+      let truncated = '';
+      
+      for (const sentence of sentences) {
+        const candidate = truncated + (truncated ? '. ' : '') + sentence.trim();
+        if (candidate.length <= 60 && sentence.trim()) {
+          truncated = candidate;
+        } else {
+          break;
+        }
+      }
+      
+      if (!truncated) {
+        // If no complete sentence fits, truncate at word boundary
+        const words = normalizedText.split(' ');
+        for (const word of words) {
+          if ((truncated + ' ' + word).length <= 60) {
+            truncated += (truncated ? ' ' : '') + word;
+          } else {
+            break;
+          }
+        }
+      }
+      
+      normalizedText = truncated + '...';
+    }
+    
+    // Normalize capitalization
+    return normalizedText.charAt(0).toUpperCase() + normalizedText.slice(1).toLowerCase();
   }
 
   // Debug information
