@@ -791,39 +791,27 @@ export default function App() {
   
   // URL input state
   const [urlInput, setUrlInput] = useState('');
-  // Remove searchText state since we're using refs now
-
   const [currentRssFeed, setCurrentRssFeed] = useState('');
-
-  // Add podcastTitle state
   const [podcastTitle, setPodcastTitle] = useState('');
 
-  // 1. Add state variables
   const [showRecordingGuidance, setShowRecordingGuidance] = useState(false);
   const [dontShowGuidanceAgain, setDontShowGuidanceAgain] = useState(false);
 
-  // Add these shared values for the new scrubber
+  // Shared values for the scrubber
   const progressSharedValue = useSharedValue(0);
   const minValue = useSharedValue(0);
   const maxValue = useSharedValue(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
 
-  // Add these new state variables after your existing state declarations (around line 102)
+
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [recentPodcasts, setRecentPodcasts] = useState([]);
 
-  // Add a ref to keep track of the current AbortController
   const searchAbortController = useRef(null);
-
-  // Add a ref for the TextInput
   const textInputRef = useRef(null);
-  
-  // Use a ref for search text to prevent re-renders during typing
   const searchTextRef = useRef('');
-  
-  // Local state for TextInput value (won't trigger parent re-renders)
   const [localSearchText, setLocalSearchText] = useState('');
   
   // Memoize the onChangeText function to prevent re-renders
@@ -858,13 +846,8 @@ export default function App() {
     console.log('🔍 Search input focused');
   }, []);
 
-  // Add a ref for the recording timer
   const recordingTimerRef = useRef(null);
-
-  // Add a new state variable for the currently loading podcast
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
-
-  // Add state for popular business podcasts with fallback emojis and cached artwork
   const [popularPodcastsArtwork, setPopularPodcastsArtwork] = useState({});
   
   // Load cached artwork on app startup
@@ -968,25 +951,22 @@ export default function App() {
   const notesTranslateY = useSharedValue(screenHeight);
   const notesOpacity = useSharedValue(0);
 
-  // Add state for episode loading spinner
   const [isEpisodeLoading, setIsEpisodeLoading] = useState(false);
   const [loadingEpisodeTitle, setLoadingEpisodeTitle] = useState('');
 
-  // Caption state variables
+  // Caption state
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [preparedTranscript, setPreparedTranscript] = useState(null);
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
 
- // Place here:
   const translateX = useSharedValue(0);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
     opacity: 1 - translateX.value / screenWidth,
   }));
   
-  // Add animated styles for episode notes bottom sheet
   const notesAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: notesTranslateY.value }],
   }));
@@ -995,16 +975,13 @@ export default function App() {
     opacity: notesOpacity.value,
   }));
 
-  // Add this new state after episodes state
   const [allEpisodes, setAllEpisodes] = useState([]);
   const [showLoadMore, setShowLoadMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Add these state variables for image caching
   const [imageCache, setImageCache] = useState(new Map());
   const [preloadingImages, setPreloadingImages] = useState(new Set());
 
-  // Preloading function for episode artwork
   const preloadEpisodeArtwork = useCallback(async (episodes) => {
     const artworkUrls = episodes
       .map(ep => ep.artwork)
@@ -1013,30 +990,25 @@ export default function App() {
 
     console.log('🖼️ Starting background preload of', artworkUrls.length, 'images');
     
-    // Preload in small batches to avoid overwhelming slow networks
     const batchSize = 2;
     for (let i = 0; i < artworkUrls.length; i += batchSize) {
       const batch = artworkUrls.slice(i, i + batchSize);
       await Promise.allSettled(
         batch.map(uri => Image.prefetch(uri).catch(() => {}))
       );
-      // Small delay between batches for slow networks
       await new Promise(resolve => setTimeout(resolve, 800));
     }
     
     console.log('🖼️ Background preload complete');
   }, []);
 
-  // Function to fetch artwork for all popular podcasts
   const fetchPopularPodcastsArtwork = async () => {
     console.log('🎨 Fetching artwork for popular podcasts...');
     const artworkCache = {};
     
     try {
-      // Fetch artwork for each popular podcast
       for (const podcast of popularBusinessPodcasts) {
         try {
-          // Use the existing search function to get podcast data
           const searchResults = await handlePodcastSearch(podcast.name, true); // silent search
           if (searchResults && searchResults.length > 0) {
             const podcastData = searchResults[0];
@@ -1050,10 +1022,8 @@ export default function App() {
         }
       }
       
-      // Update state with fetched artwork
       setPopularPodcastsArtwork(artworkCache);
       
-      // Cache the artwork for future app launches
       try {
         await AsyncStorage.setItem('popular_podcasts_artwork', JSON.stringify(artworkCache));
         console.log('💾 Cached artwork for future use');
@@ -1068,7 +1038,6 @@ export default function App() {
     }
   };
 
-  // NOW define loadPodcastFeed INSIDE the component where it can access state:
   // Cache management functions
   const getCachedFeed = async (feedUrl) => {
     try {
@@ -2985,10 +2954,9 @@ export default function App() {
     })
     .onEnd((event) => {
       const canGoBack =
-        selectedEpisode ||
         showRecordingView ||
         (searchTerm) ||
-        (!selectedEpisode);
+        (episodes.length > 0 && !selectedEpisode);
 
       const threshold = 80;
       if (canGoBack && event.translationX > threshold) {
@@ -3007,10 +2975,10 @@ export default function App() {
       }
     });
 
-  // Compose the gestures - disable swipe-back when on episode detail page
-  const composedGesture = selectedEpisode 
-    ? scrollGesture // Only allow scroll when on episode detail page
-    : Gesture.Race(swipeBackGesture, scrollGesture); // Allow both when not on episode detail page
+  // Compose the gestures - disable swipe-back on episode detail page to preserve scrubber
+  const composedGesture = (showRecordingView || searchTerm || (episodes.length > 0 && !selectedEpisode))
+    ? Gesture.Race(swipeBackGesture, scrollGesture) // Allow both when there's content to go back from
+    : scrollGesture; // Only allow scroll on home screen and episode detail page (no swipe-back)
 
 
 
@@ -3117,6 +3085,11 @@ export default function App() {
                       maxToRenderPerBatch={5}
                       windowSize={10}
                       initialNumToRender={5}
+                      scrollEnabled={true}
+                      directionalLockEnabled={true}
+                      alwaysBounceVertical={false}
+                      alwaysBounceHorizontal={false}
+                      showsHorizontalScrollIndicator={false}
                       ListHeaderComponent={() => (
                         <>
                           {/* Header */}
