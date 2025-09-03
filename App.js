@@ -34,6 +34,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
 import * as KeepAwake from 'expo-keep-awake';
+import AboutModal from './src/components/AboutModal';
+import SearchBar from './src/components/SearchBar';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -789,6 +791,7 @@ export default function App() {
   
   // URL input state
   const [urlInput, setUrlInput] = useState('');
+  // Remove searchText state since we're using refs now
 
   const [currentRssFeed, setCurrentRssFeed] = useState('');
 
@@ -816,6 +819,44 @@ export default function App() {
 
   // Add a ref for the TextInput
   const textInputRef = useRef(null);
+  
+  // Use a ref for search text to prevent re-renders during typing
+  const searchTextRef = useRef('');
+  
+  // Local state for TextInput value (won't trigger parent re-renders)
+  const [localSearchText, setLocalSearchText] = useState('');
+  
+  // Memoize the onChangeText function to prevent re-renders
+  const handleSearchTextChange = useCallback((text) => {
+    console.log('🔍 Search input changed:', text);
+    searchTextRef.current = text; // Store in ref, not state
+    setLocalSearchText(text);     // Update local state for controlled input
+  }, []);
+  
+  // Memoize the onSubmitEditing function to prevent re-renders
+  const handleSearchSubmit = useCallback(() => {
+    const query = searchTextRef.current.trim();
+    console.log('🔍 Search submitted with:', query);
+    if (query) {
+      setUrlInput(query);
+      handlePodcastSearch(query);
+    }
+  }, [handlePodcastSearch]);
+  
+  // Memoize the Search button press handler to prevent re-renders
+  const handleSearchButtonPress = useCallback(() => {
+    const query = searchTextRef.current.trim();
+    console.log('🔍 Search button pressed with:', query);
+    if (query) {
+      setUrlInput(query);
+      handlePodcastSearch(query);
+    }
+  }, [handlePodcastSearch]);
+  
+  // Memoize the onFocus handler to maintain focus
+  const handleSearchFocus = useCallback(() => {
+    console.log('🔍 Search input focused');
+  }, []);
 
   // Add a ref for the recording timer
   const recordingTimerRef = useRef(null);
@@ -1530,6 +1571,8 @@ export default function App() {
 
   // Audio player functions
   const playEpisode = async (episode) => {
+
+    
     console.log('🎧 Playing episode:', episode.title);
     console.log('🖼️ Episode artwork:', episode.artwork);
     
@@ -1609,6 +1652,8 @@ export default function App() {
       });
       
     } catch (error) {
+
+      
       setIsLoading(false);
       setIsEpisodeLoading(false); // Hide loading spinner on error
       Alert.alert('Error', `Failed to load episode: ${error.message}`);
@@ -2383,6 +2428,8 @@ export default function App() {
   };
 
   const startVideoRecording = async () => {
+
+    
     // Guard: Don't start if cleanup is in progress
     if (recordingCleanupState.isCleanupInProgress) {
       console.log('⚠️ Recording cleanup in progress, waiting...');
@@ -2767,7 +2814,7 @@ export default function App() {
   };
 
   // Refactor handlePodcastSearch to handle both URLs and free text
-  const handlePodcastSearch = async (queryOverride, silent = false) => {
+  const handlePodcastSearch = useCallback(async (queryOverride, silent = false) => {
     const query = (typeof queryOverride === 'string' ? queryOverride : searchTerm).trim();
     if (!query) return;
 
@@ -2794,7 +2841,7 @@ export default function App() {
     
     // Return results for silent searches
     return results;
-  };
+  }, [searchTerm]); // ✅ Simplified dependency array - only searchTerm is needed
 
   // Add function to handle selecting a podcast from search
   const handleSelectPodcast = async (podcast) => {
@@ -2982,79 +3029,9 @@ export default function App() {
   // Add state for about modal
   const [showAboutModal, setShowAboutModal] = useState(false);
 
-  // About Modal Component
-  const AboutModal = () => (
-    <View style={{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.9)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 99999,
-    }}>
-      <View style={{
-        backgroundColor: '#2d2d2d',
-        borderRadius: 16,
-        padding: 24,
-        marginHorizontal: 20,
-        borderWidth: 2,
-        borderColor: '#d97706',
-        minWidth: 300,
-        maxWidth: 350,
-      }}>
-        <Text style={{
-          color: '#f4f4f4',
-          fontSize: 24,
-          fontWeight: '600',
-          textAlign: 'center',
-          marginBottom: 16,
-        }}>
-          About Audio2
-        </Text>
-        
-        <Text style={{
-          color: '#b4b4b4',
-          fontSize: 14,
-          lineHeight: 20,
-          marginBottom: 20,
-          textAlign: 'center',
-        }}>
-          Audio2 transforms podcast moments into shareable video clips for social media.{'\n\n'}
-          • Search any podcast by name or RSS feed{'\n'}
-          • Select precise start and end points{'\n'}
-          • Add automated captions{'\n'}
-          • Record screen with audio{'\n'}
-          • Save directly to Photos app{'\n\n'}
-          Perfect for Instagram Stories, TikTok, LinkedIn, and more!
-        </Text>
-        
-        <TouchableOpacity 
-          style={{
-            backgroundColor: '#d97706',
-            paddingVertical: 12,
-            borderRadius: 8,
-            alignItems: 'center',
-          }}
-          onPress={() => setShowAboutModal(false)}
-        >
-          <Text style={{
-            color: '#f4f4f4',
-            fontSize: 14,
-            fontWeight: '600',
-          }}>
-            Got it!
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container}>
         <StatusBar 
           style="light" 
           backgroundColor="#1c1c1c" 
@@ -3168,42 +3145,12 @@ export default function App() {
                             </View>
                           </View>
 
-                          {/* Enhanced Input Section with Search Toggle */}
-                          <View style={styles.inputSection}>
-                            <View style={styles.inputContainer}>
-                              <TextInput
-                                ref={textInputRef}
-                                style={styles.input}
-                                placeholder="Search podcasts or paste RSS feed URL"
-                                placeholderTextColor="#888"
-                                value={urlInput}
-                                blurOnSubmit={true}
-                                onChangeText={(text) => {
-                                  console.log('📝 Input changed:', text);
-                                  setUrlInput(text);
-                                }}
-                                onSubmitEditing={() => {
-                                  console.log('⏎ Submit editing triggered');
-                                  handlePodcastSearch(urlInput);
-                                  textInputRef.current?.blur();
-                                }}
-                              />
-                            </View>
-                            <View style={styles.buttonContainer}>
-                              <Pressable 
-                                style={styles.submitButton} 
-                                onPress={() => {
-                                  const query = urlInput.trim();
-                                  if (query) {
-                                    handlePodcastSearch(query);
-                                    textInputRef.current?.blur();
-                                  }
-                                }}
-                              >
-                                <Text style={styles.submitButtonText}>Search</Text>
-                              </Pressable>
-                            </View>
-                          </View>
+                          {/* Search Bar Component */}
+                          <SearchBar 
+                            onSearch={handlePodcastSearch}
+                            placeholder="Search podcasts or paste RSS feed URL"
+                            containerStyle={styles.inputSection}
+                          />
 
                           {/* Recent Podcasts */}
                           {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
@@ -3623,7 +3570,7 @@ export default function App() {
       </LinearGradient>
               {showRecordingGuidance && <RecordingGuidanceModal />}
         {showProcessingModal && <ProcessingModal />}
-        {showAboutModal && <AboutModal />}
+        {showAboutModal && <AboutModal visible={showAboutModal} onClose={() => setShowAboutModal(false)} />}A
       
       {/* Episode Loading Spinner */}
       {isEpisodeLoading && (
@@ -3680,10 +3627,9 @@ export default function App() {
           </GestureDetector>
         </>
       )}
-      {showAboutModal && <AboutModal />}
     </SafeAreaView>
-  </GestureHandlerRootView>
-);
+      </GestureHandlerRootView>
+  );
 }
 
 const styles = StyleSheet.create({

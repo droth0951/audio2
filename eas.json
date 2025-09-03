@@ -9,16 +9,28 @@
       "distribution": "internal",
       "channel": "development"
     },
-    "preview": {
+    "testflight": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "staging",
+      "releaseChannel": "staging",
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     },
     "production": {
-      "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "releaseChannel": "production",
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "ios": {
+        "appleTeamId": "YOUR_TEAM_ID_HERE"
+      }
+    }
   }
 }

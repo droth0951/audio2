@@ -15,15 +15,19 @@
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-voice/voice": "^3.2.4",
     "@shopify/react-native-skia": "v2.0.0-next.4",
-    "expo": "53.0.19",
-    "expo-audio": "^0.4.8",
+    "expo": "53.0.22",
+    "expo-application": "^6.1.5",
+    "expo-audio": "~0.4.9",
     "expo-av": "^15.1.7",
+    "expo-clipboard": "^7.1.5",
     "expo-dev-client": "~5.2.4",
+    "expo-device": "^7.1.4",
     "expo-file-system": "~18.1.11",
     "expo-linear-gradient": "~14.1.5",
     "expo-media-library": "~17.1.7",
     "expo-screen-recorder": "^0.1.8",
     "expo-status-bar": "~2.2.3",
+    "expo-updates": "~0.28.17",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
@@ -34,10 +38,20 @@
     "react-native-svg": "15.11.2",
     "react-native-view-shot": "4.0.3",
     "react-native-web": "^0.20.0",
-    "expo-updates": "~0.28.17"
+    "expo-font": "~13.3.2"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "typescript": "~5.8.3",
+    "@types/react": "~19.0.10"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "expo-screen-recorder": {
+      "expo": "53.0.22"
+    },
+    "@expo/config-plugins": "10.1.1",
+    "@expo/prebuild-config": "9.0.0",
+    "@expo/metro-config": "0.20.0"
+  }
 }

@@ -114,8 +114,65 @@ LOG  🎬 Current speaker segment: { speaker: "DANIEL", text: "..." }
 
 ---
 
+## 🚀 OTA Update & App Store Release Checklist
+
+### **Before Building for App Store**
+1. **Set consistent versioning in app.json:**
+```json
+{
+  "version": "1.4.0",
+  "runtimeVersion": "1.4.0",
+  "ios": {
+    "buildNumber": "1.4.0"
+  }
+}
+```
+
+2. **Verify EAS Updates configuration exists:**
+```json
+{
+  "updates": {
+    "url": "https://u.expo.dev/5ec96b76-832e-4468-8e21-d5f0c3d3d3a36b"
+  }
+}
+```
+
+3. **Test the update mechanism locally:**
+```bash
+# Deploy a test update
+eas update --branch production --message "Test update"
+
+# Verify it appears in the dashboard
+eas update:list --branch production --limit 1
+```
+
+### **Critical Rules Going Forward**
+- **Never change runtimeVersion without a new build.** Once your App Store app has runtimeVersion "1.4.0", all OTA updates must use "1.4.0" until you submit a new App Store version.
+
+- **For JavaScript-only changes after App Store release:**
+```bash
+eas update --branch production --message "Bug fix description"
+```
+
+- **For native changes (new packages, permissions):**
+  - Increment both version and runtimeVersion together
+  - Create new build and submit to App Store
+
+### **Verification Steps Before App Store Submission**
+- [ ] Create the production build
+- [ ] Deploy a test OTA update
+- [ ] Install the build on a device
+- [ ] Confirm the OTA update downloads and applies
+- [ ] Only then submit to App Store
+
+**Key Insight**: runtimeVersion acts as a compatibility lock. Apps can only receive updates with matching runtimeVersion. Keep them synchronized and document this in your release process.
+
+---
+
 ## 📌 REMINDER
 
 **ALWAYS run this checklist after making server changes. This prevents the recurring audio/caption sync bug that we've encountered multiple times.**
+
+**ALWAYS run the OTA Update checklist before App Store submissions to ensure OTA updates work correctly.**
 
 *Last updated: [Current Date]*
