@@ -2020,6 +2020,15 @@ export default function App() {
 
   // BULLETPROOF: Video creation with comprehensive error handling
   const handleCreateVideo = async () => {
+    console.log('🎬 === HANDLE CREATE VIDEO CALLED ===');
+    console.log('🎬 Function entry state:', {
+      clipStart,
+      clipEnd,
+      selectedEpisode: selectedEpisode?.title,
+      isGeneratingCaptions,
+      captionsEnabled
+    });
+    
     // Guard: Prevent multiple simultaneous calls
     if (isGeneratingCaptions) {
       console.log('🎬 Already generating captions, ignoring duplicate call');
@@ -2027,11 +2036,13 @@ export default function App() {
     }
     
     if (clipStart === null || clipEnd === null) {
+      console.log('🎬 Validation failed: clipStart or clipEnd is null');
       Alert.alert('No Clip Selected', 'Please select start and end points first');
       return;
     }
     
     if (!selectedEpisode) {
+      console.log('🎬 Validation failed: no selectedEpisode');
       Alert.alert('No Episode', 'Please select an episode first');
       return;
     }
@@ -2039,12 +2050,21 @@ export default function App() {
     // Stop audio playback when entering Create Video mode
     if (sound) {
       try {
+        console.log('🎵 Stopping audio for video creation...');
+        console.log('🎵 Sound object state:', {
+          isLoaded: sound._loaded,
+          isPlaying: sound._playing,
+          position: sound._position
+        });
+        
         await sound.stopAsync();
         setIsPlaying(false);
         console.log('🎵 Audio stopped for video creation');
       } catch (error) {
-        console.log('🎵 Error stopping audio:', error);
+        console.error('🎵 Error stopping audio:', error);
       }
+    } else {
+      console.log('🎵 No sound object available');
     }
 
     // BULLETPROOF: Reset CaptionService for new clip
@@ -3625,7 +3645,17 @@ const CaptionDebugPanel = ({ currentTimeMs }) => {
                           {/* Record Clip Button */}
                           <TouchableOpacity 
                             style={styles.recordClipButton} 
-                            onPress={handleCreateVideo}
+                            onPress={() => {
+                              console.log('🎬 === RECORD CLIP BUTTON PRESSED ===');
+                              console.log('🎬 Button state:', {
+                                clipStart,
+                                clipEnd,
+                                selectedEpisode: selectedEpisode?.title,
+                                isGeneratingCaptions,
+                                captionsEnabled
+                              });
+                              handleCreateVideo();
+                            }}
                             disabled={isGeneratingCaptions}
                           >
                             <MaterialCommunityIcons name="video-plus" size={20} color="#f4f4f4" />
