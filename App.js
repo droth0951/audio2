@@ -18,7 +18,7 @@ import {
   ScrollView,
   AppState,
 } from 'react-native';
-import { captionService } from './CaptionService';
+import captionService from './CaptionService';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
