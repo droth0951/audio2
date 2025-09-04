@@ -29,6 +29,15 @@ module.exports = async (req, res) => {
     console.log(`AAI window(ms): ${startMs} → ${endMs} dur=${duration}`);
     console.log(`🎬 Sending to AssemblyAI: ${audio_url} (clipped to ${startMs}-${endMs}ms)`);
     
+    // Add debug to diagnose audio windowing issue
+    console.log('🔍 AUDIO SEGMENT DEBUG:', {
+      originalUrl: audio_url,
+      requestedStart: audio_start_from,
+      requestedEnd: audio_end_at,
+      duration: audio_end_at - audio_start_from,
+      actualAudioPlaying: 'MANUAL CHECK NEEDED'
+    });
+    
     // Request transcript from AssemblyAI
     const response = await axios.post('https://api.assemblyai.com/v2/transcript', {
       audio_url,
