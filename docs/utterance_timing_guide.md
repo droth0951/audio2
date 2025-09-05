@@ -1,7 +1,13 @@
 # Utterance Timing Guide - CRITICAL LESSONS LEARNED
 
-## 🚨 WHY THIS MATTERS
-Utterance timing is the most fragile part of Audio2's caption system. It breaks every time we modify caption logic, and when it's wrong, captions show completely different text than what's being spoken.
+## 🚨 NEW DISCOVERY: Check Railway Server FIRST
+**Before debugging utterance timing, verify Railway transcript endpoint is working:**
+- Railway logs should show `🎬 Transcript request` AND `🎬 AssemblyAI Request Payload`
+- Missing `🎬` logs = Railway parsing failure, not timing issue
+- See **[Caption Sync Debugging Guide](./caption_sync_debugging.md)** for Railway debugging
+
+## 🚨 WHY UTTERANCE TIMING MATTERS
+When Railway server is working correctly, utterance timing is the most fragile part of Audio2's caption system. It breaks when we modify caption logic, and when it's wrong, captions show completely different text than what's being spoken.
 
 ## 📋 THE CORE PROBLEM
 AssemblyAI returns timestamps in **absolute time** (from the start of the full podcast), but we need **clip-relative time** (from the start of our selected clip).
@@ -99,6 +105,8 @@ const clipRelativeTimeMs = position - clipStart;  // Missing Ms suffix
 
 ## 🔍 DEBUGGING UTTERANCE TIMING
 
+**⚠️ IMPORTANT**: Only debug utterance timing AFTER confirming Railway server is working (shows `🎬` logs).
+
 ### 1. Check AssemblyAI Response Structure
 ```javascript
 console.log('🔍 AssemblyAI Raw Response Structure:', {
@@ -144,6 +152,12 @@ Before considering utterance timing "working":
 
 ## 🚨 RED FLAGS (TIMING IS BROKEN)
 
+### Railway Server Issues (Check FIRST):
+- No `🎬 Transcript request` logs in Railway
+- No `🎬 AssemblyAI Request Payload` logs in Railway
+- HTTP 200 response but no console output
+
+### Utterance Timing Issues (Check SECOND):
 - Captions show "X" when audio says "Y"
 - First utterance never appears
 - All timestamps are negative

@@ -1,7 +1,36 @@
 # Audio2 Caption Sync Debugging Guide
 
+## 🚨 CRITICAL: RAILWAY SERVER ISSUES (NEW DISCOVERY)
+**If captions show wrong text, check Railway logs FIRST:**
+
+### The Silent Failure Pattern
+**Problem**: App calls Railway `/api/transcript` but transcript endpoint never executes.
+**Symptoms**: 
+- Railway logs show `🎵 Audio trim request` (trim-audio endpoint)
+- Railway logs show HTTP request: `POST /api/transcript 200 250ms`
+- Railway logs **MISSING** `🎬` debug logs from transcript endpoint
+- AssemblyAI receives wrong timestamps (milliseconds instead of seconds)
+
+### Root Cause: Request Parsing Failure
+The transcript request reaches Railway (HTTP 200) but fails during JSON parsing or request validation **before** executing any handler code. This means:
+1. Your conversion logic (ms→seconds) is correct but never runs
+2. AssemblyAI gets called with raw millisecond values (229728 instead of 230)
+3. AssemblyAI transcribes wrong audio segment (3+ hours into podcast)
+
+### Debug Steps for Railway Issues:
+```javascript
+// 1. Check Railway logs for this pattern:
+// ✅ PRESENT: 🎵 Audio trim request: { startMs: 229728, endMs: 259728 }
+// ✅ PRESENT: POST /api/transcript 200 250ms
+// ❌ MISSING: 🎬 Transcript request: { audio_start_from: 229728, ... }
+// ❌ MISSING: 🎬 AssemblyAI Request Payload: { convertedStartSecs: 230, ... }
+
+// 2. If transcript logs are missing, check payload validation
+console.log('🔍 Request payload being sent:', JSON.stringify(payload, null, 2));
+```
+
 ## 🚨 CRITICAL: TIMING ISSUES
-**If captions show wrong text or timing is off, check this FIRST:**
+**If Railway logs look correct but captions still wrong:**
 📋 **[Utterance Timing Guide](./utterance_timing_guide.md)** - The most fragile part of the caption system
 
 ## Common Symptom: Caption Text Doesn't Match Audio
@@ -76,6 +105,13 @@ const endIndex = Math.min(words.length, currentIndex + 3);
 
 ## 🎯 Debug Checklist:
 
+### Railway Server Issues (Check FIRST):
+- [ ] Railway logs show `🎬 Transcript request` logs (not just `🎵 Audio trim request`)
+- [ ] Railway logs show `🎬 AssemblyAI Request Payload` with converted seconds
+- [ ] HTTP response is 200 AND console logs appear
+- [ ] No JSON parsing errors in Railway logs
+
+### Caption Timing Issues (Check SECOND):
 - [ ] `shouldShow` array contains expected words
 - [ ] `actuallyShowing` matches `shouldShow`
 - [ ] Time units are in milliseconds (not seconds)
@@ -93,6 +129,14 @@ const endIndex = Math.min(words.length, currentIndex + 3);
 ```
 
 ## 🚨 Red Flags:
+
+### Railway Server Red Flags (CRITICAL):
+- Railway shows HTTP 200 but no `🎬` console logs
+- Only `🎵` logs appear (trim-audio only)
+- AssemblyAI gets milliseconds instead of seconds
+- Transcripts are for wrong audio segments (hours off)
+
+### Caption Timing Red Flags:
 - `shouldShow` is empty but audio is playing
 - `shouldShow` has multiple words when only one should be active
 - `actuallyShowing` doesn't match `shouldShow`

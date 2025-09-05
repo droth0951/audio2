@@ -117,7 +117,20 @@ const startNewClip = () => {
 
 ## Debugging
 
-When captions aren't working, use these tools:
+### Priority 1: Check Railway Server Logs FIRST
+**Before debugging CaptionService, verify the Railway server is working:**
+
+```bash
+# Check Railway logs for this pattern:
+# ✅ SHOULD SEE: 🎬 Transcript request: { audio_start_from: 229728, ... }
+# ✅ SHOULD SEE: 🎬 AssemblyAI Request Payload: { convertedStartSecs: 230, ... }
+# ❌ RED FLAG: Only seeing 🎵 logs (trim-audio) but no 🎬 logs (transcript)
+```
+
+**If transcript logs are missing**, the issue is Railway server request parsing, not CaptionService.
+
+### Priority 2: CaptionService Debugging
+When Railway logs look correct but captions still wrong:
 
 ```javascript
 // Get detailed debug info
@@ -133,11 +146,13 @@ captionService.setDebugMode(true);
 ## Rules Going Forward
 
 ### ✅ **DO:**
-- Only use `captionService.getCurrentCaption(currentTimeMs)` for captions
+- **FIRST**: Check Railway logs for `🎬` transcript debug output
+- **THEN**: Use `captionService.getCurrentCaption(currentTimeMs)` for captions
 - Call `captionService.setTranscript()` once when AssemblyAI completes
 - Call `captionService.reset()` when starting new clips
 
 ### ❌ **DON'T:**
+- Debug CaptionService before checking Railway server logs
 - Add caption timing logic anywhere else in your app
 - Modify transcript data outside of CaptionService
 - Try to "fix" caption timing in your components
