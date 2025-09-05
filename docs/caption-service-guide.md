@@ -117,7 +117,17 @@ const startNewClip = () => {
 
 ## Debugging
 
-### Priority 1: Check Railway Server Logs FIRST
+### Priority 0: Check Railway Deployment Branch FIRST
+**⚠️ RAILWAY ONLY DEPLOYS FROM `main` BRANCH ⚠️**
+```bash
+# If working on feature branch, merge to main first:
+git checkout main
+git merge your-feature-branch
+git push origin main
+# Wait 2-3 minutes for Railway deployment
+```
+
+### Priority 1: Check Railway Server Logs SECOND
 **Before debugging CaptionService, verify the Railway server is working:**
 
 ```bash

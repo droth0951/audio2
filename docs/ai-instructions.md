@@ -32,6 +32,12 @@ Mobile App → Railway Proxy → AssemblyAI API
          (ASSEMBLY_AI_API_KEY)
 ```
 
+## 🚨 CRITICAL: Railway Deployment Branch
+**⚠️ RAILWAY ONLY DEPLOYS FROM `main` BRANCH ⚠️**
+- Railway server changes must be merged to `main` and pushed
+- Feature branches are ignored by Railway deployment
+- Always verify: `git checkout main && git merge feature-branch && git push origin main`
+
 ## Key Additions Made:
 
 1. **Cost Optimization Strategy**: Added the critical rule about never sending full audio to AssemblyAI

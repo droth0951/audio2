@@ -14,8 +14,11 @@
 - [ ] Changes made to any server-side files
 
 ### 2. **Deploy to Railway**
-- [ ] Push changes to main branch
-- [ ] Wait for Railway deployment to complete
+**⚠️ CRITICAL: RAILWAY ONLY DEPLOYS FROM `main` BRANCH ⚠️**
+- [ ] **FIRST**: Ensure changes are in `main` branch (not feature branch)
+- [ ] If working on feature branch: `git checkout main && git merge feature-branch`
+- [ ] Push changes to main branch: `git push origin main`
+- [ ] Wait for Railway deployment to complete (2-3 minutes)
 - [ ] Check Railway dashboard for deployment status
 
 ---
@@ -54,11 +57,12 @@ LOG  🎬 Assembly response: {
 ## 🐛 Common Issues & Solutions
 
 ### **Issue**: `"speaker_labels": false` in logs
-**Cause**: Server changes not deployed
+**Cause**: Server changes not deployed (likely wrong branch)
 **Solution**: 
-1. Check Railway deployment status
-2. Force redeploy from Railway dashboard
-3. Wait 2-3 minutes for deployment to complete
+1. **CHECK**: Are you working on feature branch? Railway won't see it!
+2. Merge to main: `git checkout main && git merge feature-branch && git push origin main`
+3. Wait 2-3 minutes for Railway deployment
+4. If still failing, force redeploy from Railway dashboard
 
 ### **Issue**: Audio doesn't match captions
 **Cause**: Wrong transcript segment or timing offset

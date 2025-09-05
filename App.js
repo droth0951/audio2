@@ -149,20 +149,20 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       setCurrentCaption('');
     }
 
-    // BULLETPROOF: Simplified debug logging
-    if (__DEV__) {
-      console.log('🎬 === BULLETPROOF CAPTION OVERLAY DEBUG ===');
-      console.log('🎬 CaptionService result:', {
-        text,
-        isActive,
-        speaker,
-        currentTimeMs,
-        clipStartMs
-      });
-      
-      // Log CaptionService debug info
-      console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
-    }
+    // Debug logging disabled during screen recording to prevent main thread blocking
+    // if (__DEV__) {
+    //   console.log('🎬 === BULLETPROOF CAPTION OVERLAY DEBUG ===');
+    //   console.log('🎬 CaptionService result:', {
+    //     text,
+    //     isActive,
+    //     speaker,
+    //     currentTimeMs,
+    //     clipStartMs
+    //   });
+    //   
+    //   // Log CaptionService debug info
+    //   console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
+    // }
 
   }, [transcript, currentTimeMs, clipStartMs]);
 

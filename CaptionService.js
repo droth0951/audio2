@@ -86,17 +86,17 @@ class BulletproofCaptionService {
         shouldBeActive: (currentTimeMs - this.clipStartMs) >= 400 && (currentTimeMs - this.clipStartMs) <= 14080
       });
       
-      // Add this temporarily to see what's happening
-      console.log('🔍 CHECKING ALL UTTERANCES:', {
-        utteranceCount: this.utterances?.length,
-        allUtterances: this.utterances?.map((u, i) => ({
-          index: i,
-          startMs: u.startMs,
-          endMs: u.endMs,
-          text: u.text.substring(0, 20) + '...'
-        })),
-        currentTime: currentTimeMs - this.clipStartMs
-      });
+      // Debug logging disabled during screen recording to prevent main thread blocking
+      // console.log('🔍 CHECKING ALL UTTERANCES:', {
+      //   utteranceCount: this.utterances?.length,
+      //   allUtterances: this.utterances?.map((u, i) => ({
+      //     index: i,
+      //     startMs: u.startMs,
+      //     endMs: u.endMs,
+      //     text: u.text.substring(0, 20) + '...'
+      //   })),
+      //   currentTime: currentTimeMs - this.clipStartMs
+      // });
       
       if (this.debugMode) {
         console.log('[CaptionService] Timing debug:', {

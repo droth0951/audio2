@@ -1,7 +1,13 @@
 # Audio2 Caption Sync Debugging Guide
 
-## 🚨 CRITICAL: RAILWAY SERVER ISSUES (NEW DISCOVERY)
-**If captions show wrong text, check Railway logs FIRST:**
+## 🚨 CRITICAL: RAILWAY DEPLOYMENT BRANCH (CHECK FIRST!)
+**⚠️ RAILWAY ONLY DEPLOYS FROM `main` BRANCH ⚠️**
+- If you're working on feature branches, Railway **WILL NOT** see your changes
+- Always merge to `main` and push to deploy Railway server changes
+- Git push success ≠ Railway deployment
+
+## 🚨 CRITICAL: RAILWAY SERVER ISSUES 
+**After confirming deployment, if captions show wrong text, check Railway logs:**
 
 ### The Silent Failure Pattern
 **Problem**: App calls Railway `/api/transcript` but transcript endpoint never executes.
