@@ -38,8 +38,8 @@ module.exports = async (req, res) => {
       actualAudioPlaying: 'MANUAL CHECK NEEDED'
     });
     
-    // Request transcript from AssemblyAI
-    const response = await axios.post('https://api.assemblyai.com/v2/transcript', {
+    // Prepare payload with converted values
+    const assemblyAIPayload = {
       audio_url,
       audio_start_from: Math.floor(startMs / 1000),  // Convert ms to seconds: 324000 → 324
       audio_end_at: Math.floor(endMs / 1000),        // Convert ms to seconds: 342000 → 342
@@ -48,7 +48,19 @@ module.exports = async (req, res) => {
       speaker_labels: true,           // Enable speaker detection
       speakers_expected: 2,           // Most podcasts have 2 speakers
       word_boost: [],
-    }, {
+    };
+    
+    // DEBUG: Verify payload before sending to AssemblyAI
+    console.log('🎬 AssemblyAI Request Payload:', {
+      originalStartMs: startMs,
+      originalEndMs: endMs,
+      convertedStartSecs: assemblyAIPayload.audio_start_from,
+      convertedEndSecs: assemblyAIPayload.audio_end_at,
+      duration: assemblyAIPayload.audio_end_at - assemblyAIPayload.audio_start_from
+    });
+    
+    // Request transcript from AssemblyAI
+    const response = await axios.post('https://api.assemblyai.com/v2/transcript', assemblyAIPayload, {
       headers: {
         'Authorization': `Bearer ${ASSEMBLY_AI_API_KEY}`,
         'Content-Type': 'application/json',
