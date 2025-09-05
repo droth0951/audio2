@@ -41,8 +41,8 @@ module.exports = async (req, res) => {
     // Request transcript from AssemblyAI
     const response = await axios.post('https://api.assemblyai.com/v2/transcript', {
       audio_url,
-      audio_start_from: startMs,
-      audio_end_at: endMs,
+      audio_start_from: Math.floor(startMs / 1000),  // Convert ms to seconds: 324000 → 324
+      audio_end_at: Math.floor(endMs / 1000),        // Convert ms to seconds: 342000 → 342
       punctuate: punctuate !== undefined ? punctuate : true,
       format_text: format_text !== undefined ? format_text : true,
       speaker_labels: true,           // Enable speaker detection

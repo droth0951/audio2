@@ -2275,12 +2275,21 @@ export default function App() {
                 // DO NOT normalize timestamps - that causes double normalization issues
                 console.log('🎬 Using AssemblyAI response directly (timestamps already normalized)');
                 
-                // Store the raw AssemblyAI response - no timestamp manipulation needed
+                // Store the raw AssemblyAI response - normalize utterances to clip-relative timing
+                const processedUtterances = result.utterances?.map(utterance => ({
+                  ...utterance,
+                  startMs: utterance.start - clipStart,  // Actually subtract clipStart
+                  endMs: utterance.end - clipStart,      // Actually subtract clipStart  
+                  text: utterance.text,
+                  speaker: utterance.speaker,
+                  normalized: true
+                })) || [];
+                
                 const normalizedResult = {
                   ...result,
                   // Keep original AssemblyAI structure - timestamps are already clip-relative
                   words: result.words || [],
-                  utterances: result.utterances || []
+                  utterances: processedUtterances  // These are NOW normalized
                 };
                 
                 // Set up CaptionService with the transcript
@@ -2308,11 +2317,20 @@ export default function App() {
                 // Fallback: use the full text
                 console.log('🎬 No words data, using full text fallback');
                 
-                // BULLETPROOF: Same approach - no timestamp manipulation
+                // BULLETPROOF: Same approach - normalize utterances properly
+                const processedUtterances = result.utterances?.map(utterance => ({
+                  ...utterance,
+                  startMs: utterance.start - clipStart,  // Actually subtract clipStart
+                  endMs: utterance.end - clipStart,      // Actually subtract clipStart  
+                  text: utterance.text,
+                  speaker: utterance.speaker,
+                  normalized: true
+                })) || [];
+                
                 const normalizedResult = {
                   ...result,
                   words: result.words || [],
-                  utterances: result.utterances || []
+                  utterances: processedUtterances  // These are NOW normalized
                 };
                 
                 // Set up CaptionService with the transcript

@@ -49,13 +49,18 @@ class BulletproofCaptionService {
       }];
     }
 
+    // Check if utterances are already normalized (from App.js)
+    if (response.utterances[0]?.startMs !== undefined) {
+      // Already normalized in App.js - use directly
+      return response.utterances;
+    }
+    
+    // Legacy: Handle raw AssemblyAI format
     return response.utterances.map(utterance => {
-      // CRITICAL: AssemblyAI already provides clip-relative timing when using audio_start_from
-      // DO NOT subtract clipStart again - that causes double normalization
       return {
         text: utterance.text,
-        startMs: utterance.start,     // ✅ Already normalized by AssemblyAI
-        endMs: utterance.end,         // ✅ Already normalized by AssemblyAI  
+        startMs: utterance.start,     // Use raw AssemblyAI timing
+        endMs: utterance.end,         // Use raw AssemblyAI timing
         speaker: utterance.speaker,
         confidence: utterance.confidence,
         normalized: true
@@ -74,6 +79,25 @@ class BulletproofCaptionService {
       const relativeTimeMs = currentTimeMs - this.clipStartMs;
       
       // DEBUG: Log timing information
+      console.log('TIMING CHECK:', {
+        firstUtteranceStart: this.utterances?.[0]?.startMs,
+        firstUtteranceEnd: this.utterances?.[0]?.endMs,
+        currentRelativeTime: currentTimeMs - this.clipStartMs,
+        shouldBeActive: (currentTimeMs - this.clipStartMs) >= 400 && (currentTimeMs - this.clipStartMs) <= 14080
+      });
+      
+      // Add this temporarily to see what's happening
+      console.log('🔍 CHECKING ALL UTTERANCES:', {
+        utteranceCount: this.utterances?.length,
+        allUtterances: this.utterances?.map((u, i) => ({
+          index: i,
+          startMs: u.startMs,
+          endMs: u.endMs,
+          text: u.text.substring(0, 20) + '...'
+        })),
+        currentTime: currentTimeMs - this.clipStartMs
+      });
+      
       if (this.debugMode) {
         console.log('[CaptionService] Timing debug:', {
           currentTimeMs,
@@ -88,18 +112,6 @@ class BulletproofCaptionService {
       // Bounds checking
       if (relativeTimeMs < 0 || relativeTimeMs > (this.clipEndMs - this.clipStartMs)) {
         return { text: '', speaker: null, isActive: false };
-      }
-
-      // Show first utterance immediately when recording starts (0-1000ms grace period)
-      if (relativeTimeMs <= 1000) {
-        const firstUtterance = this.utterances[0];
-        if (firstUtterance) {
-          return {
-            text: this.normalizeText(firstUtterance.text),
-            speaker: firstUtterance.speaker,
-            isActive: true
-          };
-        }
       }
 
       // SIMPLE: Find the utterance that should be active right now
