@@ -90,6 +90,33 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid duration', duration: durationSeconds });
     }
     
+    // URL RESOLUTION DEBUG - Check what URL AssemblyAI will actually get
+    console.log('🔍 URL RESOLUTION CHECK:');
+    console.log('  Original URL:', audio_url);
+    
+    try {
+      // Test the URL to see if it redirects
+      const urlCheckResponse = await axios.head(audio_url, {
+        maxRedirects: 0,  // Don't follow redirects, we want to see them
+        validateStatus: () => true,
+        timeout: 10000
+      });
+      
+      console.log('  URL Check Status:', urlCheckResponse.status);
+      console.log('  URL Check Headers:', JSON.stringify({
+        'location': urlCheckResponse.headers.location,
+        'content-type': urlCheckResponse.headers['content-type'],
+        'content-length': urlCheckResponse.headers['content-length']
+      }, null, 2));
+      
+      if (urlCheckResponse.headers.location) {
+        console.log('🔄 URL REDIRECTS TO:', urlCheckResponse.headers.location);
+      }
+      
+    } catch (urlError) {
+      console.log('⚠️ URL check failed (but continuing):', urlError.message);
+    }
+
     // Prepare AssemblyAI payload
     const assemblyAIPayload = {
       audio_url,
