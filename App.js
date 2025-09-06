@@ -3115,8 +3115,8 @@ export default function App() {
                       <Text style={styles.loadingOverlayText}>Loading recent episodes…</Text>
                     </View>
                   )}
-                            {/* Show Episode List when no episode is selected */}
-              {!selectedEpisode && (
+                  {/* Show Episode List when no episode is selected */}
+                  {!selectedEpisode && (
                 <>
                   {/* Loading State */}
                   {loading ? (
