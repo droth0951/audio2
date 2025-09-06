@@ -149,24 +149,11 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
       setCurrentCaption('');
     }
 
-    // BULLETPROOF: Simplified debug logging
-    if (__DEV__) {
-      console.log('🎬 === BULLETPROOF CAPTION OVERLAY DEBUG ===');
-      console.log('🎬 CaptionService result:', {
-        text,
-        isActive,
-        speaker,
-        currentTimeMs,
-        clipStartMs
-      });
-      
-      // Log CaptionService debug info
-      console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
-    }
-
   }, [transcript, currentTimeMs, clipStartMs]);
 
-  if (!currentCaption.trim()) return null;
+  if (!currentCaption.trim()) {
+    return null;
+  }
 
   return (
     <View style={styles.speakerCaptionContainer}>
@@ -253,11 +240,7 @@ const RecordingView = ({
       {/* Captions - ALWAYS VISIBLE WHEN ENABLED */}
       {captionsEnabled && preparedTranscript && (
         <>
-          {/* BULLETPROOF: Enable CaptionService debug mode */}
-          {(() => {
-            captionService.setDebugMode(true);
-            return null;
-          })()}
+          {/* CaptionService debug mode disabled to prevent white screen */}
           <SimpleCaptionOverlay
             transcript={preparedTranscript}
             currentTimeMs={position}
@@ -1608,15 +1591,8 @@ export default function App() {
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
           
-          // Log position updates during recording
-          if (newSound._isRecording) {
-            console.log('🎵 Position update during recording:', {
-              position: status.positionMillis,
-              clipEnd: newSound._recordingClipEnd,
-              isRecording: newSound._isRecording,
-              shouldStop: status.positionMillis >= newSound._recordingClipEnd
-            });
-          }
+          // Minimal logging during recording - only errors
+          // Position updates are working, logging removed to prevent white screen
           
           // Check if we need to stop recording
           if (newSound._isRecording && status.positionMillis >= newSound._recordingClipEnd) {
@@ -2572,18 +2548,8 @@ export default function App() {
       console.log('🎬 Set recording flags:', { isRecording: sound._isRecording, clipEnd: sound._recordingClipEnd });
       
       // Add a periodic check to debug recording state
-      const debugInterval = setInterval(() => {
-        if (sound && sound._isRecording) {
-          console.log('🎬 Recording debug:', {
-            position: position,
-            clipEnd: sound._recordingClipEnd,
-            isRecording: sound._isRecording,
-            shouldStop: position >= sound._recordingClipEnd
-          });
-        } else {
-          clearInterval(debugInterval);
-        }
-      }, 1000);
+      // Debug logging removed to prevent white screen during recording
+      // Position and recording state are monitored by audio status callback
       
     } catch (error) {
       console.error('Recording error:', error);

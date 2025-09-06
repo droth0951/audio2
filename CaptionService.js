@@ -78,25 +78,7 @@ class BulletproofCaptionService {
       // Calculate clip-relative time
       const relativeTimeMs = currentTimeMs - this.clipStartMs;
       
-      // DEBUG: Log timing information
-      console.log('TIMING CHECK:', {
-        firstUtteranceStart: this.utterances?.[0]?.startMs,
-        firstUtteranceEnd: this.utterances?.[0]?.endMs,
-        currentRelativeTime: currentTimeMs - this.clipStartMs,
-        shouldBeActive: (currentTimeMs - this.clipStartMs) >= 400 && (currentTimeMs - this.clipStartMs) <= 14080
-      });
-      
-      // Add this temporarily to see what's happening
-      console.log('🔍 CHECKING ALL UTTERANCES:', {
-        utteranceCount: this.utterances?.length,
-        allUtterances: this.utterances?.map((u, i) => ({
-          index: i,
-          startMs: u.startMs,
-          endMs: u.endMs,
-          text: u.text.substring(0, 20) + '...'
-        })),
-        currentTime: currentTimeMs - this.clipStartMs
-      });
+      // Verbose timing debug logs removed to prevent white screen performance issues
       
       if (this.debugMode) {
         console.log('[CaptionService] Timing debug:', {
