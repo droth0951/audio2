@@ -179,26 +179,6 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
   );
 };
 
-// BULLETPROOF: Debug component for development
-const CaptionDebugPanel = ({ currentTimeMs }) => {
-  if (!__DEV__) return null;
-  
-  const debugInfo = captionService.getDebugInfo();
-  const currentCaption = captionService.getCurrentCaption(currentTimeMs);
-  
-  return (
-    <View style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10 }}>
-      <Text style={{ color: 'white', fontSize: 12 }}>
-        {JSON.stringify({
-          relativeTime: currentTimeMs - debugInfo.clipStartMs,
-          currentCaption: currentCaption.text,
-          isActive: currentCaption.isActive,
-          utteranceCount: debugInfo.utteranceCount
-        }, null, 2)}
-      </Text>
-    </View>
-  );
-};
 
 // Recording View Component
 const RecordingView = ({ 
@@ -283,9 +263,6 @@ const RecordingView = ({
             currentTimeMs={position}
             clipStartMs={clipStart}
           />
-          
-          {/* BULLETPROOF: Debug panel for development */}
-          <CaptionDebugPanel currentTimeMs={position} />
         </>
       )}
 
@@ -2271,15 +2248,20 @@ export default function App() {
               console.log('🎬 Assembly completed! Captions ready');
               
               if (words.length > 0) {
-                // BULLETPROOF: AssemblyAI already provides clip-relative timing when using audio_start_from
-                // DO NOT normalize timestamps - that causes double normalization issues
-                console.log('🎬 Using AssemblyAI response directly (timestamps already normalized)');
+                // Detect if file upload approach was used
+                const isFileUpload = result.audio_url && result.audio_url.includes('cdn.assemblyai.com/upload/');
+                console.log('🔍 File upload detected in App.js:', isFileUpload);
+                console.log('🔍 Audio URL in App.js:', result.audio_url);
                 
-                // Store the raw AssemblyAI response - normalize utterances to clip-relative timing
+                // For file upload, timestamps already start from 0, so no normalization needed
+                // For URL fallback, we need to normalize to clip-relative timing
+                console.log('🎬 Using AssemblyAI response - Timing mode:', isFileUpload ? 'FILE_UPLOAD (no normalization)' : 'URL_FALLBACK (normalize)');
+                
+                // Store the raw AssemblyAI response - conditionally normalize utterances
                 const processedUtterances = result.utterances?.map(utterance => ({
                   ...utterance,
-                  startMs: utterance.start - clipStart,  // Actually subtract clipStart
-                  endMs: utterance.end - clipStart,      // Actually subtract clipStart  
+                  startMs: isFileUpload ? utterance.start : utterance.start - clipStart,  
+                  endMs: isFileUpload ? utterance.end : utterance.end - clipStart,      
                   text: utterance.text,
                   speaker: utterance.speaker,
                   normalized: true
