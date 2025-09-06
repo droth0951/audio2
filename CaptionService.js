@@ -273,10 +273,18 @@ class BulletproofCaptionService {
   finalizeText(text) {
     if (!text) return '';
     
-    // Ensure first letter is capitalized
-    const finalText = text.charAt(0).toUpperCase() + text.slice(1);
+    // Only capitalize if this looks like the start of a sentence
+    // Check if text starts with a capital letter, sentence punctuation, or common sentence starters
+    const startsWithSentence = /^[A-Z]/.test(text) || 
+                               /^(And|But|So|The|This|That|It|I|We|You|They|He|She|When|Where|Why|How|If|Because|Since|Although|However|Therefore|Meanwhile|Finally|First|Second|Next|Then|Now|Today|Yesterday|Tomorrow)\b/.test(text);
     
-    return finalText;
+    if (startsWithSentence || text.match(/^[.!?]\s*/)) {
+      // This is likely the start of a sentence - capitalize first letter
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    } else {
+      // This is likely mid-sentence - keep original capitalization
+      return text;
+    }
   }
 
   // Helper: Text normalization for consistent display
