@@ -119,16 +119,19 @@ module.exports = async (req, res) => {
       
     } catch (fileError) {
       console.error('❌ FILE UPLOAD FAILED:', fileError.message);
-      console.log('🔄 FALLING BACK to original URL method');
+      console.error('📱 Please ensure you have a stable internet connection and try again.');
       
-      // Fallback to original URL approach
-      useFileUpload = false;
-      assemblyAIAudioUrl = audio_url;
+      // Return error instead of fallback
+      return res.status(503).json({ 
+        error: 'Audio processing requires a stable internet connection. Please check your connection and try again.',
+        details: fileError.message,
+        code: 'FILE_UPLOAD_REQUIRED'
+      });
     }
 
-    // Prepare AssemblyAI payload - different based on method
+    // Prepare AssemblyAI payload - file upload only
     const assemblyAIPayload = {
-      audio_url: assemblyAIAudioUrl,  // Use file upload URL or fallback URL
+      audio_url: assemblyAIAudioUrl,  // Always file upload URL
       punctuate: punctuate !== undefined ? punctuate : true,
       format_text: format_text !== undefined ? format_text : true,
       speaker_labels: speaker_labels !== undefined ? speaker_labels : true,
@@ -136,36 +139,22 @@ module.exports = async (req, res) => {
       word_boost: word_boost || [],
     };
     
-    // Only add timing parameters for URL fallback method
-    if (!useFileUpload) {
-      assemblyAIPayload.audio_start_from = startSeconds;  // CONVERTED TO SECONDS
-      assemblyAIPayload.audio_end_at = endSeconds;        // CONVERTED TO SECONDS
-      console.log('⏰ Added timing parameters for URL fallback method');
-    } else {
-      console.log('✂️ No timing parameters needed - file contains exact segment');
-    }
+    // No timing parameters needed - file contains exact segment
+    console.log('✂️ File upload approach - no timing parameters needed');
     
     console.log('🎬 ASSEMBLYAI REQUEST PAYLOAD:');
-    console.log('  🔗 AUDIO SOURCE COMPARISON:');
+    console.log('  🔗 AUDIO SOURCE:');
     console.log('    Original URL:', audio_url);
-    console.log('    AssemblyAI URL:', assemblyAIAudioUrl);
-    console.log('    Method Used:', useFileUpload ? 'FILE UPLOAD' : 'URL FALLBACK');
-    console.log('    URLs Match:', audio_url === assemblyAIAudioUrl);
+    console.log('    AssemblyAI File URL:', assemblyAIAudioUrl);
+    console.log('    Method: FILE UPLOAD ONLY');
     
     console.log('  📤 Full payload:', JSON.stringify(assemblyAIPayload, null, 2));
     
-    console.log('  🕐 CRITICAL - Timing Information:');
-    console.log('    Original timing (ms):', { startMs, endMs, durationMs: endMs - startMs });
-    console.log('    Converted timing (seconds):', {
-      startSeconds: assemblyAIPayload.audio_start_from,
-      endSeconds: assemblyAIPayload.audio_end_at,
-      durationSeconds: assemblyAIPayload.audio_end_at ? assemblyAIPayload.audio_end_at - assemblyAIPayload.audio_start_from : 'N/A (file upload)'
-    });
+    console.log('  🕐 TIMING INFORMATION:');
+    console.log('    Original clip timing (ms):', { startMs, endMs, durationMs: endMs - startMs });
+    console.log('    File contains exact segment - no timing parameters needed');
     
-    console.log('  🎯 FILE UPLOAD STATUS:');
-    console.log('    File upload attempted:', useFileUpload);
-    console.log('    Using static audio file:', useFileUpload);
-    console.log('    Expected outcome:', useFileUpload ? 'PERFECT SYNC' : 'POSSIBLE MISMATCH');
+    console.log('  🎯 EXPECTED OUTCOME: PERFECT SYNC');
     
     // Make request to AssemblyAI
     console.log('📡 Making request to AssemblyAI...');

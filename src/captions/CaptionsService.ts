@@ -165,10 +165,24 @@ export async function fetchOrTranscribe(
 
     // Convert to our format
     console.log('📝 Step 3: Converting AAI response...');
-    const transcript = toTranscript(status.transcript, request.clipStartMs);
+    
+    // Detect if file upload approach was used
+    const isFileUpload = status.transcript.audio_url && status.transcript.audio_url.includes('cdn.assemblyai.com/upload/');
+    console.log('🔍 File upload detected:', isFileUpload);
+    console.log('🔍 Audio URL:', status.transcript.audio_url);
+    
+    // For file upload, timestamps start from 0, so no clip offset needed
+    const clipStartMs = isFileUpload ? 0 : request.clipStartMs;
+    
+    const transcript = toTranscript(status.transcript, {
+      clipStartMs,
+      clipEndMs: request.clipEndMs,
+      useUtterances: true
+    });
     console.log('📝 Transcript conversion result:', {
       wordCount: transcript.words.length,
       paragraphCount: transcript.paragraphs.length,
+      timingMode: isFileUpload ? 'FILE_UPLOAD' : 'URL_FALLBACK'
     });
     
     // Measure layout

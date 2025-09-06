@@ -2248,20 +2248,15 @@ export default function App() {
               console.log('🎬 Assembly completed! Captions ready');
               
               if (words.length > 0) {
-                // Detect if file upload approach was used
-                const isFileUpload = result.audio_url && result.audio_url.includes('cdn.assemblyai.com/upload/');
-                console.log('🔍 File upload detected in App.js:', isFileUpload);
-                console.log('🔍 Audio URL in App.js:', result.audio_url);
+                // File upload only - timestamps already start from 0, no normalization needed
+                console.log('🎬 Using FILE UPLOAD response - timestamps start from 0, no normalization needed');
+                console.log('🔍 AssemblyAI File URL:', result.audio_url);
                 
-                // For file upload, timestamps already start from 0, so no normalization needed
-                // For URL fallback, we need to normalize to clip-relative timing
-                console.log('🎬 Using AssemblyAI response - Timing mode:', isFileUpload ? 'FILE_UPLOAD (no normalization)' : 'URL_FALLBACK (normalize)');
-                
-                // Store the raw AssemblyAI response - conditionally normalize utterances
+                // Store the raw AssemblyAI response - no normalization needed for file upload
                 const processedUtterances = result.utterances?.map(utterance => ({
                   ...utterance,
-                  startMs: isFileUpload ? utterance.start : utterance.start - clipStart,  
-                  endMs: isFileUpload ? utterance.end : utterance.end - clipStart,      
+                  startMs: utterance.start,  // No clipStart subtraction needed
+                  endMs: utterance.end,      // No clipStart subtraction needed
                   text: utterance.text,
                   speaker: utterance.speaker,
                   normalized: true
