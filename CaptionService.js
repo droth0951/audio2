@@ -49,23 +49,61 @@ class BulletproofCaptionService {
       }];
     }
 
+    let utterances;
+    
     // Check if utterances are already normalized (from App.js)
     if (response.utterances[0]?.startMs !== undefined) {
       // Already normalized in App.js - use directly
-      return response.utterances;
+      utterances = response.utterances;
+    } else {
+      // Legacy: Handle raw AssemblyAI format
+      utterances = response.utterances.map(utterance => {
+        return {
+          text: utterance.text,
+          startMs: utterance.start,     // Use raw AssemblyAI timing
+          endMs: utterance.end,         // Use raw AssemblyAI timing
+          speaker: utterance.speaker,
+          confidence: utterance.confidence,
+          normalized: true
+        };
+      });
     }
     
-    // Legacy: Handle raw AssemblyAI format
-    return response.utterances.map(utterance => {
-      return {
-        text: utterance.text,
-        startMs: utterance.start,     // Use raw AssemblyAI timing
-        endMs: utterance.end,         // Use raw AssemblyAI timing
-        speaker: utterance.speaker,
-        confidence: utterance.confidence,
-        normalized: true
-      };
-    });
+    // IMPROVEMENT: Combine very short utterances from the same speaker
+    // This helps with AssemblyAI's tendency to fragment sentences
+    const combinedUtterances = [];
+    let currentCombined = null;
+    
+    for (const utterance of utterances) {
+      const utteranceDuration = utterance.endMs - utterance.startMs;
+      
+      // Combine if:
+      // 1. Same speaker as previous
+      // 2. Previous utterance was very short (< 2 seconds) OR current is very short
+      // 3. Gap between them is small (< 500ms)
+      if (currentCombined && 
+          currentCombined.speaker === utterance.speaker &&
+          (utteranceDuration < 2000 || (currentCombined.endMs - currentCombined.startMs) < 2000) &&
+          (utterance.startMs - currentCombined.endMs) < 500) {
+        
+        // Combine with previous
+        currentCombined.text += ' ' + utterance.text;
+        currentCombined.endMs = utterance.endMs;
+      } else {
+        // Start new utterance
+        if (currentCombined) {
+          combinedUtterances.push(currentCombined);
+        }
+        currentCombined = { ...utterance };
+      }
+    }
+    
+    // Don't forget the last one
+    if (currentCombined) {
+      combinedUtterances.push(currentCombined);
+    }
+    
+    return combinedUtterances.length > 0 ? combinedUtterances : utterances;
   }
 
   // BULLETPROOF: Get current caption with robust error handling
@@ -166,45 +204,51 @@ class BulletproofCaptionService {
   normalizeText(text) {
     if (!text) return '';
     
-    // CRITICAL: Enforce 2-line maximum (approximately 60 characters)
+    // Normalize whitespace and fix sentence spacing
     let normalizedText = text
       .trim()
       .replace(/\s+/g, ' ')                    // Normalize whitespace
       .replace(/([.!?])\s*([a-z])/g, '$1 $2'); // Fix sentence spacing
     
-    // Enforce character limit for 2-line display
-    if (normalizedText.length > 60) {
-      // Find last complete sentence that fits
-      const sentences = normalizedText.split(/[.!?]+/);
-      let truncated = '';
+    // INCREASED LIMIT: Allow up to 120 characters (about 3-4 lines)
+    // This prevents cutting off mid-sentence for short utterances
+    const MAX_CHARS = 120;
+    
+    if (normalizedText.length > MAX_CHARS) {
+      // Try to find a natural break point (sentence or clause)
+      const breakPoints = ['. ', '! ', '? ', ', ', ' - ', ' — '];
+      let bestBreak = -1;
+      let bestBreakChar = '';
       
-      for (const sentence of sentences) {
-        const candidate = truncated + (truncated ? '. ' : '') + sentence.trim();
-        if (candidate.length <= 60 && sentence.trim()) {
-          truncated = candidate;
-        } else {
-          break;
+      // Find the last natural break point before the limit
+      for (const breakPoint of breakPoints) {
+        const index = normalizedText.lastIndexOf(breakPoint, MAX_CHARS);
+        if (index > bestBreak && index > MAX_CHARS * 0.5) { // At least halfway through
+          bestBreak = index;
+          bestBreakChar = breakPoint.trim();
         }
       }
       
-      if (!truncated) {
-        // If no complete sentence fits, truncate at word boundary
+      if (bestBreak > 0) {
+        // Cut at natural break point
+        normalizedText = normalizedText.substring(0, bestBreak + bestBreakChar.length);
+      } else {
+        // No natural break - cut at word boundary
         const words = normalizedText.split(' ');
+        let truncated = '';
         for (const word of words) {
-          if ((truncated + ' ' + word).length <= 60) {
+          if ((truncated + ' ' + word).trim().length <= MAX_CHARS) {
             truncated += (truncated ? ' ' : '') + word;
           } else {
             break;
           }
         }
+        normalizedText = truncated + '...';
       }
-      
-      normalizedText = truncated + '...';
     }
     
-    // PRESERVE AssemblyAI's capitalization - don't force lowercase
-    // Only ensure first letter is capitalized if it isn't already
-    if (normalizedText.length > 0 && normalizedText.charAt(0) !== normalizedText.charAt(0).toUpperCase()) {
+    // Ensure first letter is capitalized
+    if (normalizedText.length > 0) {
       normalizedText = normalizedText.charAt(0).toUpperCase() + normalizedText.slice(1);
     }
     
