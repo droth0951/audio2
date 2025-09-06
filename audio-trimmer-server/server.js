@@ -65,6 +65,10 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎵 Audio trimmer server running on port ${PORT}`);
+  console.log(`🏥 Health check available at http://0.0.0.0:${PORT}/health`);
+}).on('error', (err) => {
+  console.error('❌ Server startup failed:', err);
+  process.exit(1);
 });
