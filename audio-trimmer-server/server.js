@@ -48,10 +48,15 @@ app.get('/debug/env', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  console.log('🏥 Health check requested');
+  res.status(200).send('OK');
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎵 Audio trimmer server running on port ${PORT}`);
+  console.log(`🏥 Health check available at http://0.0.0.0:${PORT}/health`);
+}).on('error', (err) => {
+  console.error('❌ Server startup failed:', err);
+  process.exit(1);
 });
