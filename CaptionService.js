@@ -78,34 +78,23 @@ class BulletproofCaptionService {
       // Calculate clip-relative time
       const relativeTimeMs = currentTimeMs - this.clipStartMs;
       
-      // DEBUG: Log timing information
-      console.log('TIMING CHECK:', {
-        firstUtteranceStart: this.utterances?.[0]?.startMs,
-        firstUtteranceEnd: this.utterances?.[0]?.endMs,
-        currentRelativeTime: currentTimeMs - this.clipStartMs,
-        shouldBeActive: (currentTimeMs - this.clipStartMs) >= 400 && (currentTimeMs - this.clipStartMs) <= 14080
-      });
-      
-      // Debug logging disabled during screen recording to prevent main thread blocking
-      // console.log('🔍 CHECKING ALL UTTERANCES:', {
-      //   utteranceCount: this.utterances?.length,
-      //   allUtterances: this.utterances?.map((u, i) => ({
-      //     index: i,
-      //     startMs: u.startMs,
-      //     endMs: u.endMs,
-      //     text: u.text.substring(0, 20) + '...'
-      //   })),
-      //   currentTime: currentTimeMs - this.clipStartMs
-      // });
-      
-      if (this.debugMode) {
-        console.log('[CaptionService] Timing debug:', {
+      // DEBUG: Log caption lookup every few seconds during recording
+      if (currentTimeMs % 3000 < 100) {
+        console.log('[CaptionService] Caption lookup debug:', {
           currentTimeMs,
           clipStartMs: this.clipStartMs,
           relativeTimeMs,
-          firstUtteranceStart: this.utterances[0]?.startMs,
-          firstUtteranceEnd: this.utterances[0]?.endMs,
-          utteranceCount: this.utterances.length
+          utteranceCount: this.utterances.length,
+          firstUtterance: this.utterances[0] ? {
+            start: this.utterances[0].startMs,
+            end: this.utterances[0].endMs, 
+            text: this.utterances[0].text.substring(0, 30)
+          } : null,
+          secondUtterance: this.utterances[1] ? {
+            start: this.utterances[1].startMs,
+            end: this.utterances[1].endMs,
+            text: this.utterances[1].text.substring(0, 30) 
+          } : null
         });
       }
       
@@ -114,20 +103,38 @@ class BulletproofCaptionService {
         return { text: '', speaker: null, isActive: false };
       }
 
-      // SIMPLE: Find the utterance that should be active right now
+      // IMPROVED: Find the utterance that should be active right now
       const currentUtterance = this.utterances.find(utterance => 
         relativeTimeMs >= utterance.startMs && relativeTimeMs <= utterance.endMs
       );
       
       if (currentUtterance) {
+        // For long utterances, advance through text chunks based on time position
+        const utteranceDuration = currentUtterance.endMs - currentUtterance.startMs;
+        const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
+        const progressRatio = timeIntoUtterance / utteranceDuration;
+        
+        const displayText = this.getProgressiveText(currentUtterance.text, progressRatio);
+        
+        // Debug long utterances every few seconds
+        if (currentUtterance.text.length > 120 && relativeTimeMs % 3000 < 100) {
+          console.log('[CaptionService] Progressive text debug:', {
+            utteranceDuration: `${Math.round(utteranceDuration/1000)}s`,
+            timeIntoUtterance: `${Math.round(timeIntoUtterance/1000)}s`,
+            progressRatio: Math.round(progressRatio * 100) + '%',
+            fullTextLength: currentUtterance.text.length,
+            displayTextPreview: displayText.substring(0, 50) + '...'
+          });
+        }
+        
         return {
-          text: this.normalizeText(currentUtterance.text),
+          text: displayText,
           speaker: currentUtterance.speaker,
           isActive: true
         };
       }
       
-      // If no current utterance, find the next one coming up
+      // If no current utterance, find the next one coming up  
       const nextUtterance = this.utterances.find(utterance => 
         relativeTimeMs < utterance.startMs
       );
@@ -140,17 +147,26 @@ class BulletproofCaptionService {
         };
       }
       
-      // If no next utterance, show the last one
-      const lastUtterance = this.utterances[this.utterances.length - 1];
-      if (lastUtterance) {
-        return {
-          text: this.normalizeText(lastUtterance.text),
-          speaker: lastUtterance.speaker,
-          isActive: false
-        };
+      // FIX: If between utterances or past all, find the closest one
+      let closestUtterance = this.utterances[0];
+      let closestDistance = Math.abs(relativeTimeMs - closestUtterance.startMs);
+      
+      for (const utterance of this.utterances) {
+        const startDistance = Math.abs(relativeTimeMs - utterance.startMs);
+        const endDistance = Math.abs(relativeTimeMs - utterance.endMs);
+        const minDistance = Math.min(startDistance, endDistance);
+        
+        if (minDistance < closestDistance) {
+          closestUtterance = utterance;
+          closestDistance = minDistance;
+        }
       }
-
-      return { text: '', speaker: null, isActive: false };
+      
+      return {
+        text: this.normalizeText(closestUtterance.text),
+        speaker: closestUtterance.speaker,
+        isActive: false // Show as inactive since we're not in the exact timing
+      };
 
     } catch (error) {
       console.error('[CaptionService] Error getting current caption:', error);
@@ -178,6 +194,89 @@ class BulletproofCaptionService {
     }
     
     return closest;
+  }
+
+  // Helper: Progressive text display for long utterances
+  getProgressiveText(text, progressRatio) {
+    if (!text) return '';
+    
+    // Normalize whitespace first
+    let normalizedText = text
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/([.!?])\s*([a-z])/g, '$1 $2');
+    
+    const MAX_CHARS = 120; // Same as normalizeText limit
+    
+    // If text is short enough, just return it normally
+    if (normalizedText.length <= MAX_CHARS) {
+      return this.finalizeText(normalizedText);
+    }
+    
+    // Break long text into chunks
+    const chunks = this.breakIntoChunks(normalizedText, MAX_CHARS);
+    
+    // Determine which chunk to show based on progress
+    const chunkIndex = Math.min(
+      Math.floor(progressRatio * chunks.length),
+      chunks.length - 1
+    );
+    
+    return this.finalizeText(chunks[chunkIndex]);
+  }
+
+  // Helper: Break text into display-sized chunks at natural boundaries
+  breakIntoChunks(text, maxChars) {
+    const chunks = [];
+    let remainingText = text;
+    
+    while (remainingText.length > 0) {
+      if (remainingText.length <= maxChars) {
+        chunks.push(remainingText);
+        break;
+      }
+      
+      // Find the best break point within maxChars
+      const breakPoints = ['. ', '! ', '? ', ', ', ' - ', ' — ', ' '];
+      let bestBreak = -1;
+      let bestBreakLength = 0;
+      
+      for (const breakPoint of breakPoints) {
+        const index = remainingText.lastIndexOf(breakPoint, maxChars);
+        if (index > maxChars * 0.3 && index > bestBreak) { // At least 30% through
+          bestBreak = index;
+          bestBreakLength = breakPoint.length;
+        }
+      }
+      
+      let chunkEnd;
+      if (bestBreak > 0) {
+        // Use natural break point
+        chunkEnd = bestBreak + bestBreakLength;
+        chunks.push(remainingText.substring(0, chunkEnd).trim());
+      } else {
+        // No natural break - cut at word boundary
+        const words = remainingText.substring(0, maxChars).split(' ');
+        words.pop(); // Remove the last potentially cut-off word
+        const chunk = words.join(' ');
+        chunks.push(chunk);
+        chunkEnd = chunk.length;
+      }
+      
+      remainingText = remainingText.substring(chunkEnd).trim();
+    }
+    
+    return chunks;
+  }
+
+  // Helper: Final text formatting
+  finalizeText(text) {
+    if (!text) return '';
+    
+    // Ensure first letter is capitalized
+    const finalText = text.charAt(0).toUpperCase() + text.slice(1);
+    
+    return finalText;
   }
 
   // Helper: Text normalization for consistent display
