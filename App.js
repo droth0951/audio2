@@ -1588,15 +1588,20 @@ export default function App() {
             });
           }
           
-          // Check if we need to stop recording
-          if (newSound._isRecording && status.positionMillis >= newSound._recordingClipEnd) {
-            console.log('🎵 Audio reached clip end - stopping recording', {
+          // Check if we need to stop recording - allow slight buffer for final captions
+          if (newSound._isRecording && status.positionMillis >= (newSound._recordingClipEnd + 500)) {
+            console.log('🎵 Audio reached clip end + buffer - stopping recording', {
               position: status.positionMillis,
               clipEnd: newSound._recordingClipEnd,
+              buffer: 500,
               isRecording: newSound._isRecording
             });
-            newSound._isRecording = false;
-            newSound._recordingClipEnd = null;
+            // Clear timer to prevent double stopping
+            if (recordingTimerRef.current) {
+              clearTimeout(recordingTimerRef.current);
+              recordingTimerRef.current = null;
+            }
+            // Don't clear flags here - let stopVideoRecording() handle cleanup
             stopVideoRecording();
           }
         }
@@ -2584,17 +2589,38 @@ export default function App() {
       clipEnd: clipEnd
     });
     
-    // Guard: Don't stop if cleanup is in progress, but allow stopping if sound recording flags are still set
-    if (recordingCleanupState.isCleanupInProgress || (!isRecording && !sound?._isRecording)) {
-      console.log('⚠️ Recording not active or cleanup in progress');
+    // Guard: Don't stop if cleanup is in progress
+    if (recordingCleanupState.isCleanupInProgress) {
+      console.log('⚠️ Cleanup already in progress');
       return;
     }
+    
+    // Check if we have anything to clean up
+    const hasRecordingActivity = isRecording || sound?._isRecording || recordingTimerRef.current;
+    if (!hasRecordingActivity) {
+      console.log('⚠️ No recording activity to clean up');
+      return;
+    }
+    
+    // Set cleanup flag to prevent multiple calls
+    recordingCleanupState.isCleanupInProgress = true;
+    
+    // IMMEDIATE: Clear timer and stop audio to prevent continued calls
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+      console.log('⏰ Recording timer cleared');
+    }
+    
+    // DON'T pause audio immediately - let it continue playing for caption display
+    // Audio will be paused when user dismisses the recording view
+    console.log('🎵 Keeping audio playing to maintain caption display');
     
     // 🔋 DEACTIVATE WAKE LOCK - Allow device to sleep again
     KeepAwake.deactivateKeepAwake();
     console.log('🔋 Wake lock deactivated - device can sleep again');
     
-    // Clean up recording flags
+    // Clean up recording flags  
     if (sound) {
       sound._isRecording = false;
       sound._recordingClipEnd = null;
@@ -2604,12 +2630,8 @@ export default function App() {
     try {
       setRecordingStatus('Stopping recording...');
       
-      // Pause audio
-      if (sound && isPlaying) {
-        console.log('🎵 Pausing audio playback');
-        await sound.pauseAsync();
-        setIsPlaying(false);
-      }
+      // Keep audio playing - don't pause it here to maintain caption display
+      console.log('🎵 Audio continues playing for caption display');
       
       // Stop recording and get the URI - with crash protection
       let outputUrl = null;
@@ -2667,6 +2689,10 @@ export default function App() {
       // 🔋 DEACTIVATE WAKE LOCK on error
       KeepAwake.deactivateKeepAwake();
       console.log('🔋 Wake lock deactivated due to stop recording error');
+    } finally {
+      // Always clear cleanup flag so future recordings can work
+      recordingCleanupState.isCleanupInProgress = false;
+      console.log('🧹 Recording cleanup completed');
     }
   };
 
