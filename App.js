@@ -50,83 +50,6 @@ const formatTime = (millis) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// OLD VERSION - Commented out for rollback
-/*
-// Bold-Style Caption Constants
-const CAPTION_TIMING = {
-  LOOKAHEAD_MS: 1000,  // Was 150ms - now catches words much earlier
-  LOOKBACK_MS: 2000,   // Was 400ms - now keeps them much longer
-  MAX_WORDS: 4         // Was 3 - now shows more text
-};
-
-// Bold Caption Overlay Component
-const BoldCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) => {
-  const [currentText, setCurrentText] = useState('');
-  const [highlightedWord, setHighlightedWord] = useState('');
-  const fadeAnim = useRef(new RNAnimated.Value(0)).current;
-
-  useEffect(() => {
-    if (!transcript?.words?.length || typeof currentTimeMs !== 'number') {
-      setCurrentText('');
-      setHighlightedWord('');
-      return;
-    }
-
-    const clipRelativeTime = currentTimeMs - clipStartMs;
-    
-    // Create 2-3 word chunks (LEAN: reuse existing timing logic)
-    const visibleWords = [];
-    for (const word of transcript.words) {
-      const wordTime = word.startMs;
-      if (clipRelativeTime >= wordTime - CAPTION_TIMING.LOOKAHEAD_MS && 
-          clipRelativeTime <= wordTime + CAPTION_TIMING.LOOKBACK_MS) {
-        visibleWords.push(word);
-      }
-    }
-    
-    // Take first 2-3 words for Bold style
-    const chunkWords = visibleWords.slice(0, CAPTION_TIMING.MAX_WORDS);
-    const newText = chunkWords.map(w => w.text).join(' ');
-    
-    // Find highlighted word
-    const currentWord = chunkWords.find(word =>
-      clipRelativeTime >= word.startMs && clipRelativeTime <= word.startMs + 500
-    );
-    
-    if (newText !== currentText) {
-      setCurrentText(newText);
-      // Simple fade animation
-      RNAnimated.timing(fadeAnim, {
-        toValue: newText ? 1 : 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-    
-    setHighlightedWord(currentWord?.text || '');
-    
-  }, [transcript, currentTimeMs, clipStartMs]);
-
-  if (!currentText.trim()) return null;
-
-  return (
-    <RNAnimated.View style={[styles.boldCaptionContainer, { opacity: fadeAnim }]}>
-      <View style={styles.boldBubble}>
-        <Text style={styles.boldText}>
-          {currentText.split(' ').map((word, index) => (
-            <Text 
-              key={index}
-              style={word === highlightedWord ? styles.highlightedWord : {}}
-            >
-              {word}{index < currentText.split(' ').length - 1 ? ' ' : ''}
-            </Text>
-          ))}
-        </Text>
-      </View>
-    </RNAnimated.View>
-  );
-};
-*/
 
 // REMOVED: WordBasedChunkedCaptionOverlay - Too complex, causing bugs
 
@@ -466,13 +389,17 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
   try {
     const episodes = [];
     
-    // Use more efficient regex patterns
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let match;
-    let count = 0;
+    // Find episodes by splitting on <item> tags to preserve document order
+    const itemSplits = xmlText.split('<item>');
     
-    while ((match = itemRegex.exec(xmlText)) && count < limit) {
-      const item = match[1];
+    // Skip the first split (before first <item>) and process only the first 'limit' episodes
+    let count = 0;
+    for (let i = 1; i < itemSplits.length && count < limit; i++) {
+      const itemContent = itemSplits[i];
+      const itemEndIndex = itemContent.indexOf('</item>');
+      if (itemEndIndex === -1) continue;
+      
+      const item = itemContent.substring(0, itemEndIndex);
       
       // Fast title extraction
       const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([^<>\]]+)(?:\]\]>)?<\/title>/);
@@ -544,6 +471,13 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
         count++;
       }
     }
+    
+    // Sort episodes by publication date (newest first) as a safety measure
+    episodes.sort((a, b) => {
+      const dateA = new Date(a.pubDate);
+      const dateB = new Date(b.pubDate);
+      return dateB - dateA; // Newest first (reverse chronological)
+    });
     
     return episodes;
   } catch (error) {
@@ -1373,11 +1307,23 @@ export default function App() {
     
     setIsLoadingMore(true);
     try {
-      // If we have more episodes in allEpisodes, show them
-      if (allEpisodes.length > episodes.length) {
-        setEpisodes(allEpisodes);
-        setShowLoadMore(false);
-        console.log('📊 Loaded all', allEpisodes.length, 'episodes');
+      const currentCount = episodes.length;
+      let nextCount;
+      
+      // Progressive loading: 5 → 10 → 20 → All
+      if (currentCount === 5) {
+        nextCount = 10;
+      } else if (currentCount === 10) {
+        nextCount = 20;
+      } else {
+        nextCount = allEpisodes.length; // Load all remaining
+      }
+      
+      // If we have enough episodes in allEpisodes, show more of them
+      if (allEpisodes.length >= nextCount) {
+        setEpisodes(allEpisodes.slice(0, nextCount));
+        setShowLoadMore(nextCount < allEpisodes.length);
+        console.log(`📊 Showing ${nextCount} of ${allEpisodes.length} episodes`);
       } else {
         // If we need to parse more episodes, fetch and parse more
         console.log('📊 Fetching more episodes...');
@@ -1386,12 +1332,13 @@ export default function App() {
         const moreEpisodes = fastParseRSSFeed(xmlText, 100); // Parse up to 100 episodes
         
         setAllEpisodes(moreEpisodes);
-        setEpisodes(moreEpisodes);
-        setShowLoadMore(false);
+        const finalCount = Math.min(nextCount, moreEpisodes.length);
+        setEpisodes(moreEpisodes.slice(0, finalCount));
+        setShowLoadMore(finalCount < moreEpisodes.length);
         
         // Update cache with full data
         await setCachedFeed(currentRssFeed, moreEpisodes);
-        console.log('📊 Loaded', moreEpisodes.length, 'episodes from full parse');
+        console.log(`📊 Showing ${finalCount} of ${moreEpisodes.length} episodes from full parse`);
       }
       
     } catch (error) {
@@ -2143,6 +2090,9 @@ export default function App() {
           clipStartFormatted: formatTime(clipStart),
           clipEndFormatted: formatTime(clipEnd)
         });
+
+        // Debug: Log the exact payload being sent to Railway
+        console.log('🚨 RAILWAY DEBUG - Payload being sent:', JSON.stringify(assemblyAIPayload, null, 2));
 
         const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
           method: 'POST',
@@ -3208,8 +3158,8 @@ export default function App() {
                             <Text style={styles.episodeDate}>
                               {episode.pubDate ? (() => {
                                 const date = new Date(episode.pubDate);
-                                return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
-                              })() : ''}
+                                return isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleDateString();
+                              })() : 'Unknown date'}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -3687,7 +3637,7 @@ export default function App() {
       </LinearGradient>
               {showRecordingGuidance && <RecordingGuidanceModal />}
         {showProcessingModal && <ProcessingModal />}
-        {showAboutModal && <AboutModal visible={showAboutModal} onClose={() => setShowAboutModal(false)} />}A
+        {showAboutModal && <AboutModal visible={showAboutModal} onClose={() => setShowAboutModal(false)} />}
       
       {/* Episode Loading Spinner */}
       {isEpisodeLoading && (

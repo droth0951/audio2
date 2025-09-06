@@ -17,26 +17,22 @@ const SearchBar = ({
 
   // Memoized handlers to prevent re-renders
   const handleTextChange = useCallback((text) => {
-    console.log('🔍 SearchBar: Text changed:', text);
     setSearchText(text);
   }, []);
 
   const handleSubmit = useCallback(() => {
     const query = searchText.trim();
-    console.log('🔍 SearchBar: Submit with:', query);
     if (query && onSearch) {
-      console.log('🔍 SearchBar: Calling onSearch with:', query);
       onSearch(query);
       // Keep focus to maintain keyboard
       requestAnimationFrame(() => {
-        console.log('🔍 SearchBar: Maintaining focus after search');
         inputRef.current?.focus();
       });
     }
   }, [searchText, onSearch]);
 
   const handleFocus = useCallback(() => {
-    console.log('🔍 SearchBar: Input focused');
+    // Focus handling if needed
   }, []);
 
   return (
