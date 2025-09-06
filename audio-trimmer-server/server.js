@@ -15,6 +15,19 @@ app.use(cors({
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 
+// AGGRESSIVE REQUEST LOGGING for debugging
+app.use((req, res, next) => {
+  console.log('🌐 INCOMING REQUEST:', {
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    timestamp: new Date().toISOString(),
+    userAgent: req.get('user-agent'),
+    contentType: req.get('content-type')
+  });
+  next();
+});
+
 // Serve temp files statically
 app.use('/temp', express.static(path.join(__dirname, 'temp')));
 
