@@ -1,5 +1,6 @@
 const axios = require('axios');
-const { AudioFileProcessor } = require('./upload-utils');
+// Temporarily disable file upload to test if this is causing startup issues
+// const { AudioFileProcessor } = require('./upload-utils');
 
 // AssemblyAI API key - you'll need to set this
 const ASSEMBLY_AI_API_KEY = process.env.ASSEMBLYAI_API_KEY || process.env.ASSEMBLYAI_KEY || 'your-assembly-ai-api-key';
@@ -95,36 +96,14 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid duration', duration: durationSeconds });
     }
     
-    // FILE UPLOAD APPROACH - Download segment and upload to AssemblyAI
-    console.log('🎯 STARTING FILE UPLOAD APPROACH');
+    // TEMPORARILY DISABLED FILE UPLOAD - Testing if this causes startup issues
+    console.log('🎯 FILE UPLOAD DISABLED FOR TESTING');
+    console.log('  Using original URL method');
     console.log('  Original URL:', audio_url);
     console.log('  Time range:', `${startSeconds}s - ${endSeconds}s`);
     
-    let assemblyAIAudioUrl = null;
-    let useFileUpload = true;
-    
-    try {
-      // Create audio file processor
-      const processor = new AudioFileProcessor();
-      
-      // Process audio segment: download → extract → upload
-      assemblyAIAudioUrl = await processor.processAudioSegment(
-        audio_url, 
-        startSeconds, 
-        endSeconds, 
-        ASSEMBLY_AI_API_KEY
-      );
-      
-      console.log('✅ FILE UPLOAD SUCCESS - AssemblyAI URL:', assemblyAIAudioUrl);
-      
-    } catch (fileError) {
-      console.error('❌ FILE UPLOAD FAILED:', fileError.message);
-      console.log('🔄 FALLING BACK to original URL method');
-      
-      // Fallback to original URL approach
-      useFileUpload = false;
-      assemblyAIAudioUrl = audio_url;
-    }
+    let assemblyAIAudioUrl = audio_url; // Use original URL
+    let useFileUpload = false; // Disable for testing
 
     // Prepare AssemblyAI payload - different based on method
     const assemblyAIPayload = {
