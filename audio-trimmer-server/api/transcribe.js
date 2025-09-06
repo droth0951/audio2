@@ -95,71 +95,34 @@ module.exports = async (req, res) => {
     console.log('  Original URL:', audio_url);
     
     let resolvedUrl = audio_url;
-    let redirectCount = 0;
-    const maxRedirects = 10;
     
     try {
-      // Follow all redirects to get the final authenticated URL
-      while (redirectCount < maxRedirects) {
-        const urlCheckResponse = await axios.head(resolvedUrl, {
-          maxRedirects: 0,  // Handle redirects manually
-          validateStatus: () => true,
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; PodcastApp/1.0)',
-          }
-        });
-        
-        console.log(`  Redirect ${redirectCount + 1} - Status:`, urlCheckResponse.status);
-        
-        if (urlCheckResponse.status === 302 || urlCheckResponse.status === 301 || urlCheckResponse.status === 307 || urlCheckResponse.status === 308) {
-          const nextUrl = urlCheckResponse.headers.location;
-          if (!nextUrl) {
-            console.log('  ❌ Redirect response missing location header');
-            break;
-          }
-          
-          console.log(`  🔄 Redirect ${redirectCount + 1}: ${resolvedUrl} → ${nextUrl}`);
-          resolvedUrl = nextUrl;
-          redirectCount++;
-        } else if (urlCheckResponse.status === 200) {
-          console.log('  ✅ Final URL reached with status 200');
-          break;
-        } else {
-          console.log(`  ⚠️ Unexpected status ${urlCheckResponse.status}, using current URL`);
-          break;
-        }
-      }
-      
-      if (redirectCount >= maxRedirects) {
-        console.log('  ⚠️ Maximum redirects reached, using last URL');
-      }
-      
-      console.log('  🎯 RESOLVED FINAL URL:', resolvedUrl);
-      console.log('  📊 Total redirects followed:', redirectCount);
-      
-      // Test that the final URL is accessible
-      const finalTest = await axios.head(resolvedUrl, {
-        timeout: 10000,
+      // Use axios with automatic redirect following for simplicity
+      const urlCheckResponse = await axios.head(audio_url, {
+        maxRedirects: 5,  // Follow up to 5 redirects automatically
+        timeout: 5000,    // Shorter timeout to prevent hanging
         validateStatus: () => true,
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; PodcastApp/1.0)',
         }
       });
       
-      console.log('  🧪 Final URL test status:', finalTest.status);
-      if (finalTest.status !== 200) {
-        console.log('  ⚠️ Final URL not accessible, falling back to original');
-        resolvedUrl = audio_url;
+      console.log('  Response Status:', urlCheckResponse.status);
+      console.log('  Final URL after redirects:', urlCheckResponse.request?.responseURL || audio_url);
+      
+      if (urlCheckResponse.status === 200 && urlCheckResponse.request?.responseURL) {
+        resolvedUrl = urlCheckResponse.request.responseURL;
+        console.log('  ✅ URL resolved successfully');
       } else {
-        console.log('  ✅ Final URL confirmed accessible');
+        console.log('  ⚠️ URL resolution unsuccessful, using original');
       }
       
     } catch (urlError) {
       console.log('  ❌ URL resolution failed:', urlError.message);
-      console.log('  🔄 Falling back to original URL');
-      resolvedUrl = audio_url;
+      console.log('  🔄 Using original URL');
     }
+    
+    console.log('  🎯 FINAL URL FOR ASSEMBLYAI:', resolvedUrl);
 
     // Prepare AssemblyAI payload
     const assemblyAIPayload = {
