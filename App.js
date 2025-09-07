@@ -2672,9 +2672,6 @@ export default function App() {
     try {
       setRecordingStatus('Stopping recording...');
       
-      // Keep audio playing - don't pause it here to maintain caption display
-      console.log('🎵 Audio continues playing for caption display');
-      
       // Stop recording and get the URI - with crash protection
       let outputUrl = null;
       try {
@@ -2687,24 +2684,24 @@ export default function App() {
         throw new Error(`Stop recording failed: ${stopError.message}`);
       }
       
+      // Stop audio playback immediately when recording ends
+      if (sound) {
+        await sound.pauseAsync();
+        setIsPlaying(false);
+        // Reset position to clip start so user can replay the clip
+        if (clipStart !== null) {
+          await sound.setPositionAsync(clipStart);
+          setPosition(clipStart);
+        }
+        console.log('🎵 Audio stopped and reset to clip start when video was created');
+      }
+      
       setRecordingStatus('Saving to Photos...');
       
       // Save to Photos app
       if (outputUrl) {
         await MediaLibrary.saveToLibraryAsync(outputUrl);
         setRecordingStatus('Video saved to Photos!');
-        
-        // Stop audio playback and reset position immediately when video is created
-        if (sound) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-          // Reset position to clip start so user can replay the clip
-          if (clipStart !== null) {
-            await sound.setPositionAsync(clipStart);
-            setPosition(clipStart);
-          }
-          console.log('🎵 Audio stopped and reset to clip start when video was created');
-        }
         
         Alert.alert(
           'Video Created!',
