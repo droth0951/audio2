@@ -12,6 +12,7 @@ class BulletproofCaptionService {
     this.clipEndMs = 0;
     this.utterances = [];
     this.debugMode = false;
+    this.previousUtteranceText = ''; // Track previous utterance for smart capitalization
   }
 
   setDebugMode(enabled) {
@@ -49,23 +50,61 @@ class BulletproofCaptionService {
       }];
     }
 
+    let utterances;
+    
     // Check if utterances are already normalized (from App.js)
     if (response.utterances[0]?.startMs !== undefined) {
       // Already normalized in App.js - use directly
-      return response.utterances;
+      utterances = response.utterances;
+    } else {
+      // Legacy: Handle raw AssemblyAI format
+      utterances = response.utterances.map(utterance => {
+        return {
+          text: utterance.text,
+          startMs: utterance.start,     // Use raw AssemblyAI timing
+          endMs: utterance.end,         // Use raw AssemblyAI timing
+          speaker: utterance.speaker,
+          confidence: utterance.confidence,
+          normalized: true
+        };
+      });
     }
     
-    // Legacy: Handle raw AssemblyAI format
-    return response.utterances.map(utterance => {
-      return {
-        text: utterance.text,
-        startMs: utterance.start,     // Use raw AssemblyAI timing
-        endMs: utterance.end,         // Use raw AssemblyAI timing
-        speaker: utterance.speaker,
-        confidence: utterance.confidence,
-        normalized: true
-      };
-    });
+    // IMPROVEMENT: Combine very short utterances from the same speaker
+    // This helps with AssemblyAI's tendency to fragment sentences
+    const combinedUtterances = [];
+    let currentCombined = null;
+    
+    for (const utterance of utterances) {
+      const utteranceDuration = utterance.endMs - utterance.startMs;
+      
+      // Combine if:
+      // 1. Same speaker as previous
+      // 2. Previous utterance was very short (< 2 seconds) OR current is very short
+      // 3. Gap between them is small (< 500ms)
+      if (currentCombined && 
+          currentCombined.speaker === utterance.speaker &&
+          (utteranceDuration < 2000 || (currentCombined.endMs - currentCombined.startMs) < 2000) &&
+          (utterance.startMs - currentCombined.endMs) < 500) {
+        
+        // Combine with previous
+        currentCombined.text += ' ' + utterance.text;
+        currentCombined.endMs = utterance.endMs;
+      } else {
+        // Start new utterance
+        if (currentCombined) {
+          combinedUtterances.push(currentCombined);
+        }
+        currentCombined = { ...utterance };
+      }
+    }
+    
+    // Don't forget the last one
+    if (currentCombined) {
+      combinedUtterances.push(currentCombined);
+    }
+    
+    return combinedUtterances.length > 0 ? combinedUtterances : utterances;
   }
 
   // BULLETPROOF: Get current caption with robust error handling
@@ -109,26 +148,35 @@ class BulletproofCaptionService {
       );
       
       if (currentUtterance) {
-        // For long utterances, advance through text chunks based on time position
+        let text = currentUtterance.text;
+        
+        // CORE FIX: Check if this should be capitalized based on the previous utterance
+        const shouldCapitalize = !this.previousUtteranceText || 
+          /[.!?]\s*$/.test(this.previousUtteranceText);
+        
+        // Only capitalize if it's truly a new sentence
+        if (!shouldCapitalize && /^[A-Z]/.test(text)) {
+          // If it starts with a capital but shouldn't, make it lowercase
+          text = text.charAt(0).toLowerCase() + text.slice(1);
+        }
+        
+        // Handle long utterances with progressive display
         const utteranceDuration = currentUtterance.endMs - currentUtterance.startMs;
         const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
         const progressRatio = timeIntoUtterance / utteranceDuration;
         
-        const displayText = this.getProgressiveText(currentUtterance.text, progressRatio);
-        
-        // Debug long utterances every few seconds
-        if (currentUtterance.text.length > 120 && relativeTimeMs % 3000 < 100) {
-          console.log('[CaptionService] Progressive text debug:', {
-            utteranceDuration: `${Math.round(utteranceDuration/1000)}s`,
-            timeIntoUtterance: `${Math.round(timeIntoUtterance/1000)}s`,
-            progressRatio: Math.round(progressRatio * 100) + '%',
-            fullTextLength: currentUtterance.text.length,
-            displayTextPreview: displayText.substring(0, 50) + '...'
-          });
+        // For long text, break into chunks but preserve the corrected capitalization
+        if (text.length > 120) {
+          const chunks = this.breakIntoChunks(text, 120);
+          const chunkIndex = Math.min(Math.floor(progressRatio * chunks.length), chunks.length - 1);
+          text = chunks[chunkIndex];
         }
         
+        // Store for next iteration
+        this.previousUtteranceText = currentUtterance.text;
+        
         return {
-          text: displayText,
+          text: text,
           speaker: currentUtterance.speaker,
           isActive: true
         };
@@ -140,8 +188,9 @@ class BulletproofCaptionService {
       );
       
       if (nextUtterance) {
+        // Upcoming utterance - preserve original text without forced capitalization
         return {
-          text: this.normalizeText(nextUtterance.text),
+          text: this.smartCapitalize(nextUtterance.text, false), // false = not forcing start-of-utterance
           speaker: nextUtterance.speaker,
           isActive: false
         };
@@ -162,8 +211,9 @@ class BulletproofCaptionService {
         }
       }
       
+      // Fallback utterance - preserve original text without forced capitalization
       return {
-        text: this.normalizeText(closestUtterance.text),
+        text: this.smartCapitalize(closestUtterance.text, false), // false = not forcing start-of-utterance
         speaker: closestUtterance.speaker,
         isActive: false // Show as inactive since we're not in the exact timing
       };
@@ -208,9 +258,9 @@ class BulletproofCaptionService {
     
     const MAX_CHARS = 120; // Same as normalizeText limit
     
-    // If text is short enough, just return it normally
+    // If text is short enough, just return it with smart capitalization
     if (normalizedText.length <= MAX_CHARS) {
-      return this.finalizeText(normalizedText);
+      return this.smartCapitalize(normalizedText, true); // true = this is the start of utterance
     }
     
     // Break long text into chunks
@@ -222,7 +272,38 @@ class BulletproofCaptionService {
       chunks.length - 1
     );
     
-    return this.finalizeText(chunks[chunkIndex]);
+    // Only apply smart capitalization to the first chunk
+    // Later chunks should preserve their original capitalization
+    if (chunkIndex === 0) {
+      return this.smartCapitalize(chunks[chunkIndex], true);
+    } else {
+      // Mid-utterance chunk - preserve original capitalization
+      return chunks[chunkIndex];
+    }
+  }
+  
+  // New helper: Smart capitalization that knows context
+  smartCapitalize(text, isStartOfUtterance) {
+    if (!text) return '';
+    
+    // If this is the start of an utterance
+    if (isStartOfUtterance) {
+      const startsWithCapital = /^[A-Z]/.test(text);
+      const isCommonPronoun = /^(i|i'm|i'll|i'd|i've)\b/i.test(text);
+      
+      if (startsWithCapital) {
+        return text; // Already capitalized
+      } else if (isCommonPronoun) {
+        // Capitalize "i" pronouns
+        return text.charAt(0).toUpperCase() + text.slice(1);
+      } else if (/^[a-z]/.test(text)) {
+        // Starts with lowercase - check if it looks like a sentence start
+        // Only capitalize if it's after a long gap or at the very beginning
+        return text; // Keep lowercase for mid-conversation utterances
+      }
+    }
+    
+    return text; // Default: preserve original
   }
 
   // Helper: Break text into display-sized chunks at natural boundaries
@@ -274,15 +355,24 @@ class BulletproofCaptionService {
     if (!text) return '';
     
     // Only capitalize if this looks like the start of a sentence
-    // Check if text starts with a capital letter, sentence punctuation, or common sentence starters
-    const startsWithSentence = /^[A-Z]/.test(text) || 
-                               /^(And|But|So|The|This|That|It|I|We|You|They|He|She|When|Where|Why|How|If|Because|Since|Although|However|Therefore|Meanwhile|Finally|First|Second|Next|Then|Now|Today|Yesterday|Tomorrow)\b/.test(text);
+    // Check if already starts with capital OR is a known sentence starter (case-sensitive)
+    const startsWithCapital = /^[A-Z]/.test(text);
+    const isCommonSentenceStarter = /^(I|We|You|They|He|She|It)\b/.test(text); // Single letters/pronouns that should be capitalized
     
-    if (startsWithSentence || text.match(/^[.!?]\s*/)) {
-      // This is likely the start of a sentence - capitalize first letter
+    // DON'T capitalize if text starts with lowercase (unless it's a pronoun like "i")
+    const startsWithLowercase = /^[a-z]/.test(text);
+    
+    if (startsWithCapital) {
+      // Already capitalized - leave it
+      return text;
+    } else if (isCommonSentenceStarter) {
+      // Common sentence starter that should be capitalized (like "i" → "I")
       return text.charAt(0).toUpperCase() + text.slice(1);
+    } else if (startsWithLowercase) {
+      // Starts with lowercase - this is mid-sentence, keep as-is
+      return text;
     } else {
-      // This is likely mid-sentence - keep original capitalization
+      // Starts with number or punctuation - keep as-is
       return text;
     }
   }
@@ -291,45 +381,51 @@ class BulletproofCaptionService {
   normalizeText(text) {
     if (!text) return '';
     
-    // CRITICAL: Enforce 2-line maximum (approximately 60 characters)
+    // Normalize whitespace and fix sentence spacing
     let normalizedText = text
       .trim()
       .replace(/\s+/g, ' ')                    // Normalize whitespace
       .replace(/([.!?])\s*([a-z])/g, '$1 $2'); // Fix sentence spacing
     
-    // Enforce character limit for 2-line display
-    if (normalizedText.length > 60) {
-      // Find last complete sentence that fits
-      const sentences = normalizedText.split(/[.!?]+/);
-      let truncated = '';
+    // INCREASED LIMIT: Allow up to 120 characters (about 3-4 lines)
+    // This prevents cutting off mid-sentence for short utterances
+    const MAX_CHARS = 120;
+    
+    if (normalizedText.length > MAX_CHARS) {
+      // Try to find a natural break point (sentence or clause)
+      const breakPoints = ['. ', '! ', '? ', ', ', ' - ', ' — '];
+      let bestBreak = -1;
+      let bestBreakChar = '';
       
-      for (const sentence of sentences) {
-        const candidate = truncated + (truncated ? '. ' : '') + sentence.trim();
-        if (candidate.length <= 60 && sentence.trim()) {
-          truncated = candidate;
-        } else {
-          break;
+      // Find the last natural break point before the limit
+      for (const breakPoint of breakPoints) {
+        const index = normalizedText.lastIndexOf(breakPoint, MAX_CHARS);
+        if (index > bestBreak && index > MAX_CHARS * 0.5) { // At least halfway through
+          bestBreak = index;
+          bestBreakChar = breakPoint.trim();
         }
       }
       
-      if (!truncated) {
-        // If no complete sentence fits, truncate at word boundary
+      if (bestBreak > 0) {
+        // Cut at natural break point
+        normalizedText = normalizedText.substring(0, bestBreak + bestBreakChar.length);
+      } else {
+        // No natural break - cut at word boundary
         const words = normalizedText.split(' ');
+        let truncated = '';
         for (const word of words) {
-          if ((truncated + ' ' + word).length <= 60) {
+          if ((truncated + ' ' + word).trim().length <= MAX_CHARS) {
             truncated += (truncated ? ' ' : '') + word;
           } else {
             break;
           }
         }
+        normalizedText = truncated + '...';
       }
-      
-      normalizedText = truncated + '...';
     }
     
-    // PRESERVE AssemblyAI's capitalization - don't force lowercase
-    // Only ensure first letter is capitalized if it isn't already
-    if (normalizedText.length > 0 && normalizedText.charAt(0) !== normalizedText.charAt(0).toUpperCase()) {
+    // Ensure first letter is capitalized
+    if (normalizedText.length > 0) {
       normalizedText = normalizedText.charAt(0).toUpperCase() + normalizedText.slice(1);
     }
     

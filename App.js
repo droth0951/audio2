@@ -58,6 +58,15 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
   const [currentCaption, setCurrentCaption] = useState('');
 
   useEffect(() => {
+    // DEBUG: Log what position the caption component receives
+    if (typeof currentTimeMs === 'number' && currentTimeMs % 3000 < 100) { // Log every ~3 seconds
+      console.log('🎬 SimpleCaptionOverlay received:', {
+        currentTimeMs,
+        clipStartMs,
+        hasTranscript: !!transcript
+      });
+    }
+    
     if (!transcript || typeof currentTimeMs !== 'number') {
       setCurrentCaption('');
       return;
@@ -71,21 +80,6 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
     } else {
       setCurrentCaption('');
     }
-
-    // Debug logging disabled during screen recording to prevent main thread blocking
-    // if (__DEV__) {
-    //   console.log('🎬 === BULLETPROOF CAPTION OVERLAY DEBUG ===');
-    //   console.log('🎬 CaptionService result:', {
-    //     text,
-    //     isActive,
-    //     speaker,
-    //     currentTimeMs,
-    //     clipStartMs
-    //   });
-    //   
-    //   // Log CaptionService debug info
-    //   console.log('🎬 CaptionService debug info:', captionService.getDebugInfo());
-    // }
 
   }, [transcript, currentTimeMs, clipStartMs]);
 
@@ -102,26 +96,6 @@ const SimpleCaptionOverlay = ({ transcript, currentTimeMs, clipStartMs = 0 }) =>
   );
 };
 
-// BULLETPROOF: Debug component for development
-const CaptionDebugPanel = ({ currentTimeMs }) => {
-  if (!__DEV__) return null;
-  
-  const debugInfo = captionService.getDebugInfo();
-  const currentCaption = captionService.getCurrentCaption(currentTimeMs);
-  
-  return (
-    <View style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10 }}>
-      <Text style={{ color: 'white', fontSize: 12 }}>
-        {JSON.stringify({
-          relativeTime: currentTimeMs - debugInfo.clipStartMs,
-          currentCaption: currentCaption.text,
-          isActive: currentCaption.isActive,
-          utteranceCount: debugInfo.utteranceCount
-        }, null, 2)}
-      </Text>
-    </View>
-  );
-};
 
 // Recording View Component
 const RecordingView = ({ 
@@ -196,19 +170,11 @@ const RecordingView = ({
       {/* Captions - ALWAYS VISIBLE WHEN ENABLED */}
       {captionsEnabled && preparedTranscript && (
         <>
-          {/* BULLETPROOF: Enable CaptionService debug mode */}
-          {(() => {
-            captionService.setDebugMode(true);
-            return null;
-          })()}
           <SimpleCaptionOverlay
             transcript={preparedTranscript}
             currentTimeMs={position}
             clipStartMs={clipStart}
           />
-          
-          {/* BULLETPROOF: Debug panel for development */}
-          <CaptionDebugPanel currentTimeMs={position} />
         </>
       )}
 
@@ -1578,13 +1544,14 @@ export default function App() {
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
           
-          // Log position updates during recording
-          if (newSound._isRecording) {
-            console.log('🎵 Position update during recording:', {
-              position: status.positionMillis,
-              clipEnd: newSound._recordingClipEnd,
-              isRecording: newSound._isRecording,
-              shouldStop: status.positionMillis >= newSound._recordingClipEnd
+          // DEBUG: Log why position might not be updating during recording
+          if (newSound._isRecording && status.positionMillis % 5000 < 100) { // Log every ~5 seconds
+            console.log('🎯 Recording position check:', {
+              positionMillis: status.positionMillis,
+              isLoaded: status.isLoaded,
+              isScrubbing: isScrubbing,
+              willUpdatePosition: status.isLoaded && !isScrubbing,
+              isPlaying: status.isPlaying
             });
           }
           
@@ -1596,12 +1563,17 @@ export default function App() {
               buffer: 500,
               isRecording: newSound._isRecording
             });
+            
+            // IMMEDIATELY clear all recording flags to prevent repeated calls
+            newSound._isRecording = false;
+            setIsRecording(false);  // Also clear React state immediately
+            
             // Clear timer to prevent double stopping
             if (recordingTimerRef.current) {
               clearTimeout(recordingTimerRef.current);
               recordingTimerRef.current = null;
             }
-            // Don't clear flags here - let stopVideoRecording() handle cleanup
+            
             stopVideoRecording();
           }
         }
@@ -2087,6 +2059,17 @@ export default function App() {
           speakers_expected: assemblyAIPayload.speakers_expected
         });
 
+        // CRITICAL: Log exact URLs for CDN debugging
+        console.log('🌐 === URL CONSISTENCY DEBUG ===');
+        console.log('🌐 Original Episode URL:', selectedEpisode?.audioUrl);
+        console.log('🌐 TrimResponse URL:', trimResponse.audioUrl);
+        console.log('🌐 AssemblyAI Payload URL:', assemblyAIPayload.audio_url);
+        console.log('🌐 URLs Match Original?', {
+          trimResponseMatchesOriginal: trimResponse.audioUrl === selectedEpisode?.audioUrl,
+          assemblyAIMatchesOriginal: assemblyAIPayload.audio_url === selectedEpisode?.audioUrl,
+          allUrlsMatch: trimResponse.audioUrl === selectedEpisode?.audioUrl && assemblyAIPayload.audio_url === selectedEpisode?.audioUrl
+        });
+        
         // Verify the timing makes sense for the selected episode
         console.log('🎬 Episode Context Check:', {
           selectedEpisodeTitle: selectedEpisode?.title?.substring(0, 50) + '...',
@@ -2226,15 +2209,15 @@ export default function App() {
               console.log('🎬 Assembly completed! Captions ready');
               
               if (words.length > 0) {
-                // BULLETPROOF: AssemblyAI already provides clip-relative timing when using audio_start_from
-                // DO NOT normalize timestamps - that causes double normalization issues
-                console.log('🎬 Using AssemblyAI response directly (timestamps already normalized)');
+                // File upload only - timestamps already start from 0, no normalization needed
+                console.log('🎬 Using FILE UPLOAD response - timestamps start from 0, no normalization needed');
+                console.log('🔍 AssemblyAI File URL:', result.audio_url);
                 
-                // Store the raw AssemblyAI response - normalize utterances to clip-relative timing
+                // Store the raw AssemblyAI response - no normalization needed for file upload
                 const processedUtterances = result.utterances?.map(utterance => ({
                   ...utterance,
-                  startMs: utterance.start - clipStart,  // Actually subtract clipStart
-                  endMs: utterance.end - clipStart,      // Actually subtract clipStart  
+                  startMs: utterance.start,  // No clipStart subtraction needed
+                  endMs: utterance.end,      // No clipStart subtraction needed
                   text: utterance.text,
                   speaker: utterance.speaker,
                   normalized: true
@@ -2272,11 +2255,11 @@ export default function App() {
                 // Fallback: use the full text
                 console.log('🎬 No words data, using full text fallback');
                 
-                // BULLETPROOF: Same approach - normalize utterances properly
+                // BULLETPROOF: Same approach - no normalization needed for file upload
                 const processedUtterances = result.utterances?.map(utterance => ({
                   ...utterance,
-                  startMs: utterance.start - clipStart,  // Actually subtract clipStart
-                  endMs: utterance.end - clipStart,      // Actually subtract clipStart  
+                  startMs: utterance.start,  // No clipStart subtraction needed
+                  endMs: utterance.end,      // No clipStart subtraction needed
                   text: utterance.text,
                   speaker: utterance.speaker,
                   normalized: true
@@ -2385,6 +2368,20 @@ export default function App() {
     try {
       console.log('🎵 Getting timing info for clip:', startMs, 'to', endMs, 'ms');
       
+      // CRITICAL: Test URL resolution on device for CDN debugging
+      console.log('🌐 === AUDIO2 URL RESOLUTION DEBUG ===');
+      console.log('🌐 Audio2 will send URL:', audioUrl);
+      try {
+        const parsedUrl = new URL(audioUrl);
+        console.log('🌐 URL Domain:', parsedUrl.hostname);
+        console.log('🌐 URL Path:', parsedUrl.pathname);
+        console.log('🌐 URL Query:', parsedUrl.search);
+      } catch (urlError) {
+        console.log('🌐 URL parsing failed:', urlError.message);
+      }
+      
+      // Use original URL - no resolution to avoid CDN session mismatch
+      
       // Call Railway server for timing validation
       const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
         method: 'POST',
@@ -2392,7 +2389,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          audioUrl: audioUrl,
+          audioUrl: audioUrl, // Use original URL to maintain CDN session
           start: startMs,
           end: endMs
         })
@@ -2407,9 +2404,9 @@ export default function App() {
         return result; // Return the full response object
       } else {
         console.error('🎵 Server error:', result.error);
-        // Fallback: return basic timing info
+        // Fallback: return basic timing info with resolved URL
         return {
-          audioUrl: audioUrl,
+          audioUrl: audioUrl, // Use original URL to maintain CDN session
           startTime: startMs / 1000,
           endTime: endMs / 1000,
           duration: (endMs - startMs) / 1000
@@ -2418,9 +2415,9 @@ export default function App() {
       
     } catch (error) {
       console.error('🎵 Audio trimming failed:', error);
-      // Fallback: return basic timing info
+      // Fallback: return basic timing info with resolved URL
       return {
-        audioUrl: audioUrl,
+        audioUrl: resolvedAudioUrl, // Use resolved URL for consistency
         startTime: startMs / 1000,
         endTime: endMs / 1000,
         duration: (endMs - startMs) / 1000
@@ -2531,18 +2528,21 @@ export default function App() {
       
       // Seek to clip start and play
       console.log('🎵 Seeking to clip start:', clipStart);
+      console.log('🎯 Position state before seek:', position);
       await sound.setPositionAsync(clipStart);
       console.log('🎵 Starting audio playback');
       await sound.playAsync();
       console.log('🎵 Audio playback started');
+      console.log('🎯 Position state after playback start:', position);
       
-      // Stop recording after clip duration
+      // Stop recording after clip duration + 1 second buffer for captions
       const clipDuration = clipEnd - clipStart;
-      console.log('🎬 Starting recording timer:', { clipStart, clipEnd, clipDuration });
+      const recordingDuration = clipDuration + 1000; // Add 1 second buffer
+      console.log('🎬 Starting recording timer:', { clipStart, clipEnd, clipDuration, recordingDuration });
       recordingTimerRef.current = setTimeout(async () => {
         console.log('⏰ Recording timer expired - stopping recording');
         await stopVideoRecording();
-      }, clipDuration);
+      }, recordingDuration);
       
       // Set a flag to indicate we're recording so the existing callback can handle stopping
       sound._isRecording = true;
@@ -2550,18 +2550,8 @@ export default function App() {
       console.log('🎬 Set recording flags:', { isRecording: sound._isRecording, clipEnd: sound._recordingClipEnd });
       
       // Add a periodic check to debug recording state
-      const debugInterval = setInterval(() => {
-        if (sound && sound._isRecording) {
-          console.log('🎬 Recording debug:', {
-            position: position,
-            clipEnd: sound._recordingClipEnd,
-            isRecording: sound._isRecording,
-            shouldStop: position >= sound._recordingClipEnd
-          });
-        } else {
-          clearInterval(debugInterval);
-        }
-      }, 1000);
+      // Debug logging removed to prevent white screen during recording
+      // Position and recording state are monitored by audio status callback
       
     } catch (error) {
       console.error('Recording error:', error);
@@ -2586,7 +2576,8 @@ export default function App() {
       isRecording: isRecording,
       soundIsRecording: sound?._isRecording,
       position: position,
-      clipEnd: clipEnd
+      clipEnd: clipEnd,
+      hasTimer: !!recordingTimerRef.current
     });
     
     // Guard: Don't stop if cleanup is in progress
@@ -2595,12 +2586,9 @@ export default function App() {
       return;
     }
     
-    // Check if we have anything to clean up
-    const hasRecordingActivity = isRecording || sound?._isRecording || recordingTimerRef.current;
-    if (!hasRecordingActivity) {
-      console.log('⚠️ No recording activity to clean up');
-      return;
-    }
+    // ALWAYS proceed with cleanup - the fact that this function was called means we need to clean up
+    // The flags might be temporarily out of sync due to async React state updates
+    console.log('🧹 Proceeding with cleanup regardless of flag states');
     
     // Set cleanup flag to prevent multiple calls
     recordingCleanupState.isCleanupInProgress = true;
