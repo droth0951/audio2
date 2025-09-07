@@ -81,7 +81,7 @@ const AboutModal = ({ visible, onClose }) => {
             />
             <Text style={styles.appName}>Audio2</Text>
             <Text style={styles.tagline}>Turn audio insights into social conversations</Text>
-                            <Text style={styles.version}>Version 1.4.0</Text>
+                            <Text style={styles.version}>Version 1.4.0 (OTA Test)</Text>
           </View>
 
           {/* Main Description */}
