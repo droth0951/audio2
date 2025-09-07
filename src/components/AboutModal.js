@@ -114,7 +114,7 @@ const AboutModal = ({ visible, onClose }) => {
               </View>
               <View style={styles.featureItem}>
                 <MaterialCommunityIcons name="aspect-ratio" size={20} color="#d97706" />
-                <Text style={styles.featureText}>Multiple formats: 9:16 vertical, 1:1 square</Text>
+                <Text style={styles.featureText}>Professional vertical video format optimized for mobile</Text>
               </View>
               <View style={styles.featureItem}>
                 <MaterialCommunityIcons name="download" size={20} color="#d97706" />
@@ -170,7 +170,7 @@ const AboutModal = ({ visible, onClose }) => {
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>5</Text>
                   </View>
-                  <Text style={styles.stepText}>Choose format and generate professional video</Text>
+                  <Text style={styles.stepText}>Generate professional video with captions</Text>
                 </View>
                 <View style={styles.stepItem}>
                   <View style={styles.stepNumber}>
@@ -219,7 +219,7 @@ const AboutModal = ({ visible, onClose }) => {
                 </View>
                 <View style={styles.techDetail}>
                   <Text style={styles.techLabel}>Compatibility</Text>
-                  <Text style={styles.techValue}>iOS 12.0+ • iPhone only</Text>
+                  <Text style={styles.techValue}>iOS 12.0+ • iPhone & iPad</Text>
                 </View>
               </View>
             )}
