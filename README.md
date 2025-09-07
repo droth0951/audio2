@@ -39,4 +39,4 @@ If screen recordings show blank captions:
 - Verify captions are rendered in RecordingView component
 - Ensure proper audio session configuration
 
-## Development 
+## Development # Build trigger
