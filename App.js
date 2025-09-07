@@ -50,6 +50,19 @@ const formatTime = (millis) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+// Helper function to detect problematic podcast hosts
+const checkProblematicPodcast = (url) => {
+  if (!url) return false;
+  const problematicDomains = [
+    'podtrac.com',
+    'chrt.fm', 
+    'traffic.megaphone.fm',
+    'chtbl.com',
+    'pdst.fm'
+  ];
+  return problematicDomains.some(domain => url.includes(domain));
+};
+
 
 // REMOVED: WordBasedChunkedCaptionOverlay - Too complex, causing bugs
 
@@ -730,7 +743,6 @@ export default function App() {
   const [podcastTitle, setPodcastTitle] = useState('');
 
   const [showRecordingGuidance, setShowRecordingGuidance] = useState(false);
-  const [dontShowGuidanceAgain, setDontShowGuidanceAgain] = useState(false);
 
   // Shared values for the scrubber
   const progressSharedValue = useSharedValue(0);
@@ -1828,140 +1840,184 @@ export default function App() {
     </View>
   );
 
-  // 2. FINAL WORKING MODAL
-  const RecordingGuidanceModal = () => (
-    <View style={{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.9)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 99999,
-    }}>
+  // 2. FINAL WORKING MODAL WITH CAPTION WARNING
+  const RecordingGuidanceModal = () => {
+    const [captionsEnabledForRecording, setCaptionsEnabledForRecording] = useState(captionsEnabled);
+    const isProblematic = checkProblematicPodcast(selectedEpisode?.enclosure?.url);
+    
+    return (
       <View style={{
-        backgroundColor: '#2d2d2d',
-        borderRadius: 16,
-        padding: 24,
-        marginHorizontal: 20,
-        borderWidth: 2,
-        borderColor: '#d97706',
-        minWidth: 300,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 99999,
       }}>
-        <Text style={{
-          color: '#f4f4f4',
-          fontSize: 18,
-          fontWeight: '600',
-          textAlign: 'center',
-          marginBottom: 16,
+        <View style={{
+          backgroundColor: '#2d2d2d',
+          borderRadius: 16,
+          padding: 24,
+          marginHorizontal: 20,
+          borderWidth: 2,
+          borderColor: '#d97706',
+          minWidth: 300,
         }}>
-          Ready to make your Audio2 clip!
-        </Text>
-        
-        <Text style={{
-          color: '#b4b4b4',
-          fontSize: 14,
-          lineHeight: 20,
-          marginBottom: 16,
-        }}>
-          • Keep your screen on during recording{`\n`}
-          • Don't switch apps or lock your phone{`\n`}
-          • The recording will start automatically{`\n`}
-          • Your clip will be saved to Photos when complete
-        </Text>
-        
-        <Text style={{
-          color: '#d97706',
-          fontSize: 12,
-          lineHeight: 16,
-          marginBottom: 20,
-          textAlign: 'center',
-          fontStyle: 'italic',
-        }}>
-          iOS will ask for screen recording permission. Tap "Start Recording" to allow Audio2 to capture your screen and audio for the video clip.
-        </Text>
-        
-        <TouchableOpacity 
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 24,
-          }}
-          onPress={() => setDontShowGuidanceAgain(!dontShowGuidanceAgain)}
-        >
-          <View style={{
-            width: 20,
-            height: 20,
-            borderWidth: 2,
-            borderColor: dontShowGuidanceAgain ? '#d97706' : '#404040',
-            backgroundColor: dontShowGuidanceAgain ? '#d97706' : 'transparent',
-            borderRadius: 4,
-            marginRight: 8,
-            justifyContent: 'center',
-            alignItems: 'center',
+          <Text style={{
+            color: '#f4f4f4',
+            fontSize: 18,
+            fontWeight: '600',
+            textAlign: 'center',
+            marginBottom: 16,
           }}>
-            {dontShowGuidanceAgain && (
-              <MaterialCommunityIcons name="check" size={16} color="#f4f4f4" />
-            )}
-          </View>
+            Ready to make your Audio2 clip!
+          </Text>
+          
           <Text style={{
             color: '#b4b4b4',
             fontSize: 14,
+            lineHeight: 20,
+            marginBottom: 16,
           }}>
-            Don't show this again
+            • Keep your screen on during recording{`\n`}
+            • Don't switch apps or lock your phone{`\n`}
+            • The recording will start automatically{`\n`}
+            • Your clip will be saved to Photos when complete
           </Text>
-        </TouchableOpacity>
-        
-        <View style={{
-          flexDirection: 'row',
-          gap: 12,
-        }}>
-          <TouchableOpacity 
-            style={{
-              flex: 1,
-              backgroundColor: '#404040',
-              paddingVertical: 12,
+
+          {/* Caption warning for problematic podcasts */}
+          {isProblematic && captionsEnabledForRecording && (
+            <View style={{
+              backgroundColor: '#3d2d1d',  // Subtle orange-tinted background
+              borderLeftWidth: 3,
+              borderLeftColor: '#d97706',
               borderRadius: 8,
-              alignItems: 'center',
-            }}
-            onPress={() => setShowRecordingGuidance(false)}
-          >
-            <Text style={{
-              color: '#f4f4f4',
-              fontSize: 14,
-              fontWeight: '500',
+              padding: 12,
+              marginTop: 16,
+              marginBottom: 16,
             }}>
-              Cancel
-            </Text>
-          </TouchableOpacity>
+              <Text style={{
+                color: '#f4a460',
+                fontSize: 13,
+                lineHeight: 18,
+              }}>
+                ⚠️ Caption timing may be off with this podcast host. You can disable captions below if needed.
+              </Text>
+            </View>
+          )}
+
+          {/* Caption toggle for problematic podcasts */}
+          {isProblematic && (
+            <>
+              <View style={{
+                borderTopWidth: 1,
+                borderTopColor: '#404040',
+                marginTop: 8,
+                marginBottom: 16,
+              }} />
+              
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}
+                onPress={() => setCaptionsEnabledForRecording(!captionsEnabledForRecording)}
+              >
+                <Text style={{
+                  color: '#f4f4f4',
+                  fontSize: 14,
+                }}>
+                  Include Captions
+                </Text>
+                
+                <View style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: captionsEnabledForRecording ? '#d97706' : '#404040',
+                  padding: 2,
+                }}>
+                  <View style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: '#f4f4f4',
+                    transform: [{ translateX: captionsEnabledForRecording ? 20 : 0 }],
+                  }} />
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
           
-          <TouchableOpacity 
-            style={{
-              flex: 1,
-              backgroundColor: '#d97706',
-              paddingVertical: 12,
-              borderRadius: 8,
-              alignItems: 'center',
-            }}
-            onPress={() => {
-              setShowRecordingGuidance(false);
-              setShowRecordingView(true);
-            }}
-          >
-            <Text style={{
-              color: '#f4f4f4',
-              fontSize: 14,
-              fontWeight: '600',
-            }}>
-              Continue
-            </Text>
-          </TouchableOpacity>
+          <Text style={{
+            color: '#d97706',
+            fontSize: 12,
+            lineHeight: 16,
+            marginBottom: 20,
+            textAlign: 'center',
+            fontStyle: 'italic',
+          }}>
+            iOS will ask for screen recording permission. Tap "Start Recording" to allow Audio2 to capture your screen and audio for the video clip.
+          </Text>
+          
+          <View style={{
+            flexDirection: 'row',
+            gap: 12,
+          }}>
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: '#404040',
+                paddingVertical: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setShowRecordingGuidance(false)}
+            >
+              <Text style={{
+                color: '#f4f4f4',
+                fontSize: 14,
+                fontWeight: '500',
+              }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: '#d97706',
+                paddingVertical: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => {
+                setShowRecordingGuidance(false);
+                // If it's a problematic podcast, use the modal's caption state
+                if (isProblematic) {
+                  setCaptionsEnabled(captionsEnabledForRecording);
+                }
+                setShowRecordingView(true);
+              }}
+            >
+              <Text style={{
+                color: '#f4f4f4',
+                fontSize: 14,
+                fontWeight: '600',
+              }}>
+                Continue
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // BULLETPROOF: Video creation with comprehensive error handling
   const handleCreateVideo = async () => {
@@ -2336,11 +2392,7 @@ export default function App() {
       await loadEpisode(selectedEpisode);
     }
     
-    if (!dontShowGuidanceAgain) {
-      setShowRecordingGuidance(true);
-    } else {
-      setShowRecordingView(true);
-    }
+    setShowRecordingGuidance(true);
   };
 
   // Add caption status info display (optional)
