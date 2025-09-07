@@ -136,6 +136,10 @@ const RecordingView = ({
       colors={['#1c1c1c', '#2d2d2d']}
       style={styles.recordingBackground}
     >
+      {isRecording && (
+        <Text style={styles.recordingPodcastTitle}>{podcastTitle || 'Podcast'}</Text>
+      )}
+      
       {/* Episode artwork - ALWAYS VISIBLE */}
       {selectedEpisode?.artwork && (
         <Image 
@@ -144,6 +148,13 @@ const RecordingView = ({
           resizeMode="cover"
         />
       )}
+      
+      {/* Episode info - ALWAYS VISIBLE */}
+      <View style={styles.recordingEpisodeInfo}>
+        <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
+          {selectedEpisode?.title}
+        </Text>
+      </View>
       
       {/* Progress timeline - ALWAYS VISIBLE */}
       <View style={styles.recordingTimelineContainer}>
@@ -169,16 +180,6 @@ const RecordingView = ({
         style={styles.recordingWaveform}
         isRecording={isRecording} // Pass recording state for optimized animation
       />
-      
-      {/* Episode info - ALWAYS VISIBLE */}
-      <View style={styles.recordingEpisodeInfo}>
-        <Text style={styles.recordingEpisodeTitle} numberOfLines={2}>
-          {selectedEpisode?.title}
-        </Text>
-        <Text style={styles.recordingPodcastName}>
-          {podcastTitle || 'The Town with Matthew Belloni'}
-        </Text>
-      </View>
 
       {/* Captions - ALWAYS VISIBLE WHEN ENABLED */}
       {captionsEnabled && preparedTranscript && (
@@ -4444,22 +4445,46 @@ const styles = StyleSheet.create({
   recordingContainer: {
     flex: 1,
   },
+  recordingStatusText: {
+    position: 'absolute',
+    top: 70,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: '#ffffff',  // Pure white
+    fontSize: 32,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    zIndex: 10,
+  },
+  recordingPodcastTitle: {
+    textAlign: 'center',
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 15,
+  },
   recordingBackground: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingTop: 10,
   },
   recordingArtwork: {
-    width: 160,
-    height: 160,
+    width: 140,
+    height: 140,
     borderRadius: 20,
-    marginBottom: 40,
+    marginTop: 15,
+    marginBottom: 15,
     backgroundColor: '#404040',
   },
   recordingTimelineContainer: {
     width: '100%',
-    marginBottom: 30,
+    marginBottom: 15,
     paddingHorizontal: 40, // Increased padding to prevent timeline from running off screen
   },
   recordingTimeline: {
@@ -4483,11 +4508,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   recordingWaveform: {
-    marginBottom: 10,
+    marginBottom: 15,
   },
   recordingEpisodeInfo: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
   },
   recordingEpisodeTitle: {
     color: '#f4f4f4',
@@ -5111,7 +5136,8 @@ suggestionTagText: {
   },
   captionOverlay: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 120,
+    marginBottom: 60,
     paddingHorizontal: 20,
     minHeight: 120,
   },
