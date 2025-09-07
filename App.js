@@ -32,6 +32,7 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Updates from 'expo-updates';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
 import * as KeepAwake from 'expo-keep-awake';
 import AboutModal from './src/components/AboutModal';
@@ -761,6 +762,27 @@ export default function App() {
   const textInputRef = useRef(null);
   const searchTextRef = useRef('');
   const [localSearchText, setLocalSearchText] = useState('');
+  
+  // Check for app updates
+  const checkForUpdates = async () => {
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      }
+    } catch (e) {
+      console.log('Update check failed:', e);
+    }
+  };
+  
+  // Check for updates on app start (production only)
+  useEffect(() => {
+    // Only check for updates in production builds
+    if (!__DEV__) {
+      checkForUpdates();
+    }
+  }, []);
   
   // Memoize the onChangeText function to prevent re-renders
   const handleSearchTextChange = useCallback((text) => {
