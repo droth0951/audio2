@@ -60,7 +60,15 @@ const checkProblematicPodcast = (url) => {
     'chtbl.com',
     'pdst.fm'
   ];
-  return problematicDomains.some(domain => url.includes(domain));
+  const isProblematic = problematicDomains.some(domain => url.includes(domain));
+  
+  console.log('🔍 checkProblematicPodcast:', {
+    url: url?.substring(0, 100) + '...',
+    isProblematic,
+    matchedDomain: problematicDomains.find(domain => url.includes(domain)) || 'none'
+  });
+  
+  return isProblematic;
 };
 
 
@@ -1843,7 +1851,16 @@ export default function App() {
   // 2. FINAL WORKING MODAL WITH CAPTION WARNING
   const RecordingGuidanceModal = () => {
     const [captionsEnabledForRecording, setCaptionsEnabledForRecording] = useState(captionsEnabled);
-    const isProblematic = checkProblematicPodcast(selectedEpisode?.enclosure?.url);
+    const episodeUrl = selectedEpisode?.audioUrl;
+    const isProblematic = checkProblematicPodcast(episodeUrl);
+    
+    // Debug logging
+    console.log('🔍 RecordingGuidanceModal Debug:', {
+      episodeUrl,
+      isProblematic,
+      captionsEnabled: captionsEnabledForRecording,
+      shouldShowWarning: isProblematic && captionsEnabledForRecording
+    });
     
     return (
       <View style={{
@@ -2692,24 +2709,24 @@ export default function App() {
         await MediaLibrary.saveToLibraryAsync(outputUrl);
         setRecordingStatus('Video saved to Photos!');
         
-        setRecordingStatus('Video saved to Photos!');
+        // Stop audio playback and reset position immediately when video is created
+        if (sound) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+          // Reset position to clip start so user can replay the clip
+          if (clipStart !== null) {
+            await sound.setPositionAsync(clipStart);
+            setPosition(clipStart);
+          }
+          console.log('🎵 Audio stopped and reset to clip start when video was created');
+        }
         
         Alert.alert(
           'Video Created!',
           'Your podcast clip has been saved to Photos. You can now share it on social media.',
           [
-            { text: 'OK', onPress: async () => {
-              // Stop audio playback and reset position when returning to episode detail page
-              if (sound) {
-                await sound.pauseAsync();
-                setIsPlaying(false);
-                // Reset position to clip start so user can replay the clip
-                if (clipStart !== null) {
-                  await sound.setPositionAsync(clipStart);
-                  setPosition(clipStart);
-                }
-                console.log('🎵 Audio stopped and reset to clip start when returning to episode detail page');
-              }
+            { text: 'OK', onPress: () => {
+              // Audio already stopped above, just dismiss the modal
               setShowRecordingView(false);
               setRecordingStatus('');
               setIsRecording(false); // Reset recording state
