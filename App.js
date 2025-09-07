@@ -60,15 +60,7 @@ const checkProblematicPodcast = (url) => {
     'chtbl.com',
     'pdst.fm'
   ];
-  const isProblematic = problematicDomains.some(domain => url.includes(domain));
-  
-  console.log('🔍 checkProblematicPodcast:', {
-    url: url?.substring(0, 100) + '...',
-    isProblematic,
-    matchedDomain: problematicDomains.find(domain => url.includes(domain)) || 'none'
-  });
-  
-  return isProblematic;
+  return problematicDomains.some(domain => url.includes(domain));
 };
 
 
@@ -1854,13 +1846,6 @@ export default function App() {
     const episodeUrl = selectedEpisode?.audioUrl;
     const isProblematic = checkProblematicPodcast(episodeUrl);
     
-    // Debug logging
-    console.log('🔍 RecordingGuidanceModal Debug:', {
-      episodeUrl,
-      isProblematic,
-      captionsEnabled: captionsEnabledForRecording,
-      shouldShowWarning: isProblematic && captionsEnabledForRecording
-    });
     
     return (
       <View style={{
