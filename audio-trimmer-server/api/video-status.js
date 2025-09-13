@@ -1,41 +1,68 @@
 // ✅ Following lines 39-82 from instructions: GET /api/video-status/:jobId endpoint
+// With detailed logging and real job queue integration
 
-// Import shared job storage (temporary in-memory solution)
-// TODO: Replace with Redis or database for production
+const jobQueue = require('../services/job-queue');
+const logger = require('../services/logger');
 
 module.exports = async (req, res) => {
-  console.log('📊 Video status check:', req.params.id);
+  const jobId = req.params.id;
+  
+  logger.debug('Status check requested', { jobId });
   
   try {
-    const jobId = req.params.id;
-    
     if (!jobId) {
+      logger.error('Status check missing job ID');
       return res.status(400).json({
         success: false,
         error: 'Job ID required'
       });
     }
 
-    // For MVP, return dummy data
-    // TODO: Implement real job status tracking
+    // Get status from job queue
+    const result = jobQueue.getJobStatus(jobId);
     
+    if (!result.success) {
+      logger.warn('Job not found for status check', { jobId });
+      return res.status(404).json(result);
+    }
+
     // ✅ Following lines 74-81: Status check response format
-    const mockStatus = {
-      jobId,
-      status: 'completed',  // or 'processing', 'failed'
-      videoUrl: `https://storage.com/video-${jobId}.mp4`,
-      cost: 0.008,
-      processingTime: 42000,
-      createdAt: new Date(Date.now() - 45000).toISOString(),
-      completedAt: new Date().toISOString()
+    const response = {
+      jobId: result.jobId,
+      status: result.status,
+      createdAt: result.createdAt,
+      ...(result.startedAt && { startedAt: result.startedAt }),
+      ...(result.completedAt && { completedAt: result.completedAt }),
+      ...(result.failedAt && { failedAt: result.failedAt }),
+      ...(result.result && {
+        videoUrl: result.result.videoUrl,
+        cost: result.result.cost,
+        processingTime: result.processingTime
+      }),
+      ...(result.error && { error: result.error }),
+      queuePosition: result.queuePosition,
+      estimatedTime: result.estimatedTime,
+      // Additional debug info
+      debug: {
+        activeJobs: result.activeJobs,
+        retries: result.retries || 0
+      }
     };
 
-    console.log(`✅ Status check for job ${jobId}: ${mockStatus.status}`);
+    logger.debug('Status check completed', { 
+      jobId, 
+      status: result.status,
+      queuePosition: result.queuePosition 
+    });
     
-    res.json(mockStatus);
+    res.json(response);
     
   } catch (error) {
-    console.error('❌ Status check error:', error);
+    logger.error('Status check failed', { 
+      jobId, 
+      error: error.message 
+    });
+    
     res.status(500).json({
       success: false,
       error: 'Failed to check video status'

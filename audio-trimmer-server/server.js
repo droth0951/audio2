@@ -27,6 +27,16 @@ const transcribeStatusHandler = require('./api/transcribe-status.js');
 const createVideoHandler = require('./api/create-video.js');
 const videoStatusHandler = require('./api/video-status.js');
 const downloadVideoHandler = require('./api/download-video.js');
+const cleanupStatsHandler = require('./api/cleanup-stats.js');
+const emergencyCleanupHandler = require('./api/emergency-cleanup.js');
+const testEmailHandler = require('./api/test-email.js');
+
+// PNG frame generation for testing
+const createFrameHandler = require('./api/create-frame.js');
+
+// ✅ Cleanup service for automatic video file management
+const cleanupService = require('./services/cleanup.js');
+const config = require('./config/settings.js');
 
 // Routes
 app.post('/api/trim-audio', trimAudioHandler);
@@ -35,12 +45,26 @@ app.get('/api/transcript/:id', transcribeStatusHandler);
 
 // ✅ Video generation routes
 app.post('/api/create-video', createVideoHandler);
+app.post('/api/create-frame', createFrameHandler);
 app.get('/api/video-status/:id', videoStatusHandler);
 app.get('/api/download-video/:id', downloadVideoHandler);
 
 // ✅ Test endpoint (lines 214-222 from instructions)
 const testVideoHandler = require('./api/test-video.js');
 app.post('/api/test-video', testVideoHandler);
+
+// Stats and monitoring endpoint
+const videoStatsHandler = require('./api/video-stats.js');
+const costAnalyticsHandler = require('./api/cost-analytics.js');
+app.get('/api/video-stats', videoStatsHandler);
+app.get('/api/cleanup-stats', cleanupStatsHandler);
+app.get('/api/cost-analytics', costAnalyticsHandler);
+
+// Emergency cleanup endpoint (requires authentication)
+app.post('/api/emergency-cleanup', emergencyCleanupHandler);
+
+// Test email endpoint
+app.post('/api/test-email', testEmailHandler);
 
 // OPTIONS handlers for CORS preflight
 app.options('/api/transcript', (req, res) => {
@@ -70,6 +94,12 @@ app.get('/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎵 Audio trimmer server running on port ${PORT}`);
   console.log(`🏥 Health check available at http://0.0.0.0:${PORT}/health`);
+  
+  // ✅ Start cleanup service if video generation is enabled
+  if (config.features.ENABLE_SERVER_VIDEO) {
+    cleanupService.startCleanupService();
+    console.log(`🧹 Cleanup service started - ${config.jobs.CLEANUP_AFTER_HOURS}h retention`);
+  }
 }).on('error', (err) => {
   console.error('❌ Server startup failed:', err);
   process.exit(1);

@@ -1,0 +1,212 @@
+{
+  "2025-09-13T04:00:00.000Z": {
+    "date": "2025-09-13T04:00:00.000Z",
+    "totalCost": 0.20344541666666666,
+    "jobCount": 14,
+    "jobs": [
+      {
+        "jobId": "vid_f1562620",
+        "timestamp": "2025-09-13T18:59:29.802Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00148279,
+          "processing": 0.003074,
+          "processingTimeMs": 3074
+        },
+        "total": 0.0073067900000000005,
+        "processingTime": 3074
+      },
+      {
+        "jobId": "vid_3dc93947",
+        "timestamp": "2025-09-13T19:08:26.678Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00125063,
+          "processing": 0.0022489999999999997,
+          "processingTimeMs": 2249
+        },
+        "total": 0.006249629999999999,
+        "processingTime": 2249
+      },
+      {
+        "jobId": "vid_c35c59ea",
+        "timestamp": "2025-09-13T19:20:38.674Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00175019,
+          "processing": 0.003062,
+          "processingTimeMs": 3062
+        },
+        "total": 0.00756219,
+        "processingTime": 3062
+      },
+      {
+        "jobId": "vid_0794b358",
+        "timestamp": "2025-09-13T19:26:08.050Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00183512,
+          "processing": 0.004502,
+          "processingTimeMs": 4502
+        },
+        "total": 0.00908712,
+        "processingTime": 4502
+      },
+      {
+        "jobId": "vid_f59f3f45",
+        "timestamp": "2025-09-13T19:28:27.308Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00183404,
+          "processing": 0.0036119999999999998,
+          "processingTimeMs": 3612
+        },
+        "total": 0.00819604,
+        "processingTime": 3612
+      },
+      {
+        "jobId": "vid_bc742aa0",
+        "timestamp": "2025-09-13T19:32:38.960Z",
+        "costs": {
+          "audioDownload": 0.0005,
+          "frameGeneration": 0.0015,
+          "videoComposition": 0.00075,
+          "storage": 0.00178039,
+          "processing": 0.004705,
+          "processingTimeMs": 4705
+        },
+        "total": 0.00923539,
+        "processingTime": 4705
+      },
+      {
+        "jobId": "vid_37de42d4",
+        "timestamp": "2025-09-13T19:35:52.422Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.001,
+          "videoComposition": 0.0005,
+          "storage": 0.00085358,
+          "processing": 0.002876,
+          "processingTimeMs": 2876
+        },
+        "total": 0.005562913333333333,
+        "processingTime": 2876
+      },
+      {
+        "jobId": "vid_764aa873",
+        "timestamp": "2025-09-13T19:38:01.320Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.001,
+          "videoComposition": 0.0005,
+          "storage": 0.0008593,
+          "processing": 0.002374,
+          "processingTimeMs": 2374
+        },
+        "total": 0.005066633333333333,
+        "processingTime": 2374
+      },
+      {
+        "jobId": "vid_4c947b16",
+        "timestamp": "2025-09-13T19:56:37.053Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.001,
+          "videoComposition": 0.0005,
+          "storage": 0.00085767,
+          "processing": 0.004454,
+          "processingTimeMs": 4454
+        },
+        "total": 0.007145003333333333,
+        "processingTime": 4454
+      },
+      {
+        "jobId": "vid_9698ab41",
+        "timestamp": "2025-09-13T20:06:51.101Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.001,
+          "videoComposition": 0.0005,
+          "storage": 0.00085862,
+          "processing": 0.004572,
+          "processingTimeMs": 4572
+        },
+        "total": 0.007263953333333333,
+        "processingTime": 4572
+      },
+      {
+        "jobId": "vid_cc82b8b5",
+        "timestamp": "2025-09-13T20:10:42.117Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00080271,
+          "processing": 0.019299999999999998,
+          "processingTimeMs": 19300
+        },
+        "total": 0.03293604333333333,
+        "processingTime": 19300
+      },
+      {
+        "jobId": "vid_260d8f9a",
+        "timestamp": "2025-09-13T20:19:35.854Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00080271,
+          "processing": 0.017544,
+          "processingTimeMs": 17544
+        },
+        "total": 0.031180043333333334,
+        "processingTime": 17544
+      },
+      {
+        "jobId": "vid_c29055e7",
+        "timestamp": "2025-09-13T20:23:12.622Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.0007915,
+          "processing": 0.017834,
+          "processingTimeMs": 17834
+        },
+        "total": 0.03145883333333333,
+        "processingTime": 17834
+      },
+      {
+        "jobId": "vid_13b811a0",
+        "timestamp": "2025-09-13T20:29:20.849Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.0008165000000000001,
+          "processing": 0.021544999999999998,
+          "processingTimeMs": 21545
+        },
+        "total": 0.03519483333333333,
+        "processingTime": 21545
+      }
+    ],
+    "breakdown": {
+      "audioDownload": 0.005666666666666665,
+      "frameGeneration": 0.061,
+      "videoComposition": 0.008500000000000002,
+      "storage": 0.01657575,
+      "processing": 0.111703
+    }
+  }
+}

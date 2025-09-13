@@ -1,12 +1,15 @@
 // ✅ Following lines 39-82 from instructions: POST /api/create-video endpoint
+// With safety features: feature flags, concurrent limits, cost caps, detailed logging
 
-const { v4: uuidv4 } = require('uuid');
-
-// In-memory job storage for MVP (will need Redis/DB for production)
-const jobStorage = new Map();
+const jobQueue = require('../services/job-queue');
+const logger = require('../services/logger');
+const config = require('../config/settings');
 
 module.exports = async (req, res) => {
-  console.log('🎬 Video creation request received');
+  logger.info('Video creation request received', { 
+    ip: req.ip,
+    userAgent: req.headers['user-agent']?.substring(0, 50) 
+  });
   
   try {
     // ✅ Following lines 46-62: Request format validation
@@ -22,6 +25,7 @@ module.exports = async (req, res) => {
 
     // Validate required fields
     if (!audioUrl || clipStart === undefined || clipEnd === undefined) {
+      logger.error('Missing required fields', { provided: Object.keys(req.body) });
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: audioUrl, clipStart, clipEnd'
@@ -30,55 +34,55 @@ module.exports = async (req, res) => {
 
     // Validate clip duration (30-60 seconds as per requirements)
     const duration = (clipEnd - clipStart) / 1000;
-    if (duration < 30 || duration > 60) {
+    if (duration < config.video.MIN_DURATION_SECONDS || duration > config.video.MAX_DURATION_SECONDS) {
+      logger.error('Invalid clip duration', { 
+        duration, 
+        min: config.video.MIN_DURATION_SECONDS, 
+        max: config.video.MAX_DURATION_SECONDS 
+      });
       return res.status(400).json({
         success: false,
-        error: 'Clip duration must be between 30 and 60 seconds'
+        error: `Clip duration must be between ${config.video.MIN_DURATION_SECONDS} and ${config.video.MAX_DURATION_SECONDS} seconds`
       });
     }
 
-    // Generate unique job ID
-    const jobId = `vid_${uuidv4().substring(0, 8)}`;
-    
-    // Store job with initial status
-    const job = {
-      jobId,
-      status: 'processing',
-      request: req.body,
-      createdAt: new Date().toISOString(),
-      estimatedTime: 45  // seconds
-    };
-    
-    jobStorage.set(jobId, job);
+    // Validate audio URL format
+    if (!audioUrl.startsWith('http')) {
+      logger.error('Invalid audio URL format', { audioUrl: audioUrl.substring(0, 50) });
+      return res.status(400).json({
+        success: false,
+        error: 'Audio URL must be a valid HTTP/HTTPS URL'
+      });
+    }
 
-    // ✅ Following lines 66-72: Immediate response format
-    const response = {
-      success: true,
-      jobId,
-      message: 'Video processing started',
-      estimatedTime: 45
-    };
-
-    console.log(`✅ Job ${jobId} created for ${duration}s clip`);
+    // Create job through queue system (handles all safety checks)
+    const result = jobQueue.createJob(req.body);
     
-    // TODO: Implement background processing (lines 104-147)
-    // For now, just return dummy response
-    setTimeout(() => {
-      // Simulate processing completion
-      job.status = 'completed';
-      job.videoUrl = `https://placeholder.com/video-${jobId}.mp4`;
-      job.cost = 0.008;
-      job.processingTime = 42000;
-      jobStorage.set(jobId, job);
-    }, 5000);
+    logger.success('Job created successfully', {
+      jobId: result.jobId,
+      queuePosition: result.queuePosition,
+      estimatedTime: result.estimatedTime
+    });
 
-    res.status(202).json(response);
+    // ✅ Following lines 66-72: Immediate response format (enhanced)
+    res.status(202).json(result);
     
   } catch (error) {
-    console.error('❌ Video creation error:', error);
-    res.status(500).json({
+    logger.error('Video creation failed', { 
+      error: error.message,
+      stack: config.logging.VERBOSE ? error.stack : undefined
+    });
+    
+    // Return appropriate error codes
+    let statusCode = 500;
+    if (error.message.includes('disabled')) statusCode = 503;
+    if (error.message.includes('limit') || error.message.includes('full')) statusCode = 429;
+    if (error.message.includes('spending cap')) statusCode = 402;
+
+    res.status(statusCode).json({
       success: false,
-      error: 'Failed to start video processing'
+      error: error.message,
+      stats: jobQueue.getStats() // Help with debugging
     });
   }
 };

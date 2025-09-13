@@ -1,0 +1,92 @@
+<svg width="{{width}}" height="{{height}}" xmlns="http://www.w3.org/2000/svg">
+  <!-- Claude Gradient Background with subtle texture -->
+  <defs>
+    <linearGradient id="claudeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0a"/>
+      <stop offset="50%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#252525"/>
+    </linearGradient>
+    
+    <!-- Shadow effects for depth -->
+    <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="4" result="offsetblur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.5"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Text shadow for better readability -->
+    <filter id="textShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.8"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="{{width}}" height="{{height}}" fill="url(#claudeGradient)"/>
+  
+  <!-- Subtle vignette for depth -->
+  <rect width="{{width}}" height="{{height}}" fill="none" stroke="url(#claudeGradient)" stroke-width="100" opacity="0.3"/>
+  
+  <!-- PODCAST NAME - APP STYLE: 26px, uppercase, center, white - with wrapping -->
+  {{#each podcastNameLines}}
+  <text x="{{../centerX}}" y="{{../podcastNameY}}" dy="{{@index}}em" text-anchor="middle" fill="#ffffff"
+        font-size="{{../podcastNameSize}}" font-weight="800"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif"
+        letter-spacing="1.5"
+        filter="url(#textShadow)">{{this}}</text>
+  {{/each}}
+  
+  <!-- PODCAST ARTWORK - APP SIZE: 140x140, 20px radius -->
+  <rect x="{{artworkX}}" y="{{artworkY}}" width="{{artworkSize}}" height="{{artworkSize}}" 
+        rx="20" fill="#1a1a1a" filter="url(#dropShadow)"/>
+  
+  <!-- Artwork border for polish -->
+  <rect x="{{artworkX}}" y="{{artworkY}}" width="{{artworkSize}}" height="{{artworkSize}}" 
+        rx="20" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+  
+  <!-- EPISODE TITLE - BELOW ARTWORK, MEDIUM - with wrapping -->
+  {{#each episodeTitleLines}}
+  <text x="{{../centerX}}" y="{{../episodeTitleY}}" dy="{{@index}}em" text-anchor="middle" fill="#ffffff"
+        font-size="{{../episodeTitleSize}}" font-weight="600"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif"
+        filter="url(#textShadow)">{{this}}</text>
+  {{/each}}
+  
+  <!-- INTEGRATED TIMELINE + WAVEFORM - Time counters with waveform between them -->
+  <g>
+    <!-- Left time counter -->
+    <text x="{{progressX}}" y="{{timeY}}" text-anchor="start"
+          fill="rgba(255,255,255,0.9)" font-size="28" font-weight="500"
+          font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif">{{currentTime}}</text>
+
+    <!-- Waveform bars positioned BETWEEN the time counters -->
+    <g opacity="0.95">
+      {{#each progressWaveform}}
+      <rect x="{{x}}" y="{{y}}" width="{{barWidth}}" height="{{height}}"
+            rx="{{radius}}" fill="{{color}}" opacity="{{opacity}}"/>
+      {{/each}}
+    </g>
+
+    <!-- Right time counter -->
+    <text x="{{progressEndX}}" y="{{timeY}}" text-anchor="end"
+          fill="rgba(255,255,255,0.6)" font-size="28" font-weight="500"
+          font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif">{{totalTime}}</text>
+  </g>
+  
+  
+  <!-- Audio2 Branding (subtle) -->
+  <text x="{{centerX}}" y="{{brandingY}}" text-anchor="middle" 
+        fill="rgba(255,255,255,0.3)" font-size="20" font-weight="600"
+        font-family="-apple-system, BlinkMacSystemFont, sans-serif">Audio2</text>
+</svg>
