@@ -23,10 +23,24 @@ const trimAudioHandler = require('./api/trim-audio.js');
 const transcribeHandler = require('./api/transcribe.js');
 const transcribeStatusHandler = require('./api/transcribe-status.js');
 
+// ✅ New video generation endpoints (lines 39-44 from instructions)
+const createVideoHandler = require('./api/create-video.js');
+const videoStatusHandler = require('./api/video-status.js');
+const downloadVideoHandler = require('./api/download-video.js');
+
 // Routes
 app.post('/api/trim-audio', trimAudioHandler);
 app.post('/api/transcript', transcribeHandler);
 app.get('/api/transcript/:id', transcribeStatusHandler);
+
+// ✅ Video generation routes
+app.post('/api/create-video', createVideoHandler);
+app.get('/api/video-status/:id', videoStatusHandler);
+app.get('/api/download-video/:id', downloadVideoHandler);
+
+// ✅ Test endpoint (lines 214-222 from instructions)
+const testVideoHandler = require('./api/test-video.js');
+app.post('/api/test-video', testVideoHandler);
 
 // OPTIONS handlers for CORS preflight
 app.options('/api/transcript', (req, res) => {
