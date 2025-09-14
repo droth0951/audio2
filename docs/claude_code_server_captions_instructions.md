@@ -274,6 +274,18 @@ For now, test server endpoints directly. Mobile app integration comes after serv
 
 ---
 
+## Updated graphics plan
+Video Frame Generation Approach:
+Use SVG templates + Sharp instead of Canvas for frame generation:
+
+✅ Simpler implementation - template-based vs programmatic drawing
+✅ More reliable - fewer dependencies and failure points
+✅ Better text rendering - crisp SVG text at any resolution
+✅ Easier maintenance - human-readable SVG templates
+✅ Identical visual output - matches Audio2 wireframe perfectly
+
+Create /templates/audio2-frame.svg with Claude gradient background, podcast artwork placeholder, progress bar, and episode info. Use Handlebars for dynamic content injection.
+
 ## 💡 Key Success Factors
 
 1. **Single audio source**: Download once, use for both video and future captions
@@ -283,3 +295,5 @@ For now, test server endpoints directly. Mobile app integration comes after serv
 5. **Quality output**: Professional-looking videos ready for social media
 
 Start with the simplest possible implementation that proves the concept, then iterate based on results.
+
+

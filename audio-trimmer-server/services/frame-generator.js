@@ -127,10 +127,10 @@ class FrameGenerator {
       // App uses 140x140 artwork (matches Recording View exactly) - now scaled
       const artworkSize = Math.floor(140 * scaleFactor); // Scaled artwork size (integer)
       
-      // HORIZONTAL SAFE ZONES - 5% margins left/right for social media protection
-      const horizontalSafeMargin = dimensions.width * 0.05; // 5% from left and right edges
-      const contentWidth = Math.floor(dimensions.width - (horizontalSafeMargin * 2)); // Available content width
-      const waveformWidth = contentWidth; // Waveform spans full width between safe margins
+      // UNIVERSAL 8% MARGINS - Apply to ALL elements (text, artwork, waveform)
+      const MARGIN = dimensions.width * 0.08; // 8% margins from edges
+      const contentWidth = Math.floor(dimensions.width - (MARGIN * 2)); // Available content width
+      const waveformWidth = contentWidth; // Waveform uses same width as content
       const progressFill = Math.floor(waveformWidth * progress);
 
       // Format times
@@ -162,13 +162,14 @@ class FrameGenerator {
       // Calculate the actual bottom of the episode title (accounting for multiple lines and proper line height)
       const lineHeight = Math.floor(24 * scaleFactor); // SVG line height for episode title
       const episodeTitleBottom = episodeTitleY + (episodeTitleLines.length - 1) * lineHeight + Math.floor(20 * scaleFactor); // Add font size for last line
-      // Position timeline closer to episode title
-      const timeY = episodeTitleBottom + Math.floor(40 * scaleFactor); // Reduced spacing for closer timeline
-      // Waveform positioned at SAME level as timeline - integrated into timeline display
-      const waveformY = timeY; // Same Y position as time counters - integrated display
 
-      // Generate combined progress waveform (replaces progress bar) - AFTER waveformY is calculated
-      const progressWaveform = this.generateProgressWaveform(progress, dimensions, scaleFactor, waveformWidth, waveformY, horizontalSafeMargin);
+      // Position waveform directly below episode title with proper spacing
+      const waveformY = episodeTitleBottom + Math.floor(60 * scaleFactor); // Good spacing from text
+      const waveformHeight = Math.floor(40 * scaleFactor); // Decent height
+
+      // Generate new progress system with dancing bars watermark
+      const frameNumber = Math.floor(progress * duration * 12 / 1000); // Convert progress to frame number for animation
+      const progressElements = this.generateProgressElements(progress, dimensions, scaleFactor, episodeTitleBottom, frameNumber);
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
@@ -176,30 +177,23 @@ class FrameGenerator {
       const templateData = {
         width: dimensions.width,
         height: dimensions.height,
-        centerX: Math.floor(horizontalSafeMargin + contentWidth / 2), // Center within safe area
-        // Artwork positioning and size - centered within safe area
-        artworkX: Math.floor(horizontalSafeMargin + (contentWidth - artworkSize) / 2),
+        marginX: Math.floor(MARGIN), // Left margin at 8%
+        centerX: Math.floor(dimensions.width / 2), // True center of screen
+        // Artwork positioning and size - CENTERED on screen
+        artworkX: Math.floor((dimensions.width - artworkSize) / 2),
         artworkY: Math.floor(artworkY),
         artworkSize: artworkSize,
-        // Timeline positioning - aligned within safe area
-        progressX: Math.floor(horizontalSafeMargin),
-        timeY: Math.floor(timeY),
-        waveformY: Math.floor(waveformY),
-        progressWidth: waveformWidth,
-        progressFill: progressFill,
-        progressEndX: Math.floor(horizontalSafeMargin + waveformWidth),
+        // No timeline positioning needed - no time counters displayed
         // Text positioning - SCALED
         podcastNameY: Math.floor(podcastNameY),
         podcastNameSize: Math.floor(26 * scaleFactor), // App size scaled for video
         episodeTitleY: Math.floor(episodeTitleY),
         episodeTitleSize: Math.floor(20 * scaleFactor), // App size scaled for video
         brandingY: Math.floor(brandingY),
-        // Content - wrapped text lines
+        // Content - wrapped text lines and new progress system
         podcastNameLines: podcastTitleLines,
         episodeTitleLines: episodeTitleLines,
-        progressWaveform: progressWaveform,
-        currentTime,
-        totalTime
+        progressElements: progressElements
       };
 
 
@@ -256,73 +250,74 @@ class FrameGenerator {
     }
   }
 
-  // PROGRESS WAVEFORM - Combined progress bar and waveform
-  generateProgressWaveform(progress, dimensions, scaleFactor = 1, progressBarWidth, progressY, socialMediaMargin = 0) {
-    const bars = [];
+  // BREATHING GRADIENT PROGRESS SYSTEM + DANCING BARS WATERMARK
+  generateProgressElements(progress, dimensions, scaleFactor = 1, episodeTitleBottom, frameNumber = 0) {
+    // ========================================
+    // 1. BREATHING GRADIENT PROGRESS BAR
+    // ========================================
+    const progressWidth = dimensions.width * 0.84; // 84% width (8% margins each side)
+    const progressX = dimensions.width * 0.08; // 8% left margin
+    const progressY = episodeTitleBottom + (60 * scaleFactor); // Proper spacing below title
+    const progressHeight = 6 * scaleFactor;
+    const progressFillWidth = progressWidth * progress; // progress = 0.0 to 1.0
 
-    // Use progress bar width instead of fixed width - more bars for smoother progress
-    const totalBars = 25; // More bars for smoother progress visualization
-    const barWidth = Math.floor(4 * scaleFactor); // Slightly thinner bars
-    const barGap = Math.floor(2 * scaleFactor); // Tighter spacing
+    // ========================================
+    // 2. DANCING BARS WATERMARK (BOTTOM-RIGHT)
+    // ========================================
+    const watermarkRightMargin = 20 * scaleFactor;
+    const watermarkBottomMargin = 30 * scaleFactor;
+    const watermarkX = dimensions.width - watermarkRightMargin - (120 * scaleFactor);
+    const watermarkY = dimensions.height - watermarkBottomMargin;
 
-    // Generate consistent waveform pattern - use fixed seed for consistent heights across frames
-    const baseHeights = [];
-    for (let i = 0; i < totalBars; i++) {
-      // Use deterministic pattern instead of random for smooth video
-      const phase = (i / totalBars) * Math.PI * 4; // Create varied pattern
-      const speechLike = (Math.sin(phase) + 1) * 0.2 + 0.3; // 30-70% base volume
-      const peakPhase = (i / totalBars) * Math.PI * 8;
-      const peaks = Math.sin(peakPhase) > 0.6 ? Math.cos(peakPhase) * 0.3 + 0.3 : 0; // Occasional peaks
-      const heightFactor = Math.min(1.0, speechLike + Math.abs(peaks));
-      baseHeights.push(Math.floor(heightFactor * 32 * scaleFactor)); // Max height scaled
-    }
+    // Dancing bars configuration
+    const barHeights = [6, 10, 8, 12, 7]; // Base heights in logical pixels
+    const barWidth = 2 * scaleFactor;
+    const barSpacing = 2 * scaleFactor;
+    const barCenterY = watermarkY - (8 * scaleFactor); // Center line for bars
 
-    // Calculate space BETWEEN the time counters for waveform placement
-    const timeCounterWidth = Math.floor(60 * scaleFactor); // Approximate width needed for time text like "0:10"
-    const waveformSpaceStart = socialMediaMargin + timeCounterWidth; // Start after left time counter
-    const waveformSpaceEnd = socialMediaMargin + progressBarWidth - timeCounterWidth; // End before right time counter
-    const availableWaveformWidth = waveformSpaceEnd - waveformSpaceStart;
+    // Generate dancing bars with animation
+    const dancingBars = [];
+    let barsX = watermarkX;
+    for (let i = 0; i < 5; i++) {
+      const baseHeight = barHeights[i] * scaleFactor;
 
-    const totalWaveformWidth = (totalBars * barWidth) + ((totalBars - 1) * barGap);
-    const actualWidth = Math.min(availableWaveformWidth, totalWaveformWidth);
-    const startX = Math.floor(waveformSpaceStart + (availableWaveformWidth - actualWidth) / 2); // Center in available space
+      // Animation: bars oscillate around center line with staggered timing
+      const animationPhase = (frameNumber * 0.1) + (i * 0.3);
+      const animationScale = 0.6 + (0.4 * Math.sin(animationPhase));
+      const animatedHeight = baseHeight * animationScale;
 
-    // Use the actual progress bar Y position passed in
+      // Position so bar extends up and down from center line
+      const barY = barCenterY - (animatedHeight / 2);
 
-    for (let i = 0; i < totalBars; i++) {
-      const x = startX + (i * (barWidth + barGap));
-
-      // Skip bars that would exceed the progress bar width
-      if (x + barWidth > startX + actualWidth) break;
-
-      // Calculate this bar's position in the timeline
-      const barProgress = i / totalBars;
-
-      // Determine if this bar should be "played" (orange) or "unplayed" (grey)
-      const isPlayed = barProgress <= progress;
-
-      const baseHeight = baseHeights[i];
-
-      // Use consistent height for smooth video (no janky frame-by-frame animation)
-      const height = baseHeight;
-
-      // Use the waveform position passed in (already positioned correctly)
-      const y = progressY - height / 2; // Center waveform around the position
-
-      bars.push({
-        x: Math.floor(x),
-        y: Math.floor(y),
-        barWidth: barWidth,
-        height: Math.floor(height),
-        radius: Math.floor(2 * scaleFactor),
-        // Color based on progress - orange if played, grey if not
-        color: isPlayed ? '#d97706' : '#404040',
-        opacity: isPlayed ? '0.9' : '0.6'
-        // Removed animation for smooth video playback
+      dancingBars.push({
+        x: Math.floor(barsX),
+        y: Math.floor(barY),
+        width: Math.floor(barWidth),
+        height: Math.floor(animatedHeight)
       });
+
+      barsX += barWidth + barSpacing;
     }
 
-    return bars;
+    // Audio2 text position
+    const textX = barsX + (8 * scaleFactor);
+    const textY = watermarkY - (2 * scaleFactor);
+
+    return {
+      progressBar: {
+        x: Math.floor(progressX),
+        y: Math.floor(progressY),
+        width: Math.floor(progressWidth),
+        height: Math.floor(progressHeight),
+        fillWidth: Math.floor(progressFillWidth)
+      },
+      dancingBars,
+      watermarkText: {
+        x: Math.floor(textX),
+        y: Math.floor(textY),
+        fontSize: Math.floor(12 * scaleFactor)
+      }
+    };
   }
 
   // REVIEW-CRITICAL: Download podcast artwork efficiently
