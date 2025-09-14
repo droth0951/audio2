@@ -995,3 +995,130 @@
   "min": 5,
   "max": 240
 }
+{
+  "timestamp": "2025-09-14T14:55:20.001Z",
+  "level": "error",
+  "message": "Missing required fields",
+  "provided": [
+    "podcast",
+    "duration"
+  ]
+}
+{
+  "timestamp": "2025-09-14T14:58:31.609Z",
+  "level": "error",
+  "message": "Invalid clip duration",
+  "duration": 0.005,
+  "min": 5,
+  "max": 240
+}
+{
+  "timestamp": "2025-09-14T14:58:37.798Z",
+  "level": "error",
+  "message": "Invalid clip duration",
+  "duration": 0.008,
+  "min": 5,
+  "max": 240
+}
+{
+  "timestamp": "2025-09-14T14:59:28.972Z",
+  "level": "error",
+  "message": "Invalid clip duration",
+  "duration": 0.01,
+  "min": 5,
+  "max": 240
+}
+{
+  "timestamp": "2025-09-14T14:59:40.493Z",
+  "level": "error",
+  "message": "Invalid clip duration",
+  "duration": 0.01,
+  "min": 5,
+  "max": 240
+}
+{
+  "timestamp": "2025-09-14T15:01:53.791Z",
+  "level": "error",
+  "message": "Audio download failed",
+  "jobId": "vid_2b4845bc",
+  "audioUrl": "https://file-examples.com/storage/fe68c1b8fa66981b1c4e54c/2017/11/file_example_MP3_700KB.mp3",
+  "error": "HTTP 404: Request failed with status code 404",
+  "downloadTime": "1143ms"
+}
+{
+  "timestamp": "2025-09-14T15:01:53.791Z",
+  "level": "error",
+  "message": "Video processing failed",
+  "jobId": "vid_2b4845bc",
+  "error": "HTTP 404: Request failed with status code 404",
+  "stack": "Error: HTTP 404: Request failed with status code 404\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}
+{
+  "timestamp": "2025-09-14T15:01:54.356Z",
+  "level": "error",
+  "message": "Audio download failed",
+  "jobId": "vid_2b4845bc",
+  "audioUrl": "https://file-examples.com/storage/fe68c1b8fa66981b1c4e54c/2017/11/file_example_MP3_700KB.mp3",
+  "error": "HTTP 404: Request failed with status code 404",
+  "downloadTime": "564ms"
+}
+{
+  "timestamp": "2025-09-14T15:01:54.356Z",
+  "level": "error",
+  "message": "Video processing failed",
+  "jobId": "vid_2b4845bc",
+  "error": "HTTP 404: Request failed with status code 404",
+  "stack": "Error: HTTP 404: Request failed with status code 404\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}
+{
+  "timestamp": "2025-09-14T15:01:54.357Z",
+  "level": "error",
+  "message": "Job vid_2b4845bc failed at final_failure",
+  "jobId": "vid_2b4845bc",
+  "stage": "final_failure",
+  "error": "HTTP 404: Request failed with status code 404",
+  "stack": "Error: HTTP 404: Request failed with status code 404\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}
+{
+  "timestamp": "2025-09-14T15:21:11.340Z",
+  "level": "error",
+  "message": "Audio download failed",
+  "jobId": "vid_8b1285fa",
+  "audioUrl": "https://www2.cs.uic.edu/~i101/SoundFiles/PinkPanther30.wav",
+  "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
+  "downloadTime": "90ms"
+}
+{
+  "timestamp": "2025-09-14T15:21:11.341Z",
+  "level": "error",
+  "message": "Video processing failed",
+  "jobId": "vid_8b1285fa",
+  "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
+  "stack": "Error: HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}
+{
+  "timestamp": "2025-09-14T15:21:11.348Z",
+  "level": "error",
+  "message": "Audio download failed",
+  "jobId": "vid_8b1285fa",
+  "audioUrl": "https://www2.cs.uic.edu/~i101/SoundFiles/PinkPanther30.wav",
+  "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
+  "downloadTime": "7ms"
+}
+{
+  "timestamp": "2025-09-14T15:21:11.348Z",
+  "level": "error",
+  "message": "Job vid_8b1285fa failed at final_failure",
+  "jobId": "vid_8b1285fa",
+  "stage": "final_failure",
+  "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
+  "stack": "Error: HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}
+{
+  "timestamp": "2025-09-14T15:21:11.348Z",
+  "level": "error",
+  "message": "Video processing failed",
+  "jobId": "vid_8b1285fa",
+  "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
+  "stack": "Error: HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
+}

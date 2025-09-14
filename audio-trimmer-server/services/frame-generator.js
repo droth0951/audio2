@@ -66,7 +66,7 @@ class FrameGenerator {
         const progress = frameTime / duration;
         
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId);
+        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i);
         frames.push(framePath);
         
         logger.debug('Generated frame', {
@@ -115,7 +115,7 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId) {
+  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0) {
     try {
       // Calculate dimensions for 9:16 aspect ratio
       const dimensions = this.getAspectRatioDimensions('9:16');
@@ -168,8 +168,8 @@ class FrameGenerator {
       const waveformHeight = Math.floor(40 * scaleFactor); // Decent height
 
       // Generate new progress system with dancing bars watermark
-      const frameNumber = Math.floor(progress * duration * 12 / 1000); // Convert progress to frame number for animation
-      const progressElements = this.generateProgressElements(progress, dimensions, scaleFactor, episodeTitleBottom, frameNumber);
+      // Use actual frame index for proper animation
+      const progressElements = this.generateProgressElements(progress, dimensions, scaleFactor, episodeTitleBottom, frameIndex);
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
@@ -257,16 +257,16 @@ class FrameGenerator {
     // ========================================
     const progressWidth = dimensions.width * 0.84; // 84% width (8% margins each side)
     const progressX = dimensions.width * 0.08; // 8% left margin
-    const progressY = episodeTitleBottom + (60 * scaleFactor); // Proper spacing below title
+    const progressY = episodeTitleBottom + (15 * scaleFactor); // 15px spacing below title as requested
     const progressHeight = 6 * scaleFactor;
     const progressFillWidth = progressWidth * progress; // progress = 0.0 to 1.0
 
     // ========================================
     // 2. DANCING BARS WATERMARK (BOTTOM-RIGHT)
     // ========================================
-    const watermarkRightMargin = 20 * scaleFactor;
+    const watermarkRightMargin = dimensions.width * 0.08; // 8% right margin to avoid social media cutoff
     const watermarkBottomMargin = 30 * scaleFactor;
-    const watermarkX = dimensions.width - watermarkRightMargin - (120 * scaleFactor);
+    const watermarkX = dimensions.width - watermarkRightMargin - (120 * scaleFactor); // Flush right with proper margins
     const watermarkY = dimensions.height - watermarkBottomMargin;
 
     // Dancing bars configuration
@@ -299,8 +299,8 @@ class FrameGenerator {
       barsX += barWidth + barSpacing;
     }
 
-    // Audio2 text position
-    const textX = barsX + (8 * scaleFactor);
+    // Audio2 text position - only one character space from dancing bars
+    const textX = barsX + (4 * scaleFactor); // Reduced from 8px to 4px for closer spacing
     const textY = watermarkY - (2 * scaleFactor);
 
     return {

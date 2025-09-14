@@ -253,8 +253,8 @@
   },
   "2025-09-14T04:00:00.000Z": {
     "date": "2025-09-14T04:00:00.000Z",
-    "totalCost": 0.13165401,
-    "jobCount": 1,
+    "totalCost": 0.39311915999999997,
+    "jobCount": 7,
     "jobs": [
       {
         "jobId": "vid_ffd35321",
@@ -269,14 +269,98 @@
         },
         "total": 0.13165401,
         "processingTime": 110650
+      },
+      {
+        "jobId": "vid_b6c621a2",
+        "timestamp": "2025-09-14T15:02:18.049Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00059483,
+          "processing": 0.012438,
+          "processingTimeMs": 12438
+        },
+        "total": 0.02586616333333333,
+        "processingTime": 12438
+      },
+      {
+        "jobId": "vid_fda73e69",
+        "timestamp": "2025-09-14T15:11:51.404Z",
+        "costs": {
+          "audioDownload": 0.0002666666666666667,
+          "frameGeneration": 0.009600000000000001,
+          "videoComposition": 0.0004,
+          "storage": 0.0009978300000000001,
+          "processing": 0.019434,
+          "processingTimeMs": 19434
+        },
+        "total": 0.030698496666666665,
+        "processingTime": 19434
+      },
+      {
+        "jobId": "vid_bcd88ae2",
+        "timestamp": "2025-09-14T15:18:57.216Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00100049,
+          "processing": 0.021998,
+          "processingTimeMs": 21998
+        },
+        "total": 0.03583182333333333,
+        "processingTime": 21998
+      },
+      {
+        "jobId": "vid_63081588",
+        "timestamp": "2025-09-14T15:25:23.143Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00102721,
+          "processing": 0.023493999999999998,
+          "processingTimeMs": 23494
+        },
+        "total": 0.03735454333333333,
+        "processingTime": 23494
+      },
+      {
+        "jobId": "vid_bab01603",
+        "timestamp": "2025-09-14T15:25:29.883Z",
+        "costs": {
+          "audioDownload": 0.001,
+          "frameGeneration": 0.036000000000000004,
+          "videoComposition": 0.0015,
+          "storage": 0.0009965,
+          "processing": 0.058774,
+          "processingTimeMs": 58774
+        },
+        "total": 0.09827050000000001,
+        "processingTime": 58774
+      },
+      {
+        "jobId": "vid_8adffda2",
+        "timestamp": "2025-09-14T15:27:42.702Z",
+        "costs": {
+          "audioDownload": 0.0003333333333333333,
+          "frameGeneration": 0.012,
+          "videoComposition": 0.0005,
+          "storage": 0.00102729,
+          "processing": 0.019583,
+          "processingTimeMs": 19583
+        },
+        "total": 0.03344362333333333,
+        "processingTime": 19583
       }
     ],
     "breakdown": {
-      "audioDownload": 0.0005,
-      "frameGeneration": 0.018000000000000002,
-      "videoComposition": 0.00075,
-      "storage": 0.00175401,
-      "processing": 0.11065
+      "audioDownload": 0.0031,
+      "frameGeneration": 0.1116,
+      "videoComposition": 0.00465,
+      "storage": 0.00739816,
+      "processing": 0.26637099999999997
     }
   }
 }
