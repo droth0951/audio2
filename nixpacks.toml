@@ -1,8 +1,19 @@
+# Railway nixpacks configuration for video generation
+[providers]
+node = "18"
+
 [phases.setup]
-nixPkgs = ["nodejs_18", "npm-9_x"]
+# Install system dependencies for video processing
+aptPackages = ["ffmpeg"]
 
 [phases.build]
-cmds = ["cd audio-trimmer-server && npm ci"]
+cmds = [
+  "cd audio-trimmer-server",
+  "npm install",
+  "npm rebuild sharp"
+]
 
-[phases.start]
-cmd = "cd audio-trimmer-server && npm start"
+[variables]
+# Ensure Sharp uses correct platform binaries
+SHARP_IGNORE_GLOBAL_LIBVIPS = "1"
+NODE_ENV = "production"
