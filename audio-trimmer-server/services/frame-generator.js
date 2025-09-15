@@ -1,11 +1,23 @@
 // SVG + Sharp frame generation service for 9:16 videos
 
-const sharp = require('sharp');
 const Handlebars = require('handlebars');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('./logger');
 const config = require('../config/settings');
+
+// Lazy load Sharp only when video generation is enabled
+let sharp = null;
+function getSharp() {
+  if (!sharp) {
+    try {
+      sharp = require('sharp');
+    } catch (error) {
+      throw new Error('Sharp not available - video generation requires Sharp: ' + error.message);
+    }
+  }
+  return sharp;
+}
 
 class FrameGenerator {
   constructor() {
@@ -201,20 +213,20 @@ class FrameGenerator {
       const svgContent = template(templateData);
 
       // Convert SVG to PNG using Sharp
-      let frameBuffer = await sharp(Buffer.from(svgContent))
+      let frameBuffer = await getSharp()(Buffer.from(svgContent))
         .png()
         .toBuffer();
 
       // REVIEW-DESIGN: Composite podcast artwork if available
       if (artworkBuffer) {
         // Resize artwork to match the larger size
-        const resizedArtwork = await sharp(artworkBuffer)
+        const resizedArtwork = await getSharp()(artworkBuffer)
           .resize(artworkSize, artworkSize, { fit: 'cover' })
           .png()
           .toBuffer();
 
         // Add rounded corners to artwork using Sharp's built-in method (20px to match app)
-        const roundedArtwork = await sharp(resizedArtwork)
+        const roundedArtwork = await getSharp()(resizedArtwork)
           .composite([{
             input: Buffer.from(
               `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
@@ -225,7 +237,7 @@ class FrameGenerator {
           .toBuffer();
 
         // Composite artwork onto frame with correct positioning
-        frameBuffer = await sharp(frameBuffer)
+        frameBuffer = await getSharp()(frameBuffer)
           .composite([{
             input: roundedArtwork,
             left: Math.round((dimensions.width - artworkSize) / 2),
