@@ -2,19 +2,18 @@
 [providers]
 node = "18"
 
+[phases.setup]
+# Install system dependencies for video processing
+aptPackages = ["ffmpeg"]
+
 [phases.build]
 cmds = [
+  "cd audio-trimmer-server",
   "npm install",
-  # Rebuild Sharp for Railway's container architecture
   "npm rebuild sharp"
 ]
-
-[phases.install]
-# Install system dependencies for video processing
-apt = ["ffmpeg"]
 
 [variables]
 # Ensure Sharp uses correct platform binaries
 SHARP_IGNORE_GLOBAL_LIBVIPS = "1"
-# Railway specific Sharp configuration
 NODE_ENV = "production"

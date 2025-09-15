@@ -33,14 +33,12 @@ class CleanupService {
       retentionHours: config.jobs.CLEANUP_AFTER_HOURS
     });
 
-    // RAILWAY FIX: Delay initial cleanup to prevent health check timeout
-    // Railway health checks have 300s timeout - immediate cleanup with Sharp loading can exceed this
+    // RAILWAY FIX: Skip initial cleanup entirely to prevent health check timeout
+    // Railway health checks are failing - run cleanup only via scheduled interval
     const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID;
     if (isRailway) {
-      logger.info('Railway environment detected - delaying initial cleanup by 60 seconds');
-      setTimeout(() => {
-        this.performCleanup();
-      }, 60000); // 60 second delay for Railway
+      logger.info('Railway environment detected - skipping initial cleanup (scheduled only)');
+      // Skip immediate cleanup on Railway - only run via interval
     } else {
       // Run cleanup immediately in local/other environments
       this.performCleanup();
