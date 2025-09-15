@@ -1,9 +1,7 @@
 # Railway nixpacks configuration for video generation
-[providers]
-node = "18"
+providers = ["node"]
 
 [phases.setup]
-# Install system dependencies for video processing
 aptPackages = ["ffmpeg"]
 
 [phases.build]
@@ -14,6 +12,5 @@ cmds = [
 ]
 
 [variables]
-# Ensure Sharp uses correct platform binaries
 SHARP_IGNORE_GLOBAL_LIBVIPS = "1"
 NODE_ENV = "production"
