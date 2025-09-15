@@ -4,9 +4,25 @@ const config = require('../config/settings');
 const logger = require('./logger');
 const { v4: uuidv4 } = require('uuid');
 const audioDownload = require('./audio-download');
-const frameGenerator = require('./frame-generator');
-const videoComposer = require('./video-composer');
 const costAnalytics = require('./cost-analytics');
+
+// Lazy load video generation services to prevent Sharp loading at startup
+let frameGenerator = null;
+let videoComposer = null;
+
+function getFrameGenerator() {
+  if (!frameGenerator) {
+    frameGenerator = require('./frame-generator');
+  }
+  return frameGenerator;
+}
+
+function getVideoComposer() {
+  if (!videoComposer) {
+    videoComposer = require('./video-composer');
+  }
+  return videoComposer;
+}
 
 class JobQueue {
   constructor() {
@@ -195,7 +211,7 @@ class JobQueue {
       });
 
       // Step 2: Generate video frames using SVG + Sharp
-      const frameResult = await frameGenerator.generateFrames(
+      const frameResult = await getFrameGenerator().generateFrames(
         audioResult.tempPath,
         audioResult.duration,
         request.podcast,
@@ -209,7 +225,7 @@ class JobQueue {
       });
 
       // Step 3: Combine audio + frames with FFmpeg
-      const videoResult = await videoComposer.composeVideo(
+      const videoResult = await getVideoComposer().composeVideo(
         audioResult.tempPath,
         frameResult,
         jobId
@@ -223,14 +239,14 @@ class JobQueue {
       });
 
       // Validate video output
-      await videoComposer.validateVideoOutput(videoResult.videoPath, jobId);
+      await getVideoComposer().validateVideoOutput(videoResult.videoPath, jobId);
 
       // Step 4: Generate video URL and complete job
-      const videoUrl = videoComposer.generateVideoUrl(videoResult.videoPath, jobId);
+      const videoUrl = getVideoComposer().generateVideoUrl(videoResult.videoPath, jobId);
 
       // Step 5: Cleanup temp files (keep video for now - cleanup after download)
       await audioDownload.cleanupTempFile(audioResult.tempPath, jobId);
-      await frameGenerator.cleanupFrames(frameResult.frameDir, jobId);
+      await getFrameGenerator().cleanupFrames(frameResult.frameDir, jobId);
 
       // Calculate detailed cost breakdown
       const durationInMinutes = (request.clipEnd - request.clipStart) / 60000;
