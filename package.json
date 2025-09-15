@@ -7,7 +7,7 @@
     "install": "cd audio-trimmer-server && npm install"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   },
   "dependencies": {}
 }
