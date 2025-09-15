@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "postinstall": "npm rebuild sharp"
+    "dev": "node server.js"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
