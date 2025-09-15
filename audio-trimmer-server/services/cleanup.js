@@ -5,8 +5,14 @@ const path = require('path');
 const logger = require('./logger');
 const config = require('../config/settings');
 
-// REVIEW-CRITICAL: Import job queue to prevent deleting active jobs
-const jobQueue = require('./job-queue');
+// REVIEW-CRITICAL: Lazy load job queue to prevent deleting active jobs (avoids Sharp loading at startup)
+let jobQueue = null;
+function getJobQueue() {
+  if (!jobQueue) {
+    jobQueue = require('./job-queue');
+  }
+  return jobQueue;
+}
 
 class CleanupService {
   constructor() {
@@ -74,7 +80,7 @@ class CleanupService {
             if (fileAge > (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000)) {
               // REVIEW-CRITICAL: Check if job is still active before deleting
               const jobId = file.replace('video_', '').replace('.mp4', '');
-              const jobStatus = jobQueue.getJobStatus(jobId);
+              const jobStatus = getJobQueue().getJobStatus(jobId);
               
               // Safety check: Don't delete if job is recent or still in system
               let shouldSkip = false;
@@ -230,7 +236,7 @@ class CleanupService {
             
             // Check if deleting an active job (for logging)
             const jobId = file.replace('video_', '').replace('.mp3', '');
-            const jobStatus = jobQueue.getJobStatus(jobId);
+            const jobStatus = getJobQueue().getJobStatus(jobId);
             if (jobStatus.success && ['queued', 'processing', 'completed'].includes(jobStatus.status)) {
               activeJobsDeleted++;
               logger.warn('Emergency cleanup deleting active job video', {
