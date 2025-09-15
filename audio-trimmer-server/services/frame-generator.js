@@ -264,9 +264,9 @@ class FrameGenerator {
     // ========================================
     // 2. DANCING BARS WATERMARK (BOTTOM-RIGHT)
     // ========================================
-    const watermarkRightMargin = dimensions.width * 0.08; // 8% right margin to avoid social media cutoff
-    const watermarkBottomMargin = 30 * scaleFactor;
-    const watermarkX = dimensions.width - watermarkRightMargin - (120 * scaleFactor); // Flush right with proper margins
+    const watermarkRightMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
+    const watermarkBottomMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
+    const watermarkX = dimensions.width - watermarkRightMargin - (60 * scaleFactor); // Even smaller total width
     const watermarkY = dimensions.height - watermarkBottomMargin;
 
     // Dancing bars configuration
