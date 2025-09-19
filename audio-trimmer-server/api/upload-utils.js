@@ -104,9 +104,7 @@ class AudioFileProcessor {
       ffmpeg(inputPath)
         .seekInput(startSeconds)
         .duration(duration)
-        .audioCodec('mp3')
-        .audioBitrate('128k')
-        .format('mp3')
+        .audioCodec('copy')
         .output(outputPath)
         .on('start', (commandLine) => {
           console.log('🎬 FFmpeg command:', commandLine);
