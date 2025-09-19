@@ -71,7 +71,10 @@ const AboutModal = ({ visible, onClose }) => {
           <Text style={styles.headerTitle}>About Audio2</Text>
           <View style={{ width: 40 }} />
         </View>
-        
+
+        {/* Build Date for Verification */}
+        <Text style={styles.buildDate}>Updated: September 19, 2025</Text>
+
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Logo Section */}
           <View style={styles.logoSection}>
@@ -350,6 +353,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#f4f4f4',
+  },
+  buildDate: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 5,
+    marginBottom: 10,
   },
   content: {
     flex: 1,
