@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'dejavu_fonts', 'liberation_ttf']
+
+[phases.build]
+cmds = ['npm ci']
+
+[phases.start]
+cmd = 'npm start'
