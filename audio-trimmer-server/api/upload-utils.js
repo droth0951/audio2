@@ -104,7 +104,7 @@ class AudioFileProcessor {
       ffmpeg(inputPath)
         .seekInput(startSeconds)
         .duration(duration)
-        .audioCodec('libmp3lame')
+        .audioCodec('mp3')
         .audioBitrate('128k')
         .format('mp3')
         .output(outputPath)
