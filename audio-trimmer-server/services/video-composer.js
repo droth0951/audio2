@@ -16,7 +16,7 @@ class VideoComposer {
   }
 
   // REVIEW-CRITICAL: Combine frames + audio into MP4 video
-  async composeVideo(audioPath, frameResult, jobId) {
+  async composeVideo(audioPath, frameResult, jobId, duration) {
     try {
       // REVIEW-CRITICAL: Feature flag check for video composition
       if (!config.features.ENABLE_SERVER_VIDEO) {
@@ -35,7 +35,7 @@ class VideoComposer {
       });
 
       // REVIEW-COST: FFmpeg processing - optimize for speed vs quality
-      await this.createVideoWithFFmpeg(audioPath, frameResult, outputPath, jobId);
+      await this.createVideoWithFFmpeg(audioPath, frameResult, outputPath, jobId, duration);
 
       const compositionTime = Date.now() - startTime;
       const stats = await fs.stat(outputPath);
@@ -51,7 +51,7 @@ class VideoComposer {
         videoPath: outputPath,
         fileSize: stats.size,
         compositionTime,
-        duration: frameResult.frameCount / frameResult.fps
+        duration: duration
       };
 
     } catch (error) {
@@ -65,7 +65,7 @@ class VideoComposer {
   }
 
   // REVIEW-CRITICAL: FFmpeg command construction and execution
-  async createVideoWithFFmpeg(audioPath, frameResult, outputPath, jobId) {
+  async createVideoWithFFmpeg(audioPath, frameResult, outputPath, jobId, duration) {
     return new Promise((resolve, reject) => {
       const framePattern = path.join(frameResult.frameDir, 'frame_%06d.png');
       
@@ -84,7 +84,7 @@ class VideoComposer {
           '-pix_fmt', 'yuv420p',      // REVIEW-CRITICAL: Compatibility with all players
           '-c:a', 'aac',              // REVIEW-COST: AAC audio codec
           '-b:a', '128k',             // REVIEW-COST: Audio bitrate
-          '-shortest',                // REVIEW-CRITICAL: End when shortest stream ends
+          '-t', duration.toFixed(2),  // REVIEW-CRITICAL: Set exact duration to match audio
           '-movflags', '+faststart'   // REVIEW-CRITICAL: Web optimization
         ])
         .output(outputPath)

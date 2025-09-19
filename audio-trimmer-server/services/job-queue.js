@@ -228,7 +228,8 @@ class JobQueue {
       const videoResult = await getVideoComposer().composeVideo(
         audioResult.tempPath,
         frameResult,
-        jobId
+        jobId,
+        audioResult.duration
       );
 
       logger.success('Video composition completed', {
