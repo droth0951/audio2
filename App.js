@@ -2125,7 +2125,13 @@ export default function App() {
           format_text: true,
           speaker_labels: true,
           speakers_expected: 2,
-          word_boost: []
+          word_boost: [],
+          // Podcast metadata for future video generation
+          podcast: {
+            title: selectedEpisode?.title || 'Unknown Episode',
+            artwork: selectedEpisode?.artwork || null,
+            podcastName: podcastTitle || 'Unknown Podcast'
+          }
         };
 
         console.log('🎬 AssemblyAI Request Payload:', {
