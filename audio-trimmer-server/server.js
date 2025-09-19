@@ -49,6 +49,10 @@ app.post('/api/create-frame', createFrameHandler);
 app.get('/api/video-status/:id', videoStatusHandler);
 app.get('/api/download-video/:id', downloadVideoHandler);
 
+// Debug endpoint to list available videos
+const listVideosHandler = require('./api/list-videos.js');
+app.get('/api/list-videos', listVideosHandler);
+
 // ✅ Test endpoint (lines 214-222 from instructions)
 const testVideoHandler = require('./api/test-video.js');
 app.post('/api/test-video', testVideoHandler);
