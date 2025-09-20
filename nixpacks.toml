@@ -14,14 +14,15 @@ nixPkgs = [
 cmds = [
   "mkdir -p /app/.fontconfig",              # Create fontconfig directory
   "mkdir -p /app/.cache/fontconfig",        # Create fontconfig cache directory
+  "cp -f /etc/fonts/fonts.conf /app/.fontconfig/ 2>/dev/null || echo 'No system fonts.conf found'", # Copy config if available
   "fc-cache -fv",                           # Rebuild font cache
-  "fc-list | head -10"                      # Debug: list available fonts
+  "fc-list 2>/dev/null | head -10 || true" # Debug: list available fonts (ignore pipe errors)
 ]
 
 [phases.start]
 cmd = "cd audio-trimmer-server && npm start"
 
 [phases.start.env]
-FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig"
-FONTCONFIG_FILE = "/etc/fonts/fonts.conf"
+FONTCONFIG_PATH = "/app/.fontconfig:/etc/fonts"
+FONTCONFIG_FILE = "/app/.fontconfig/fonts.conf"
 XDG_CACHE_HOME = "/app/.cache"
