@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x", "npm-9_x", "ffmpeg", "fontconfig", "dejavu_fonts", "liberation_ttf"]
+nixPkgs = ["nodejs_18", "ffmpeg", "fontconfig", "dejavu_fonts", "liberation_ttf"]
+
+[phases.build]
+cmds = ["npm ci"]
+
+[phases.start]
+cmd = "cd audio-trimmer-server && npm start"
