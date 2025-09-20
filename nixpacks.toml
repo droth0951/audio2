@@ -4,9 +4,11 @@ nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'roboto', 'dejavu_fonts']
 [phases.build]
 cmds = [
   'mkdir -p /app/fonts',
+  'cp /etc/fonts/fonts.conf /app/fonts.conf',  # Copy system config
+  'export FONTCONFIG_FILE=/app/fonts.conf',    # Point to copied config
   'export FONTCONFIG_PATH=/etc/fonts:/app/fonts',
   'fc-cache -fv',
-  'echo "Available fonts:" && fc-list | grep -i roboto'
+  'echo "Testing font access:" && fc-list | grep -i roboto | head -5'
 ]
 
 [phases.start]
