@@ -86,7 +86,7 @@ class VideoComposer {
           '-pix_fmt', 'yuv420p',      // REVIEW-CRITICAL: Compatibility with all players
           '-c:a', 'aac',              // REVIEW-COST: AAC audio codec
           '-b:a', '128k',             // REVIEW-COST: Audio bitrate
-          '-shortest',                // REVIEW-CRITICAL: End when shortest stream ends
+          '-t', duration.toString(),  // REVIEW-CRITICAL: Use exact duration instead of -shortest
           '-movflags', '+faststart'   // REVIEW-CRITICAL: Web optimization
         ])
         .output(outputPath)
