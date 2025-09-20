@@ -19,10 +19,9 @@ cmds = [
 ]
 
 [phases.start]
-# Set fontconfig environment variables
-env = {
-  FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig",
-  FONTCONFIG_FILE = "/etc/fonts/fonts.conf",
-  XDG_CACHE_HOME = "/app/.cache"
-}
 cmd = "cd audio-trimmer-server && npm start"
+
+[phases.start.env]
+FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig"
+FONTCONFIG_FILE = "/etc/fonts/fonts.conf"
+XDG_CACHE_HOME = "/app/.cache"
