@@ -1,22 +1,12 @@
 [phases.setup]
-nixPkgs = [
-  "nodejs_18",
-  "ffmpeg",
-  "fontconfig",
-  "dejavu_fonts",
-  "liberation_ttf",
-  "roboto",              # ← Add this
-  "noto-fonts",          # ← Add this
-  "google-fonts"         # ← Add this (if available)
-]
+nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'roboto', 'dejavu_fonts']
 
 [phases.build]
 cmds = [
-  "mkdir -p /app/.fontconfig",              # Create fontconfig directory
-  "mkdir -p /app/.cache/fontconfig",        # Create fontconfig cache directory
-  "cp -f /etc/fonts/fonts.conf /app/.fontconfig/ 2>/dev/null || echo 'No system fonts.conf found'", # Copy config if available
-  "fc-cache -fv",                           # Rebuild font cache
-  "fc-list 2>/dev/null | head -10 || true" # Debug: list available fonts (ignore pipe errors)
+  'mkdir -p /app/fonts',
+  'export FONTCONFIG_PATH=/etc/fonts:/app/fonts',
+  'fc-cache -fv',
+  'echo "Available fonts:" && fc-list | grep -i roboto'
 ]
 
 [phases.start]
