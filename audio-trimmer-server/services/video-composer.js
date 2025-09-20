@@ -31,7 +31,9 @@ class VideoComposer {
         audioPath: path.basename(audioPath),
         frameCount: frameResult.frameCount,
         frameDir: path.basename(frameResult.frameDir),
-        fps: frameResult.fps
+        fps: frameResult.fps,
+        duration: `${duration}s`,
+        calculatedFrameDuration: `${frameResult.frameCount / frameResult.fps}s`
       });
 
       // REVIEW-COST: FFmpeg processing - optimize for speed vs quality
@@ -84,7 +86,7 @@ class VideoComposer {
           '-pix_fmt', 'yuv420p',      // REVIEW-CRITICAL: Compatibility with all players
           '-c:a', 'aac',              // REVIEW-COST: AAC audio codec
           '-b:a', '128k',             // REVIEW-COST: Audio bitrate
-          '-t', duration.toFixed(2),  // REVIEW-CRITICAL: Set exact duration to match audio
+          '-shortest',                // REVIEW-CRITICAL: End when shortest stream ends
           '-movflags', '+faststart'   // REVIEW-CRITICAL: Web optimization
         ])
         .output(outputPath)

@@ -36,7 +36,7 @@ class FrameGenerator {
 
       const startTime = Date.now();
       const fps = 12; // 12 frames per second for smooth video playback
-      const frameCount = Math.ceil(duration * fps);
+      const frameCount = Math.round(duration * fps); // Use round instead of ceil for exact timing
       const frameDir = path.join(this.tempDir, `frames_${jobId}`);
       
       await fs.mkdir(frameDir, { recursive: true });
