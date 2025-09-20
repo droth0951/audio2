@@ -151,8 +151,8 @@ class FrameGenerator {
 
       // EXACT APP SPACING - tight layout matching Recording View - SCALED
       // App uses very tight spacing: 15px between elements - now scaled
-      const podcastTitleLines = this.wrapText((podcast.title || 'Podcast').toUpperCase(), 18);
-      const episodeTitleLines = this.wrapText(podcast.episode || 'Podcast Episode', 35);
+      const podcastTitleLines = this.wrapText((podcast.podcastName || 'Podcast').toUpperCase(), 18);
+      const episodeTitleLines = this.wrapText(podcast.title || 'Podcast Episode', 35);
       const podcastTitleHeight = Math.floor(26 * scaleFactor) * podcastTitleLines.length;
       const artworkHeight = artworkSize;
       const episodeTitleHeight = Math.floor(20 * scaleFactor) * episodeTitleLines.length;
