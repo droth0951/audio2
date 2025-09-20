@@ -1,5 +1,20 @@
 [phases.setup]
-nixPkgs = ["nodejs_18", "ffmpeg", "fontconfig", "dejavu_fonts", "liberation_ttf"]
+nixPkgs = [
+  "nodejs_18",
+  "ffmpeg",
+  "fontconfig",
+  "dejavu_fonts",
+  "liberation_ttf",
+  "roboto",              # ← Add this
+  "noto-fonts",          # ← Add this
+  "google-fonts"         # ← Add this (if available)
+]
+
+[phases.build]
+cmds = [
+  "fc-cache -fv",        # Rebuild font cache
+  "fc-list | head -10"   # Debug: list available fonts
+]
 
 [phases.start]
 cmd = "cd audio-trimmer-server && npm start"

@@ -35,8 +35,19 @@ class FrameGenerator {
       }
 
       const startTime = Date.now();
-      const fps = 12; // 12 frames per second for smooth video playback
+      const fps = 12; // 12 frames per second for smooth video playbook
       const frameCount = Math.round(duration * fps); // Use round instead of ceil for exact timing
+
+      // 🔤 Debug: List available fonts
+      try {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+        const { stdout } = await execAsync('fc-list | grep -i roboto | head -5');
+        logger.debug('🔤 Available Roboto fonts:', { jobId, fonts: stdout.trim() });
+      } catch (error) {
+        logger.warn('🔤 Font debug failed:', { jobId, error: error.message });
+      }
       const frameDir = path.join(this.tempDir, `frames_${jobId}`);
       
       await fs.mkdir(frameDir, { recursive: true });
