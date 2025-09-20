@@ -12,9 +12,17 @@ nixPkgs = [
 
 [phases.build]
 cmds = [
-  "fc-cache -fv",        # Rebuild font cache
-  "fc-list | head -10"   # Debug: list available fonts
+  "mkdir -p /app/.fontconfig",              # Create fontconfig directory
+  "mkdir -p /app/.cache/fontconfig",        # Create fontconfig cache directory
+  "fc-cache -fv",                           # Rebuild font cache
+  "fc-list | head -10"                      # Debug: list available fonts
 ]
 
 [phases.start]
+# Set fontconfig environment variables
+env = {
+  FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig",
+  FONTCONFIG_FILE = "/etc/fonts/fonts.conf",
+  XDG_CACHE_HOME = "/app/.cache"
+}
 cmd = "cd audio-trimmer-server && npm start"
