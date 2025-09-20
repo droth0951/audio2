@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x", "npm-9_x", "ffmpeg"]
+nixPkgs = ["nodejs-18_x", "npm-9_x", "ffmpeg", "fontconfig", "dejavu_fonts", "liberation_ttf"]
