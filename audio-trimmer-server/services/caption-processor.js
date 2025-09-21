@@ -12,14 +12,15 @@ class CaptionProcessor {
 
   // Initialize AssemblyAI client
   initializeClient() {
-    if (!process.env.ASSEMBLYAI_API_KEY) {
+    const apiKey = process.env.ASSEMBLYAI_API_KEY || process.env.ASSEMBLYAI_KEY;
+    if (!apiKey) {
       logger.warn('⚠️ AssemblyAI API key not found - captions will be disabled');
       return;
     }
 
     try {
       this.assemblyai = new AssemblyAI({
-        apiKey: process.env.ASSEMBLYAI_API_KEY
+        apiKey: apiKey
       });
       logger.debug('✅ AssemblyAI client initialized');
     } catch (error) {
