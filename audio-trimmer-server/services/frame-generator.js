@@ -214,6 +214,11 @@ class FrameGenerator {
         ? this.getCurrentCaptionFromTranscript(transcript, currentTimeMs)
         : '';
 
+      // NEW: Precise caption positioning - between progress bar and watermark
+      const progressBarBottom = progressElements.progressBar.y + progressElements.progressBar.height;
+      const watermarkY = progressElements.watermarkText.y;
+      const captionY = progressBarBottom + ((watermarkY - progressBarBottom) * 0.3); // 30% of space between elements
+
       const templateData = {
         width: dimensions.width,
         height: dimensions.height,
@@ -238,7 +243,8 @@ class FrameGenerator {
         // NEW: Add caption data to existing template (NO visual changes to existing elements)
         captionText: currentCaption,          // Caption text for current time
         captionsEnabled: captionsEnabled,     // Show/hide captions
-        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 40) : []
+        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 40) : [],
+        captionY: Math.floor(captionY)        // Precise Y position between progress bar and watermark
       };
 
 

@@ -90,6 +90,17 @@
         fill="url(#progressFill)"
         rx="{{progressElements.progressBar.height}}" ry="{{progressElements.progressBar.height}}"/>
 
+  <!-- CAPTIONS - Positioned between progress bar and watermark -->
+  {{#if captionsEnabled}}
+  {{#each captionLines}}
+  <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
+        text-anchor="middle" fill="#ffffff"
+        font-size="32" font-weight="600"
+        font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+        filter="url(#textShadow)">{{this}}</text>
+  {{/each}}
+  {{/if}}
+
   <!-- DANCING BARS WATERMARK (BOTTOM-RIGHT) -->
   {{#each progressElements.dancingBars}}
   <rect x="{{x}}" y="{{y}}" width="{{width}}" height="{{height}}"
