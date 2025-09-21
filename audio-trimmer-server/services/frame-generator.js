@@ -27,7 +27,7 @@ class FrameGenerator {
   }
 
   // REVIEW-CRITICAL: Generate video frames with Audio2 design using SVG
-  async generateFrames(audioPath, duration, podcast, jobId) {
+  async generateFrames(audioPath, duration, podcast, jobId, transcript = null) {
     try {
       // REVIEW-CRITICAL: Feature flag check for frame generation
       if (!config.features.ENABLE_SERVER_VIDEO) {
@@ -89,7 +89,9 @@ class FrameGenerator {
         const progress = frameTime / duration;
         
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i);
+        // Calculate current time in milliseconds for caption lookup
+        const currentTimeMs = (i / fps) * 1000;
+        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i, transcript, currentTimeMs);
         frames.push(framePath);
         
         logger.debug('Generated frame', {
@@ -138,7 +140,7 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0) {
+  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0, transcript = null, currentTimeMs = 0) {
     try {
       // Calculate dimensions for 9:16 aspect ratio
       const dimensions = this.getAspectRatioDimensions('9:16');
@@ -196,6 +198,18 @@ class FrameGenerator {
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
+      // Calculate caption font size based on available space
+      const progressBarBottom = progressElements.progressBar.y + progressElements.progressBar.height;
+      const watermarkTop = progressElements.watermarkText.y - 20; // 20px buffer above watermark
+      const availableCaptionHeight = watermarkTop - progressBarBottom;
+
+      // Choose font size based on available space (use 40% of available height)
+      const maxFontSize = Math.min(72, availableCaptionHeight * 0.4);
+      const safeFontSize = Math.max(48, maxFontSize); // Minimum 48px, maximum based on space
+      const captionFontSize = Math.floor(safeFontSize);
+
+      // Calculate precise caption Y position (30% of space between progress bar and watermark)
+      const captionY = Math.floor(progressBarBottom + ((watermarkTop - progressBarBottom) * 0.3));
 
       const templateData = {
         width: dimensions.width,
@@ -216,7 +230,12 @@ class FrameGenerator {
         // Content - wrapped text lines and new progress system
         podcastNameLines: podcastTitleLines,
         episodeTitleLines: episodeTitleLines,
-        progressElements: progressElements
+        progressElements: progressElements,
+        // Caption data
+        captionsEnabled: transcript && transcript.length > 0,
+        captionY: captionY,
+        captionFontSize: captionFontSize,
+        captionLines: this.getCurrentCaption(transcript, currentTimeMs)
       };
 
 
@@ -471,6 +490,70 @@ class FrameGenerator {
     const frameCount = Math.ceil(duration * fps);
     const costPerFrame = 0.0001; // $0.0001 per frame
     return frameCount * costPerFrame;
+  }
+
+  // Get current caption for specific timestamp
+  getCurrentCaption(transcript, currentTimeMs) {
+    if (!transcript || !Array.isArray(transcript) || transcript.length === 0) {
+      return [];
+    }
+
+    // Find current utterance based on timestamp
+    const currentUtterance = transcript.find(utterance => {
+      const startMs = utterance.start || 0;
+      const endMs = utterance.end || (utterance.start + 3000); // Default 3 second duration
+      return currentTimeMs >= startMs && currentTimeMs <= endMs;
+    });
+
+    if (!currentUtterance || !currentUtterance.text) {
+      return [];
+    }
+
+    // Format caption text and split into lines (max 2 lines)
+    const formattedText = this.formatCaptionText(currentUtterance.text);
+    return this.splitIntoLines(formattedText, 2); // Max 2 lines
+  }
+
+  // Format caption text with proper capitalization
+  formatCaptionText(text) {
+    if (!text) return '';
+
+    // Clean up text
+    let cleanText = text.trim();
+
+    // Only capitalize first character if it looks like start of sentence
+    if (cleanText.length > 0) {
+      cleanText = cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
+    }
+
+    return cleanText;
+  }
+
+  // Split text into maximum number of lines
+  splitIntoLines(text, maxLines = 2) {
+    if (!text) return [];
+
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+
+      // Rough character limit per line (adjust based on font size)
+      if (testLine.length > 35 && currentLine && lines.length < maxLines - 1) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine && lines.length < maxLines) {
+      lines.push(currentLine);
+    }
+
+    return lines;
   }
 }
 

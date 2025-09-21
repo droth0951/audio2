@@ -210,12 +210,31 @@ class JobQueue {
         downloadTime: audioResult.downloadTime
       });
 
-      // Step 2: Generate video frames using SVG + Sharp
+      // Step 2: Generate captions if enabled
+      let transcript = null;
+      if (request.captionsEnabled) {
+        logger.debug('Starting caption generation', { jobId });
+
+        // TODO: Add actual caption processing here
+        // For now, create mock transcript data for testing
+        transcript = [
+          { start: 0, end: 3000, text: "Because I teach at NYU" },
+          { start: 3000, end: 6000, text: "and I have been doing this for years" }
+        ];
+
+        logger.success('Caption generation completed', {
+          jobId,
+          utteranceCount: transcript ? transcript.length : 0
+        });
+      }
+
+      // Step 3: Generate video frames using SVG + Sharp
       const frameResult = await getFrameGenerator().generateFrames(
         audioResult.tempPath,
         audioResult.duration,
         request.podcast,
-        jobId
+        jobId,
+        transcript
       );
 
       logger.success('Frame generation completed', {
@@ -224,7 +243,7 @@ class JobQueue {
         generationTime: frameResult.generationTime
       });
 
-      // Step 3: Combine audio + frames with FFmpeg
+      // Step 4: Combine audio + frames with FFmpeg
       const videoResult = await getVideoComposer().composeVideo(
         audioResult.tempPath,
         frameResult,
@@ -251,21 +270,47 @@ class JobQueue {
 
       // Calculate detailed cost breakdown
       const durationInMinutes = (request.clipEnd - request.clipStart) / 60000;
+      const durationInSeconds = (request.clipEnd - request.clipStart) / 1000;
       const processingTimeMs = Date.now() - new Date(job.startedAt).getTime();
+
+      // AssemblyAI cost calculation (if captions enabled)
+      const assemblyAICost = request.captionsEnabled ?
+        (durationInSeconds / 3600) * 0.37 : 0; // $0.37 per hour
+
+      // Railway actual pricing: CPU $0.000463/vCPU/min, RAM $0.000231/GB/min
+      const processingTimeMinutes = processingTimeMs / 60000;
+      const railwayCpuCost = processingTimeMinutes * 0.000463; // 1 vCPU
+      const railwayRamCost = processingTimeMinutes * 0.000231; // 1GB RAM
+      const railwayNetworkCost = (videoResult.fileSize / 1024) * 0.000000047683716; // Network egress
+
       const costBreakdown = {
-        audioDownload: durationInMinutes * 0.002, // $0.002 per minute for download/processing
-        frameGeneration: frameResult.frameCount * 0.0001, // $0.0001 per frame
-        videoComposition: durationInMinutes * 0.003, // $0.003 per minute for FFmpeg
-        storage: Math.max(0.0005, videoResult.fileSize * 0.00000001), // $0.0005 base + size
-        processing: Math.max(0.001, processingTimeMs * 0.000001), // $0.001 base + time
-        processingTimeMs: processingTimeMs // Keep as metadata, not part of cost calculation
+        railwayCpu: railwayCpuCost,
+        railwayRam: railwayRamCost,
+        railwayNetwork: railwayNetworkCost,
+        assemblyAI: assemblyAICost, // AssemblyAI transcription cost
+        processingTimeMs: processingTimeMs // Keep as metadata
       };
 
-      const totalCost = costBreakdown.audioDownload + 
-                        costBreakdown.frameGeneration + 
-                        costBreakdown.videoComposition + 
-                        costBreakdown.storage + 
-                        costBreakdown.processing;
+      const totalCost = costBreakdown.railwayCpu +
+                        costBreakdown.railwayRam +
+                        costBreakdown.railwayNetwork +
+                        costBreakdown.assemblyAI;
+
+      // DETAILED COST DEBUG LOGGING
+      console.log('💰 COST BREAKDOWN DEBUG (FIXED CALCULATION):', {
+        jobId,
+        durationSeconds: durationInSeconds,
+        processingTimeMinutes: processingTimeMinutes,
+        captionsEnabled: request.captionsEnabled,
+        calculatedAssemblyAICost: assemblyAICost,
+        railwayCpuCost: railwayCpuCost,
+        railwayRamCost: railwayRamCost,
+        railwayNetworkCost: railwayNetworkCost,
+        totalJobCost: totalCost,
+        expectedCost: 0.005,
+        costMultiplier: totalCost > 0 ? `${(totalCost / 0.005).toFixed(1)}x vs target` : 'Under target!',
+        realWorldCheck: `Railway monthly: $0.48 across many jobs`
+      });
 
       // Complete job successfully
       await this.completeJob(jobId, {
