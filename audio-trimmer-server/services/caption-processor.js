@@ -44,10 +44,12 @@ class CaptionProcessor {
       });
 
       const uploadResponse = await this.assemblyai.files.upload(audioBuffer);
+      logger.debug('AssemblyAI upload response:', { jobId, uploadResponse });
 
       // 2. Enhanced transcription request with Phase 1 AI features
+      const audioUrl = uploadResponse.upload_url || uploadResponse;
       const transcriptRequest = {
-        audio_url: uploadResponse.upload_url,  // Static file URL
+        audio_url: audioUrl,  // Static file URL
 
         // Core caption features (existing)
         speaker_labels: true,
@@ -68,7 +70,7 @@ class CaptionProcessor {
       logger.info('🎬 Starting enhanced transcription with smart features', {
         jobId,
         smartFeatures: enableSmartFeatures,
-        uploadUrl: uploadResponse.upload_url.substring(0, 50) + '...'
+        uploadUrl: uploadResponse.upload_url ? uploadResponse.upload_url.substring(0, 50) + '...' : 'uploaded'
       });
 
       const transcript = await this.assemblyai.transcripts.create(transcriptRequest);
