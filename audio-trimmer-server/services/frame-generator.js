@@ -24,10 +24,21 @@ class FrameGenerator {
     this.tempDir = path.join(__dirname, '../temp');
     this.templatePath = path.join(__dirname, '../templates/audio2-frame.svg');
     this.compiledTemplate = null; // Cache compiled template
+
+    // Register Handlebars helpers for captions
+    this.registerHandlebarsHelpers();
+  }
+
+  // Register Handlebars helpers for template processing
+  registerHandlebarsHelpers() {
+    // Add helper for numeric addition (needed for caption positioning)
+    Handlebars.registerHelper('add', function(a, b) {
+      return a + b;
+    });
   }
 
   // REVIEW-CRITICAL: Generate video frames with Audio2 design using SVG
-  async generateFrames(audioPath, duration, podcast, jobId) {
+  async generateFrames(audioPath, duration, podcast, jobId, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
     try {
       // REVIEW-CRITICAL: Feature flag check for frame generation
       if (!config.features.ENABLE_SERVER_VIDEO) {
@@ -89,7 +100,7 @@ class FrameGenerator {
         const progress = frameTime / duration;
         
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i);
+        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs);
         frames.push(framePath);
         
         logger.debug('Generated frame', {
@@ -138,7 +149,7 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0) {
+  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
     try {
       // Calculate dimensions for 9:16 aspect ratio
       const dimensions = this.getAspectRatioDimensions('9:16');
@@ -196,6 +207,12 @@ class FrameGenerator {
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
+      // NEW: Get current caption text using production-tested logic
+      const clipDurationMs = clipEndMs - clipStartMs;
+      const currentTimeMs = clipStartMs + (progress * clipDurationMs); // Absolute time for transcript lookup
+      const currentCaption = captionsEnabled && transcript
+        ? this.getCurrentCaptionFromTranscript(transcript, currentTimeMs)
+        : '';
 
       const templateData = {
         width: dimensions.width,
@@ -216,7 +233,12 @@ class FrameGenerator {
         // Content - wrapped text lines and new progress system
         podcastNameLines: podcastTitleLines,
         episodeTitleLines: episodeTitleLines,
-        progressElements: progressElements
+        progressElements: progressElements,
+
+        // NEW: Add caption data to existing template (NO visual changes to existing elements)
+        captionText: currentCaption,          // Caption text for current time
+        captionsEnabled: captionsEnabled,     // Show/hide captions
+        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 40) : []
       };
 
 
@@ -471,6 +493,40 @@ class FrameGenerator {
     const frameCount = Math.ceil(duration * fps);
     const costPerFrame = 0.0001; // $0.0001 per frame
     return frameCount * costPerFrame;
+  }
+
+  // NEW: Use production CaptionService patterns (don't reinvent)
+  getCurrentCaptionFromTranscript(transcript, currentTimeMs) {
+    if (!transcript?.utterances?.length) return '';
+
+    // Use same logic as CaptionService.getCurrentCaption() - utterance-based
+    const currentUtterance = transcript.utterances.find(utterance =>
+      currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
+    );
+
+    return currentUtterance ? currentUtterance.text : '';
+  }
+
+  // Helper to split long captions (respects 3-line max rule)
+  splitCaptionIntoLines(text, maxCharsPerLine = 40) {
+    if (!text || text.length <= maxCharsPerLine) return [text];
+
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      if ((currentLine + ' ' + word).length <= maxCharsPerLine) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+        if (lines.length >= 2) break; // Max 3 lines total
+      }
+    }
+
+    if (currentLine) lines.push(currentLine);
+    return lines.slice(0, 3); // Enforce 3-line max
   }
 }
 

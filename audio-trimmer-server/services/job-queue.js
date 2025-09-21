@@ -6,6 +6,10 @@ const { v4: uuidv4 } = require('uuid');
 const audioDownload = require('./audio-download');
 const costAnalytics = require('./cost-analytics');
 
+// NEW: Caption processing services
+const audioProcessor = require('./audio-processor');
+const captionProcessor = require('./caption-processor');
+
 // Lazy load video generation services to prevent Sharp loading at startup
 let frameGenerator = null;
 let videoComposer = null;
@@ -82,9 +86,9 @@ class JobQueue {
       this.checkFeatureEnabled();
       this.checkQueueLimit();
       
-      // Estimate cost
+      // Estimate cost (include captions if enabled)
       const duration = (request.clipEnd - request.clipStart) / 1000;
-      const estimatedCost = this.estimateJobCost(duration);
+      const estimatedCost = this.estimateJobCost(duration, request.captionsEnabled);
       this.checkDailySpendingLimit(estimatedCost);
 
       // Generate job
@@ -120,13 +124,17 @@ class JobQueue {
     }
   }
 
-  // Estimate job cost based on duration
-  estimateJobCost(durationSeconds) {
+  // Estimate job cost based on duration (includes captions if enabled)
+  estimateJobCost(durationSeconds, captionsEnabled = false) {
     const audioCost = (durationSeconds / 60) * config.costs.COST_PER_MINUTE_AUDIO;
     const processingCost = config.costs.COST_PER_VIDEO_PROCESSING;
     const storageCost = config.costs.COST_PER_GB_STORAGE * 0.01; // ~10MB video
-    
-    return audioCost + processingCost + storageCost;
+
+    // Add caption cost if enabled
+    const captionCost = captionsEnabled ?
+      captionProcessor.estimateCaptionCost(durationSeconds * 1000).total : 0;
+
+    return audioCost + processingCost + storageCost + captionCost;
   }
 
   // Get job position in queue
@@ -210,12 +218,66 @@ class JobQueue {
         downloadTime: audioResult.downloadTime
       });
 
-      // Step 2: Generate video frames using SVG + Sharp
+      // Step 1.5: Generate captions if enabled (file upload method)
+      let transcript = null;
+      if (request.captionsEnabled && captionProcessor.isCaptionsEnabled()) {
+        try {
+          logger.info('🎬 Starting caption generation using file upload method', { jobId });
+
+          // Download and extract exact audio clip for AssemblyAI
+          const audioBuffer = await audioProcessor.downloadAndExtractClip(
+            request.audioUrl,
+            request.clipStart,
+            request.clipEnd,
+            jobId
+          );
+
+          // Generate captions using file upload (solves CDN timing issue)
+          transcript = await captionProcessor.generateCaptions(
+            audioBuffer,
+            request.clipStart,
+            request.clipEnd,
+            jobId,
+            request.enableSmartFeatures
+          );
+
+          if (transcript) {
+            logger.success('✅ Caption generation completed', {
+              jobId,
+              utterances: transcript.utterances?.length || 0,
+              words: transcript.words?.length || 0
+            });
+
+            // Log smart insights for future features
+            audioProcessor.logSmartInsights(transcript, request.clipStart, request.clipEnd, jobId);
+          } else {
+            logger.warn('⚠️ Caption generation failed - continuing without captions', { jobId });
+          }
+
+        } catch (error) {
+          logger.error('❌ Caption generation failed - continuing without captions', {
+            jobId,
+            error: error.message
+          });
+          // Continue video generation without captions (graceful fallback)
+          transcript = null;
+        }
+      } else {
+        if (request.captionsEnabled) {
+          logger.info('ℹ️ Captions requested but not enabled via environment variable', { jobId });
+        }
+      }
+
+      // Step 2: Generate video frames using SVG + Sharp (now with transcript data)
       const frameResult = await getFrameGenerator().generateFrames(
         audioResult.tempPath,
         audioResult.duration,
         request.podcast,
-        jobId
+        jobId,
+        transcript, // NEW: Pass transcript for captions
+        request.captionsEnabled, // NEW: Pass caption toggle
+        request.clipStart, // NEW: Pass clip timing for caption sync
+        request.clipEnd
       );
 
       logger.success('Frame generation completed', {

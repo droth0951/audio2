@@ -20,7 +20,9 @@ module.exports = async (req, res) => {
       podcast,
       userEmail,
       aspectRatio = '9:16',  // Default to vertical
-      template = 'professional'
+      template = 'professional',
+      captionsEnabled = false,        // NEW: Caption toggle
+      enableSmartFeatures = true      // NEW: Smart features toggle
     } = req.body;
 
     // Validate required fields
@@ -53,6 +55,13 @@ module.exports = async (req, res) => {
         success: false,
         error: 'Audio URL must be a valid HTTP/HTTPS URL'
       });
+    }
+
+    // Feature flag protection for captions
+    if (captionsEnabled && process.env.ENABLE_SERVER_CAPTIONS !== 'true') {
+      logger.warn('⚠️ Captions requested but not enabled via environment variable', { jobId: 'pending' });
+      // Continue without captions instead of failing (graceful degradation)
+      req.body.captionsEnabled = false;
     }
 
     // Create job through queue system (handles all safety checks)
