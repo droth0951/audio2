@@ -96,19 +96,39 @@ class FrameGenerator {
       
       // Generate frames
       for (let i = 0; i < frameCount; i++) {
+        const frameStartTime = Date.now();
         const frameTime = i / fps;
         const progress = frameTime / duration;
-        
+
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
         await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs);
         frames.push(framePath);
-        
-        logger.debug('Generated frame', {
-          jobId,
-          frame: i + 1,
-          totalFrames: frameCount,
-          progress: `${Math.round(progress * 100)}%`
-        });
+
+        const frameRenderTime = Date.now() - frameStartTime;
+
+        // Log slow frames and progress milestones
+        if (frameRenderTime > 1000 || i % 30 === 0 || i === frameCount - 1) {
+          logger.debug('Frame generation progress', {
+            jobId,
+            frame: i + 1,
+            totalFrames: frameCount,
+            progress: `${Math.round(progress * 100)}%`,
+            frameTime: `${frameRenderTime}ms`,
+            avgTime: `${Math.round((Date.now() - startTime) / (i + 1))}ms`,
+            hasCaptions: captionsEnabled && transcript ? 'yes' : 'no'
+          });
+        }
+
+        // Warn on very slow frames
+        if (frameRenderTime > 2000) {
+          logger.warn(`⚠️ Slow frame detected`, {
+            jobId,
+            frame: i + 1,
+            renderTime: `${frameRenderTime}ms`,
+            captionsEnabled,
+            hasTranscript: !!transcript
+          });
+        }
       }
 
       const generationTime = Date.now() - startTime;
@@ -210,9 +230,22 @@ class FrameGenerator {
       // NEW: Get current caption text using production-tested logic
       const clipDurationMs = clipEndMs - clipStartMs;
       const currentTimeMs = clipStartMs + (progress * clipDurationMs); // Absolute time for transcript lookup
+
+      const captionStartTime = Date.now();
       const currentCaption = captionsEnabled && transcript
         ? this.getCurrentCaptionFromTranscript(transcript, currentTimeMs)
         : '';
+      const captionTime = Date.now() - captionStartTime;
+
+      // Log if caption processing is slow
+      if (captionTime > 50) {
+        logger.debug('Slow caption lookup', {
+          jobId,
+          frame: frameIndex,
+          captionTime: `${captionTime}ms`,
+          hasCaption: !!currentCaption
+        });
+      }
 
       // NEW: Precise caption positioning - between progress bar and watermark
       const progressBarBottom = progressElements.progressBar.y + progressElements.progressBar.height;
@@ -503,9 +536,23 @@ class FrameGenerator {
 
   // NEW: Use production CaptionService patterns (don't reinvent)
   getCurrentCaptionFromTranscript(transcript, currentTimeMs) {
+    // Use word-level data if available (preferred for progressive captions like mobile app)
+    if (transcript?.words?.length) {
+      // MOBILE APP LOGIC: Show words that have already been spoken (progressive captions)
+      const wordsSpokenSoFar = transcript.words.filter(word =>
+        word.start <= currentTimeMs
+      );
+
+      // Show recent words (last 8 words like mobile app)
+      const recentWords = wordsSpokenSoFar.slice(-8);
+      const captionText = recentWords.map(w => w.text).join(' ');
+
+      return captionText.trim();
+    }
+
+    // Fallback to utterance-based if no word-level data
     if (!transcript?.utterances?.length) return '';
 
-    // Use same logic as CaptionService.getCurrentCaption() - utterance-based
     const currentUtterance = transcript.utterances.find(utterance =>
       currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
     );
