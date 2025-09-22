@@ -492,26 +492,60 @@ class FrameGenerator {
     return frameCount * costPerFrame;
   }
 
-  // Get current caption for specific timestamp
+  // Get current caption for specific timestamp with word-by-word progression
   getCurrentCaption(transcript, currentTimeMs) {
     if (!transcript || !Array.isArray(transcript) || transcript.length === 0) {
       return [];
     }
 
-    // Find current utterance based on timestamp
-    const currentUtterance = transcript.find(utterance => {
-      const startMs = utterance.start || 0;
-      const endMs = utterance.end || (utterance.start + 3000); // Default 3 second duration
-      return currentTimeMs >= startMs && currentTimeMs <= endMs;
-    });
-
-    if (!currentUtterance || !currentUtterance.text) {
+    // BETTER: Show progressive text within each utterance
+    const captionText = this.getCurrentCaptionText(transcript, currentTimeMs);
+    if (!captionText) {
       return [];
     }
 
     // Format caption text and split into lines (max 2 lines)
-    const formattedText = this.formatCaptionText(currentUtterance.text);
+    const formattedText = this.formatCaptionText(captionText);
     return this.splitIntoLines(formattedText, 2); // Max 2 lines
+  }
+
+  // Show words within utterance progressively
+  getCurrentCaptionText(transcript, currentTimeMs) {
+    // Handle mock transcript format (simple array with start/end/text)
+    if (transcript.length > 0 && transcript[0].text && !transcript[0].utterances) {
+      const activeUtterance = transcript.find(utterance => {
+        const startMs = utterance.start || 0;
+        const endMs = utterance.end || (utterance.start + 3000);
+        return currentTimeMs >= startMs && currentTimeMs <= endMs;
+      });
+
+      return activeUtterance ? activeUtterance.text : '';
+    }
+
+    // Handle real AssemblyAI transcript format with utterances and words
+    if (!transcript.utterances || !transcript.words) {
+      return '';
+    }
+
+    // Find active utterance
+    const activeUtterance = transcript.utterances.find(u =>
+      currentTimeMs >= u.start && currentTimeMs <= u.end
+    );
+
+    if (!activeUtterance) return '';
+
+    // Show words within that utterance progressively
+    const wordsInUtterance = transcript.words.filter(word =>
+      word.start >= activeUtterance.start && word.end <= activeUtterance.end
+    );
+
+    const currentWords = wordsInUtterance.filter(word =>
+      currentTimeMs >= word.start
+    );
+
+    // Show last 8-12 words for readability
+    const recentWords = currentWords.slice(-10);
+    return recentWords.map(w => w.text).join(' ');
   }
 
   // Format caption text with proper capitalization
