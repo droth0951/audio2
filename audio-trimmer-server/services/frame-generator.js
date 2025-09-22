@@ -538,14 +538,30 @@ class FrameGenerator {
   getCurrentCaptionFromTranscript(transcript, currentTimeMs) {
     // Use word-level data if available (preferred for progressive captions like mobile app)
     if (transcript?.words?.length) {
-      // MOBILE APP LOGIC: Show words that have already been spoken (progressive captions)
-      const wordsSpokenSoFar = transcript.words.filter(word =>
-        word.start <= currentTimeMs
+      // IMPROVED: Time-based caption chunks for better readability
+      const CAPTION_WINDOW_MS = 3000; // 3 second window for stable display
+      const MAX_WORDS_PER_CAPTION = 12; // Reasonable reading limit
+
+      // Find words in current time window (not just words spoken so far)
+      const windowStart = Math.max(0, currentTimeMs - CAPTION_WINDOW_MS);
+      const windowEnd = currentTimeMs + 1000; // Small lookahead
+
+      const wordsInWindow = transcript.words.filter(word =>
+        word.start >= windowStart && word.start <= windowEnd
       );
 
-      // Show recent words (last 8 words like mobile app)
-      const recentWords = wordsSpokenSoFar.slice(-8);
-      const captionText = recentWords.map(w => w.text).join(' ');
+      if (wordsInWindow.length === 0) {
+        // Fallback: show recent words if no words in window
+        const wordsSpokenSoFar = transcript.words.filter(word =>
+          word.start <= currentTimeMs
+        );
+        const recentWords = wordsSpokenSoFar.slice(-8);
+        return recentWords.map(w => w.text).join(' ').trim();
+      }
+
+      // Take reasonable chunk size
+      const captionWords = wordsInWindow.slice(0, MAX_WORDS_PER_CAPTION);
+      const captionText = captionWords.map(w => w.text).join(' ');
 
       return captionText.trim();
     }
