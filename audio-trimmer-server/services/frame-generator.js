@@ -492,7 +492,7 @@ class FrameGenerator {
     return frameCount * costPerFrame;
   }
 
-  // Get current caption matching Audio2 app's proven utterance-based approach
+  // Get current caption using EXACT mobile app logic (word-by-word)
   getCurrentCaption(transcript, currentTimeMs) {
     // Handle mock transcript format for testing
     if (Array.isArray(transcript) && transcript.length > 0 && transcript[0].text) {
@@ -510,36 +510,27 @@ class FrameGenerator {
       return this.splitIntoLines(formattedText, 2);
     }
 
-    // Handle real AssemblyAI transcript - UTTERANCE-BASED like the mobile app
-    if (!transcript?.utterances?.length) {
-      return [];
-    }
+    // EXACT MOBILE APP LOGIC: Word-by-word processing
+    if (!transcript?.words?.length) return [];
 
-    // Find current utterance (exactly like mobile app's CaptionService)
-    const currentUtterance = transcript.utterances.find(utterance =>
-      currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
+    // Convert to clip-relative time (like mobile app)
+    const clipRelativeTime = currentTimeMs; // Already relative in server context
+
+    // COPY MOBILE APP LOGIC: Progressive word filtering
+    const activeWords = transcript.words.filter(word =>
+      clipRelativeTime >= word.start && clipRelativeTime <= word.end
     );
 
-    if (!currentUtterance || !currentUtterance.text) {
+    // Show recent words (like mobile app)
+    const recentWords = activeWords.slice(-8); // Last 8 words
+    const captionText = recentWords.map(w => w.text).join(' ');
+
+    if (!captionText.trim()) {
       return [];
-    }
-
-    let displayText = currentUtterance.text;
-
-    // Handle long utterances with progressive display (like mobile app)
-    const utteranceDuration = currentUtterance.end - currentUtterance.start;
-    const timeIntoUtterance = currentTimeMs - currentUtterance.start;
-    const progressRatio = timeIntoUtterance / utteranceDuration;
-
-    // For long text (>120 chars like mobile), show chunks progressively
-    if (displayText.length > 120) {
-      const chunks = this.breakIntoChunks(displayText, 120);
-      const chunkIndex = Math.min(Math.floor(progressRatio * chunks.length), chunks.length - 1);
-      displayText = chunks[chunkIndex];
     }
 
     // Format and split into lines
-    const formattedText = this.formatCaptionText(displayText);
+    const formattedText = this.formatCaptionText(captionText);
     return this.splitIntoLines(formattedText, 2);
   }
 
