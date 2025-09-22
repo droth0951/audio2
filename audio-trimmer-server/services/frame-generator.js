@@ -492,26 +492,79 @@ class FrameGenerator {
     return frameCount * costPerFrame;
   }
 
-  // Get current caption for specific timestamp
+  // Get current caption matching Audio2 app's proven utterance-based approach
   getCurrentCaption(transcript, currentTimeMs) {
-    if (!transcript || !Array.isArray(transcript) || transcript.length === 0) {
+    // Handle mock transcript format for testing
+    if (Array.isArray(transcript) && transcript.length > 0 && transcript[0].text) {
+      const currentUtterance = transcript.find(utterance => {
+        const startMs = utterance.start || 0;
+        const endMs = utterance.end || (utterance.start + 3000);
+        return currentTimeMs >= startMs && currentTimeMs <= endMs;
+      });
+
+      if (!currentUtterance || !currentUtterance.text) {
+        return [];
+      }
+
+      const formattedText = this.formatCaptionText(currentUtterance.text);
+      return this.splitIntoLines(formattedText, 2);
+    }
+
+    // Handle real AssemblyAI transcript - UTTERANCE-BASED like the mobile app
+    if (!transcript?.utterances?.length) {
       return [];
     }
 
-    // Find current utterance based on timestamp
-    const currentUtterance = transcript.find(utterance => {
-      const startMs = utterance.start || 0;
-      const endMs = utterance.end || (utterance.start + 3000); // Default 3 second duration
-      return currentTimeMs >= startMs && currentTimeMs <= endMs;
-    });
+    // Find current utterance (exactly like mobile app's CaptionService)
+    const currentUtterance = transcript.utterances.find(utterance =>
+      currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
+    );
 
     if (!currentUtterance || !currentUtterance.text) {
       return [];
     }
 
-    // Format caption text and split into lines (max 2 lines)
-    const formattedText = this.formatCaptionText(currentUtterance.text);
-    return this.splitIntoLines(formattedText, 2); // Max 2 lines
+    let displayText = currentUtterance.text;
+
+    // Handle long utterances with progressive display (like mobile app)
+    const utteranceDuration = currentUtterance.end - currentUtterance.start;
+    const timeIntoUtterance = currentTimeMs - currentUtterance.start;
+    const progressRatio = timeIntoUtterance / utteranceDuration;
+
+    // For long text (>120 chars like mobile), show chunks progressively
+    if (displayText.length > 120) {
+      const chunks = this.breakIntoChunks(displayText, 120);
+      const chunkIndex = Math.min(Math.floor(progressRatio * chunks.length), chunks.length - 1);
+      displayText = chunks[chunkIndex];
+    }
+
+    // Format and split into lines
+    const formattedText = this.formatCaptionText(displayText);
+    return this.splitIntoLines(formattedText, 2);
+  }
+
+  // Break text into chunks (matching mobile app's approach)
+  breakIntoChunks(text, maxChunkLength = 120) {
+    const words = text.split(' ');
+    const chunks = [];
+    let currentChunk = '';
+
+    for (const word of words) {
+      const testChunk = currentChunk ? `${currentChunk} ${word}` : word;
+
+      if (testChunk.length > maxChunkLength && currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = word;
+      } else {
+        currentChunk = testChunk;
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+
+    return chunks.length > 0 ? chunks : [text];
   }
 
   // Format caption text with proper capitalization
