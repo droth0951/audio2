@@ -516,13 +516,13 @@ class FrameGenerator {
     // Convert to clip-relative time (like mobile app)
     const clipRelativeTime = currentTimeMs; // Already relative in server context
 
-    // COPY MOBILE APP LOGIC: Progressive word filtering
-    const activeWords = transcript.words.filter(word =>
-      clipRelativeTime >= word.start && clipRelativeTime <= word.end
+    // CORRECTED MOBILE APP LOGIC: Show words that have already started (progressive captions)
+    const wordsSpokenSoFar = transcript.words.filter(word =>
+      word.start <= clipRelativeTime
     );
 
-    // Show recent words (like mobile app)
-    const recentWords = activeWords.slice(-8); // Last 8 words
+    // Show recent words (like mobile app) - last 8 words that have been spoken
+    const recentWords = wordsSpokenSoFar.slice(-8);
     const captionText = recentWords.map(w => w.text).join(' ');
 
     if (!captionText.trim()) {

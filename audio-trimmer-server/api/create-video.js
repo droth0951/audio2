@@ -6,9 +6,9 @@ const logger = require('../services/logger');
 const config = require('../config/settings');
 
 module.exports = async (req, res) => {
-  logger.info('Video creation request received', { 
+  logger.info('🎉🎉 Video creation request received', {
     ip: req.ip,
-    userAgent: req.headers['user-agent']?.substring(0, 50) 
+    userAgent: req.headers['user-agent']?.substring(0, 50)
   });
   
   try {
