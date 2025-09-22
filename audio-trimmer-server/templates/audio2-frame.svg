@@ -96,17 +96,6 @@
         fill="#666666" rx="1" ry="1"/>
   {{/each}}
 
-  <!-- CAPTIONS - Between progress bar and watermark -->
-  {{#if captionsEnabled}}
-  {{#each captionLines}}
-  <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
-        text-anchor="middle" fill="#ffffff"
-        font-size="64" font-weight="700"
-        font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
-        filter="url(#textShadow)">{{this}}</text>
-  {{/each}}
-  {{/if}}
-
   <!-- Audio2 watermark text -->
   <text x="{{progressElements.watermarkText.x}}" y="{{progressElements.watermarkText.y}}"
         font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
