@@ -74,18 +74,48 @@ class FrameGenerator {
       // Load cached SVG template
       const template = await this.getTemplate();
 
-      // Download podcast artwork if available
-      let artworkBuffer = null;
+      // Download and process podcast artwork once - cache for all frames
+      let processedArtwork = null;
       if (podcast.artwork) {
         try {
-          artworkBuffer = await this.downloadArtwork(podcast.artwork, jobId);
-          logger.debug('Podcast artwork downloaded', { 
-            jobId, 
+          const artworkStartTime = Date.now();
+          const artworkBuffer = await this.downloadArtwork(podcast.artwork, jobId);
+          logger.debug('Podcast artwork downloaded', {
+            jobId,
             artworkUrl: this.sanitizeUrl(podcast.artwork),
             size: `${Math.round(artworkBuffer.length / 1024)}KB`
           });
+
+          // Pre-process artwork once for all frames (resize + rounded corners)
+          const dimensions = this.getAspectRatioDimensions('9:16');
+          const scaleFactor = dimensions.width / 375;
+          const artworkSize = Math.floor(140 * scaleFactor);
+
+          const resizedArtwork = await getSharp()(artworkBuffer)
+            .resize(artworkSize, artworkSize, { fit: 'cover' })
+            .png()
+            .toBuffer();
+
+          // Add rounded corners using Sharp's built-in method (20px to match app)
+          processedArtwork = await getSharp()(resizedArtwork)
+            .composite([{
+              input: Buffer.from(
+                `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
+              ),
+              blend: 'dest-in'
+            }])
+            .png()
+            .toBuffer();
+
+          const artworkProcessTime = Date.now() - artworkStartTime;
+          logger.debug('📊 Artwork pre-processed and cached', {
+            jobId,
+            processTime: `${artworkProcessTime}ms`,
+            size: `${artworkSize}x${artworkSize}`,
+            cacheForFrames: frameCount
+          });
         } catch (error) {
-          logger.warn('Failed to download podcast artwork, using placeholder', {
+          logger.warn('Failed to download/process podcast artwork, using placeholder', {
             jobId,
             error: error.message
           });
@@ -101,7 +131,7 @@ class FrameGenerator {
         const progress = frameTime / duration;
 
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs);
+        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs);
         frames.push(framePath);
 
         const frameRenderTime = Date.now() - frameStartTime;
@@ -169,7 +199,7 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
+  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
     const frameStartTime = Date.now();
     const timings = {};
 
@@ -297,30 +327,13 @@ class FrameGenerator {
         .toBuffer();
       timings.sharpConversion = Date.now() - sharpStartTime;
 
-      // REVIEW-DESIGN: Composite podcast artwork if available
-      if (artworkBuffer) {
+      // REVIEW-DESIGN: Composite pre-processed artwork if available
+      if (processedArtwork) {
         const artworkStartTime = Date.now();
-        // Resize artwork to match the larger size
-        const resizedArtwork = await getSharp()(artworkBuffer)
-          .resize(artworkSize, artworkSize, { fit: 'cover' })
-          .png()
-          .toBuffer();
-
-        // Add rounded corners to artwork using Sharp's built-in method (20px to match app)
-        const roundedArtwork = await getSharp()(resizedArtwork)
-          .composite([{
-            input: Buffer.from(
-              `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
-            ),
-            blend: 'dest-in'
-          }])
-          .png()
-          .toBuffer();
-
-        // Composite artwork onto frame with correct positioning
+        // Composite pre-processed artwork onto frame with correct positioning
         frameBuffer = await getSharp()(frameBuffer)
           .composite([{
-            input: roundedArtwork,
+            input: processedArtwork,
             left: Math.round((dimensions.width - artworkSize) / 2),
             top: Math.round(artworkY),
             blend: 'over'
