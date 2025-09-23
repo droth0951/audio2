@@ -1,20 +1,30 @@
 [phases.setup]
-nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'roboto', 'dejavu_fonts']
+nixPkgs = [
+  "nodejs_18",
+  "ffmpeg",
+  "fontconfig",
+  "dejavu_fonts",
+  "liberation_ttf",
+  "roboto",
+  "roboto-slab",
+  "opensans-ttf"
+]
 
 [phases.build]
 cmds = [
-  'mkdir -p /app/fonts',
-  'mkdir -p /app/.fontconfig',
-  'mkdir -p /app/.cache/fontconfig',
-  'echo "<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n<fontconfig>\n  <dir>/usr/share/fonts</dir>\n  <dir>/app/fonts</dir>\n  <cachedir>/app/.cache/fontconfig</cachedir>\n</fontconfig>" > /app/.fontconfig/fonts.conf',
-  'FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv',
-  'echo "Testing font access:" && FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i roboto || true'
+  "mkdir -p /app/.fontconfig",
+  "mkdir -p /app/.cache/fontconfig",
+  "mkdir -p /usr/share/fonts/truetype/custom",
+  "fc-cache -fv",
+  "fc-list | grep -i roboto || echo 'No Roboto found'",
+  "fc-list | grep -i arial || echo 'No Arial found'"
 ]
 
 [phases.start]
+env = {
+  FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig",
+  FONTCONFIG_FILE = "/etc/fonts/fonts.conf",
+  XDG_CACHE_HOME = "/app/.cache",
+  FC_DEBUG = "1"
+}
 cmd = "cd audio-trimmer-server && npm start"
-
-[phases.start.env]
-FONTCONFIG_PATH = "/app/.fontconfig:/etc/fonts"
-FONTCONFIG_FILE = "/app/.fontconfig/fonts.conf"
-XDG_CACHE_HOME = "/app/.cache"
