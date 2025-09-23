@@ -170,6 +170,9 @@ class FrameGenerator {
 
   // REVIEW-DESIGN: Single frame generation using SVG template
   async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
+    const frameStartTime = Date.now();
+    const timings = {};
+
     try {
       // Calculate dimensions for 9:16 aspect ratio
       const dimensions = this.getAspectRatioDimensions('9:16');
@@ -280,17 +283,23 @@ class FrameGenerator {
         captionY: Math.floor(captionY)        // Precise Y position between progress bar and watermark
       };
 
-
+      // Time SVG template rendering
+      const svgStartTime = Date.now();
       // Render SVG with professional layout
       const svgContent = template(templateData);
+      timings.svgTemplate = Date.now() - svgStartTime;
 
+      // Time Sharp PNG conversion
+      const sharpStartTime = Date.now();
       // Convert SVG to PNG using Sharp
       let frameBuffer = await getSharp()(Buffer.from(svgContent))
         .png()
         .toBuffer();
+      timings.sharpConversion = Date.now() - sharpStartTime;
 
       // REVIEW-DESIGN: Composite podcast artwork if available
       if (artworkBuffer) {
+        const artworkStartTime = Date.now();
         // Resize artwork to match the larger size
         const resizedArtwork = await getSharp()(artworkBuffer)
           .resize(artworkSize, artworkSize, { fit: 'cover' })
@@ -318,10 +327,29 @@ class FrameGenerator {
           }])
           .png()
           .toBuffer();
+        timings.artworkComposite = Date.now() - artworkStartTime;
       }
 
+      // Time file writing
+      const writeStartTime = Date.now();
       // Save frame
       await fs.writeFile(framePath, frameBuffer);
+      timings.fileWrite = Date.now() - writeStartTime;
+
+      // Log total frame time and breakdown for slow frames
+      const totalFrameTime = Date.now() - frameStartTime;
+      if (totalFrameTime > 500 || frameIndex % 50 === 0) {
+        logger.debug('📊 Frame timing breakdown', {
+          jobId,
+          frame: frameIndex,
+          total: `${totalFrameTime}ms`,
+          captionLookup: captionTime ? `${captionTime}ms` : 'N/A',
+          svgTemplate: `${timings.svgTemplate}ms`,
+          sharpConversion: `${timings.sharpConversion}ms`,
+          artworkComposite: timings.artworkComposite ? `${timings.artworkComposite}ms` : 'N/A',
+          fileWrite: `${timings.fileWrite}ms`
+        });
+      }
 
     } catch (error) {
       logger.error('Single SVG frame generation failed', {
