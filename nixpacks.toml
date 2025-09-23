@@ -6,8 +6,7 @@ nixPkgs = [
   "dejavu_fonts",
   "liberation_ttf",
   "roboto",
-  "roboto-slab",
-  "opensans-ttf"
+  "roboto-slab"
 ]
 
 [phases.build]
