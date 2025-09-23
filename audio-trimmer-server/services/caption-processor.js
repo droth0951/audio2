@@ -301,13 +301,17 @@ class CaptionProcessor {
           const duration = endMs - startMs;
           const validatedTiming = this.validateCaptionTiming(startMs, endMs, text);
 
+          // Extract word-level timing for this caption
+          const wordTimings = this.extractWordTimingsForCaption(transcript, text, validatedTiming.startMs, validatedTiming.endMs);
+
           captions.push({
             index,
             startMs: validatedTiming.startMs,
             endMs: validatedTiming.endMs,
             text: text,
             duration: validatedTiming.endMs - validatedTiming.startMs,
-            lines: this.optimizeLineBreaks(text, 32) // Smart line breaking at 32 chars
+            lines: this.optimizeLineBreaks(text, 32), // Smart line breaking at 32 chars
+            words: wordTimings // Word-level timing for highlighting
           });
         }
       }
@@ -355,6 +359,35 @@ class CaptionProcessor {
       startMs: validatedStart,
       endMs: validatedEnd
     };
+  }
+
+  // Extract word-level timing data for a specific caption from AssemblyAI transcript
+  extractWordTimingsForCaption(transcript, captionText, captionStartMs, captionEndMs) {
+    if (!transcript?.words?.length) return [];
+
+    // Find words that fall within this caption's time range
+    const captionWords = transcript.words.filter(word =>
+      word.start >= captionStartMs && word.end <= captionEndMs
+    );
+
+    // If no exact matches, try fuzzy matching by text content
+    if (captionWords.length === 0) {
+      const captionWordsArray = captionText.toLowerCase().split(/\s+/);
+      const matchedWords = [];
+
+      for (const word of transcript.words) {
+        const wordText = word.text.toLowerCase().replace(/[^\w]/g, '');
+        if (captionWordsArray.some(captionWord =>
+          captionWord.replace(/[^\w]/g, '') === wordText
+        ) && word.start >= captionStartMs - 500 && word.end <= captionEndMs + 500) {
+          matchedWords.push(word);
+        }
+      }
+
+      return matchedWords.slice(0, captionWordsArray.length); // Limit to caption length
+    }
+
+    return captionWords;
   }
 
   // Optimize line breaks for readability (smart grammatical breaks)

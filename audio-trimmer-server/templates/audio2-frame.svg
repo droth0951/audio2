@@ -55,7 +55,7 @@
   <!-- PODCAST NAME - APP STYLE: 26px, uppercase, centered within 8% margins -->
   {{#each podcastNameLines}}
   <text x="{{../centerX}}" y="{{../podcastNameY}}" dy="{{@index}}em" text-anchor="middle" fill="#ffffff"
-        font-size="{{../podcastNameSize}}" font-weight="800"
+        font-size="{{../podcastNameSize}}" font-weight="500"
         font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
         letter-spacing="1.5"
         filter="url(#textShadow)">{{this}}</text>
@@ -72,7 +72,7 @@
   <!-- EPISODE TITLE - BELOW ARTWORK, centered within 8% margins -->
   {{#each episodeTitleLines}}
   <text x="{{../centerX}}" y="{{../episodeTitleY}}" dy="{{@index}}em" text-anchor="middle" fill="#ffffff"
-        font-size="{{../episodeTitleSize}}" font-weight="500"
+        font-size="{{../episodeTitleSize}}" font-weight="400"
         font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
         filter="url(#textShadow)">{{this}}</text>
   {{/each}}
@@ -92,13 +92,29 @@
 
   <!-- CAPTIONS - Positioned between progress bar and watermark -->
   {{#if captionsEnabled}}
+  {{#if captionWords.length}}
+  <!-- Word-level highlighting captions -->
+  {{#each captionLines}}
+  <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
+        text-anchor="middle"
+        font-size="56" font-weight="800"
+        font-family="Arial, Helvetica, sans-serif"
+        filter="url(#textShadow)">
+    {{#each (wordsInLine this ../captionWords ../currentTimeMs)}}
+    <tspan fill="{{#if isHighlighted}}#f59e0b{{else}}#ffffff{{/if}}">{{text}} </tspan>
+    {{/each}}
+  </text>
+  {{/each}}
+  {{else}}
+  <!-- Fallback simple captions -->
   {{#each captionLines}}
   <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
         text-anchor="middle" fill="#ffffff"
-        font-size="56" font-weight="600"
+        font-size="56" font-weight="800"
         font-family="Arial, Helvetica, sans-serif"
         filter="url(#textShadow)">{{this}}</text>
   {{/each}}
+  {{/if}}
   {{/if}}
 
   <!-- DANCING BARS WATERMARK (BOTTOM-RIGHT) -->
@@ -111,6 +127,6 @@
   <text x="{{progressElements.watermarkText.x}}" y="{{progressElements.watermarkText.y}}"
         font-family="Roboto, 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
         font-size="{{progressElements.watermarkText.fontSize}}"
-        font-weight="500"
+        font-weight="300"
         fill="#666666">Audio2</text>
 </svg>

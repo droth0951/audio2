@@ -35,6 +35,48 @@ class FrameGenerator {
     Handlebars.registerHelper('add', function(a, b) {
       return a + b;
     });
+
+    // Add helper for word-level highlighting in captions
+    Handlebars.registerHelper('wordsInLine', function(lineText, captionWords, currentTimeMs) {
+      if (!lineText || !captionWords || captionWords.length === 0) {
+        // Fallback: split line into words without highlighting
+        return lineText.split(' ').map(word => ({
+          text: word,
+          isHighlighted: false
+        }));
+      }
+
+      // Split line text into words
+      const lineWords = lineText.split(' ');
+      const result = [];
+
+      // Match each word in the line to timing data
+      let wordIndex = 0;
+      for (const lineWord of lineWords) {
+        const cleanLineWord = lineWord.toLowerCase().replace(/[^\w]/g, '');
+        let isHighlighted = false;
+
+        // Find matching word in caption timing data
+        for (let i = wordIndex; i < captionWords.length; i++) {
+          const captionWord = captionWords[i];
+          const cleanCaptionWord = captionWord.text?.toLowerCase().replace(/[^\w]/g, '') || '';
+
+          if (cleanLineWord === cleanCaptionWord) {
+            // Check if this word should be highlighted (current time within word timing)
+            isHighlighted = currentTimeMs >= captionWord.start && currentTimeMs <= captionWord.end;
+            wordIndex = i + 1; // Move to next word for next iteration
+            break;
+          }
+        }
+
+        result.push({
+          text: lineWord,
+          isHighlighted: isHighlighted
+        });
+      }
+
+      return result;
+    });
   }
 
   // REVIEW-CRITICAL: Generate video frames with Audio2 design using SVG
@@ -265,9 +307,10 @@ class FrameGenerator {
       const currentTimeMs = clipStartMs + (progress * clipDurationMs); // Absolute time for transcript lookup
 
       const captionStartTime = Date.now();
-      const currentCaption = captionsEnabled && transcript
+      const currentCaptionData = captionsEnabled && transcript
         ? this.getCurrentCaptionFromTranscript(transcript, currentTimeMs)
-        : '';
+        : null;
+      const currentCaption = currentCaptionData?.text || '';
       const captionTime = Date.now() - captionStartTime;
 
       // Log if caption processing is slow
@@ -310,7 +353,11 @@ class FrameGenerator {
         captionText: currentCaption,          // Caption text for current time
         captionsEnabled: captionsEnabled,     // Show/hide captions
         captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 32) : [], // Industry standard 32 chars
-        captionY: Math.floor(captionY)        // Precise Y position between progress bar and watermark
+        captionY: Math.floor(captionY),       // Precise Y position between progress bar and watermark
+
+        // NEW: Word-level highlighting data
+        captionWords: currentCaptionData?.words || [], // Word-level timing for highlighting
+        currentTimeMs: currentTimeMs          // Current video time for word highlighting
       };
 
       // Time SVG template rendering
@@ -585,10 +632,15 @@ class FrameGenerator {
       );
 
       if (currentCaption) {
-        // Return the text - lines are already optimized in the SRT parsing
-        return currentCaption.text;
+        // Return both text and word-level timing data
+        return {
+          text: currentCaption.text,
+          words: currentCaption.words || [], // Word-level timing from caption processor
+          startMs: currentCaption.startMs,
+          endMs: currentCaption.endMs
+        };
       }
-      return '';
+      return null;
     }
 
     // FALLBACK: Use word-level data if no SRT captions
@@ -611,24 +663,44 @@ class FrameGenerator {
           word.start <= currentTimeMs
         );
         const recentWords = wordsSpokenSoFar.slice(-6); // Reduced for better readability
-        return recentWords.map(w => w.text).join(' ').trim();
+        const fallbackText = recentWords.map(w => w.text).join(' ').trim();
+        return {
+          text: fallbackText,
+          words: recentWords,
+          startMs: recentWords[0]?.start || currentTimeMs,
+          endMs: recentWords[recentWords.length - 1]?.end || currentTimeMs
+        };
       }
 
       // Take reasonable chunk size
       const captionWords = wordsInWindow.slice(0, MAX_WORDS_PER_CAPTION);
       const captionText = captionWords.map(w => w.text).join(' ');
 
-      return captionText.trim();
+      return {
+        text: captionText.trim(),
+        words: captionWords,
+        startMs: captionWords[0]?.start || currentTimeMs,
+        endMs: captionWords[captionWords.length - 1]?.end || currentTimeMs
+      };
     }
 
     // Final fallback to utterance-based if no word-level data
-    if (!transcript?.utterances?.length) return '';
+    if (!transcript?.utterances?.length) return null;
 
     const currentUtterance = transcript.utterances.find(utterance =>
       currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
     );
 
-    return currentUtterance ? currentUtterance.text : '';
+    if (currentUtterance) {
+      return {
+        text: currentUtterance.text,
+        words: [], // No word-level data available
+        startMs: currentUtterance.start,
+        endMs: currentUtterance.end
+      };
+    }
+
+    return null;
   }
 
   // Helper to split long captions (respects 2-line max rule for readability)
