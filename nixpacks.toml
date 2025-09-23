@@ -11,4 +11,9 @@ cmds = [
 ]
 
 [phases.start]
-cmd = 'export FONTCONFIG_FILE=/app/.fontconfig/fonts.conf && export FONTCONFIG_PATH=/app/.fontconfig && export XDG_CACHE_HOME=/app/.cache && cd audio-trimmer-server && npm start'
+cmd = 'cd audio-trimmer-server && npm start'
+
+[variables]
+FONTCONFIG_FILE = '/app/.fontconfig/fonts.conf'
+FONTCONFIG_PATH = '/app/.fontconfig'
+XDG_CACHE_HOME = '/app/.cache'
