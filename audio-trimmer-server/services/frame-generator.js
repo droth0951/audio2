@@ -276,7 +276,7 @@ class FrameGenerator {
         // NEW: Add caption data to existing template (NO visual changes to existing elements)
         captionText: currentCaption,          // Caption text for current time
         captionsEnabled: captionsEnabled,     // Show/hide captions
-        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 40) : [],
+        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 32) : [], // Industry standard 32 chars
         captionY: Math.floor(captionY)        // Precise Y position between progress bar and watermark
       };
 
@@ -534,15 +534,29 @@ class FrameGenerator {
     return frameCount * costPerFrame;
   }
 
-  // NEW: Use production CaptionService patterns (don't reinvent)
+  // NEW: Use SRT captions with proper timing (industry standard 1.5-7 seconds)
   getCurrentCaptionFromTranscript(transcript, currentTimeMs) {
-    // Use word-level data if available (preferred for progressive captions like mobile app)
+    // PRIORITY 1: Use SRT captions if available (best for readability)
+    if (transcript?.srtCaptions?.length) {
+      // Find the caption that should be displayed at current time
+      const currentCaption = transcript.srtCaptions.find(caption =>
+        currentTimeMs >= caption.startMs && currentTimeMs <= caption.endMs
+      );
+
+      if (currentCaption) {
+        // Return the text - lines are already optimized in the SRT parsing
+        return currentCaption.text;
+      }
+      return '';
+    }
+
+    // FALLBACK: Use word-level data if no SRT captions
     if (transcript?.words?.length) {
       // IMPROVED: Time-based caption chunks for better readability
       const CAPTION_WINDOW_MS = 3000; // 3 second window for stable display
-      const MAX_WORDS_PER_CAPTION = 12; // Reasonable reading limit
+      const MAX_WORDS_PER_CAPTION = 8; // Reduced for 32-char limit
 
-      // Find words in current time window (not just words spoken so far)
+      // Find words in current time window
       const windowStart = Math.max(0, currentTimeMs - CAPTION_WINDOW_MS);
       const windowEnd = currentTimeMs + 1000; // Small lookahead
 
@@ -555,7 +569,7 @@ class FrameGenerator {
         const wordsSpokenSoFar = transcript.words.filter(word =>
           word.start <= currentTimeMs
         );
-        const recentWords = wordsSpokenSoFar.slice(-8);
+        const recentWords = wordsSpokenSoFar.slice(-6); // Reduced for better readability
         return recentWords.map(w => w.text).join(' ').trim();
       }
 
@@ -566,7 +580,7 @@ class FrameGenerator {
       return captionText.trim();
     }
 
-    // Fallback to utterance-based if no word-level data
+    // Final fallback to utterance-based if no word-level data
     if (!transcript?.utterances?.length) return '';
 
     const currentUtterance = transcript.utterances.find(utterance =>
@@ -576,10 +590,31 @@ class FrameGenerator {
     return currentUtterance ? currentUtterance.text : '';
   }
 
-  // Helper to split long captions (respects 3-line max rule)
-  splitCaptionIntoLines(text, maxCharsPerLine = 40) {
+  // Helper to split long captions (respects 2-line max rule for readability)
+  splitCaptionIntoLines(text, maxCharsPerLine = 32) { // Changed to 32 chars as per industry standard
     if (!text || text.length <= maxCharsPerLine) return [text];
 
+    // For SRT captions, lines may already be optimized
+    if (text.includes('\n')) {
+      return text.split('\n').slice(0, 2); // Max 2 lines
+    }
+
+    // Try smart breaking at punctuation/conjunctions first
+    const breakPoints = [', ', ' and ', ' but ', ' or ', ' - ', ': '];
+
+    if (text.length <= maxCharsPerLine * 2) {
+      for (const breakPoint of breakPoints) {
+        const index = text.indexOf(breakPoint, Math.floor(text.length * 0.3));
+        if (index > 0 && index < Math.floor(text.length * 0.7)) {
+          return [
+            text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim(),
+            text.substring(index + breakPoint.length).trim()
+          ].slice(0, 2);
+        }
+      }
+    }
+
+    // Fallback to word boundary breaking
     const words = text.split(' ');
     const lines = [];
     let currentLine = '';
@@ -590,12 +625,12 @@ class FrameGenerator {
       } else {
         if (currentLine) lines.push(currentLine);
         currentLine = word;
-        if (lines.length >= 2) break; // Max 3 lines total
+        if (lines.length >= 1) break; // Max 2 lines total for better readability
       }
     }
 
     if (currentLine) lines.push(currentLine);
-    return lines.slice(0, 3); // Enforce 3-line max
+    return lines.slice(0, 2); // Enforce 2-line max for optimal mobile viewing
   }
 }
 

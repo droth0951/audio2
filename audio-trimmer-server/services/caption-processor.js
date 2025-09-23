@@ -94,7 +94,31 @@ class CaptionProcessor {
           topicCategories: Object.keys(completedTranscript.iab_categories_result?.summary || {}).length
         });
 
-        // 4. Process smart features for future use
+        // 4. Fetch SRT subtitles with 32-character chunking for optimal mobile readability
+        try {
+          logger.info('📝 Fetching SRT subtitles with 32-char chunking', { jobId, transcriptId: completedTranscript.id });
+          const srtSubtitles = await this.assemblyai.transcripts.subtitles(
+            completedTranscript.id,
+            'srt',
+            32  // chars_per_caption - CRITICAL for mobile optimization as per AssemblyAI docs
+          );
+
+          // Parse SRT into structured format
+          completedTranscript.srtCaptions = this.parseSRT(srtSubtitles);
+
+          logger.debug('✅ SRT subtitles fetched and parsed', {
+            jobId,
+            captionCount: completedTranscript.srtCaptions?.length || 0,
+            sampleCaption: completedTranscript.srtCaptions?.[0]
+          });
+        } catch (srtError) {
+          logger.warn('⚠️ SRT subtitle fetch failed, falling back to word-level', {
+            jobId,
+            error: srtError.message
+          });
+        }
+
+        // 5. Process smart features for future use
         if (enableSmartFeatures && process.env.ENABLE_SMART_FEATURES === 'true') {
           await this.processSmartFeatures(completedTranscript, jobId);
         }
@@ -212,6 +236,129 @@ class CaptionProcessor {
   // Check if captions are enabled via environment variable
   isCaptionsEnabled() {
     return process.env.ENABLE_SERVER_CAPTIONS === 'true' && this.assemblyai !== null;
+  }
+
+  // Parse SRT format into structured captions with timing
+  parseSRT(srtString) {
+    if (!srtString) return [];
+
+    const captions = [];
+    const blocks = srtString.trim().split('\n\n');
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      if (lines.length >= 3) {
+        const index = parseInt(lines[0]);
+        const timingLine = lines[1];
+        const text = lines.slice(2).join(' ').trim();
+
+        // Parse SRT timecode: "00:00:01,500 --> 00:00:04,200"
+        const timingMatch = timingLine.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+
+        if (timingMatch) {
+          const startMs = this.srtTimeToMs(timingMatch[1], timingMatch[2], timingMatch[3], timingMatch[4]);
+          const endMs = this.srtTimeToMs(timingMatch[5], timingMatch[6], timingMatch[7], timingMatch[8]);
+
+          // Validate timing (1.5-7 seconds as per industry standards)
+          const duration = endMs - startMs;
+          const validatedTiming = this.validateCaptionTiming(startMs, endMs, text);
+
+          captions.push({
+            index,
+            startMs: validatedTiming.startMs,
+            endMs: validatedTiming.endMs,
+            text: text,
+            duration: validatedTiming.endMs - validatedTiming.startMs,
+            lines: this.optimizeLineBreaks(text, 32) // Smart line breaking at 32 chars
+          });
+        }
+      }
+    }
+
+    return captions;
+  }
+
+  // Convert SRT time format to milliseconds
+  srtTimeToMs(hours, minutes, seconds, milliseconds) {
+    return parseInt(hours) * 3600000 +
+           parseInt(minutes) * 60000 +
+           parseInt(seconds) * 1000 +
+           parseInt(milliseconds);
+  }
+
+  // Validate and adjust caption timing to meet industry standards
+  validateCaptionTiming(startMs, endMs, text) {
+    const duration = endMs - startMs;
+    const MIN_DURATION = 1500; // 1.5 seconds minimum
+    const MAX_DURATION = 7000; // 7 seconds maximum
+
+    let validatedStart = startMs;
+    let validatedEnd = endMs;
+
+    if (duration < MIN_DURATION) {
+      // Extend duration to minimum
+      validatedEnd = startMs + MIN_DURATION;
+      logger.debug('Caption duration extended to minimum', {
+        original: `${duration}ms`,
+        adjusted: `${MIN_DURATION}ms`,
+        text: text.substring(0, 30)
+      });
+    } else if (duration > MAX_DURATION) {
+      // Cap duration to maximum
+      validatedEnd = startMs + MAX_DURATION;
+      logger.debug('Caption duration capped to maximum', {
+        original: `${duration}ms`,
+        adjusted: `${MAX_DURATION}ms`,
+        text: text.substring(0, 30)
+      });
+    }
+
+    return {
+      startMs: validatedStart,
+      endMs: validatedEnd
+    };
+  }
+
+  // Optimize line breaks for readability (smart grammatical breaks)
+  optimizeLineBreaks(text, maxCharsPerLine = 32) {
+    if (!text || text.length <= maxCharsPerLine) {
+      return [text];
+    }
+
+    // Try to break at punctuation or conjunctions for natural reading
+    const breakPoints = [', ', ' and ', ' but ', ' or ', ' - ', ': ', '; '];
+
+    // If text fits in 2 lines, find optimal break point
+    if (text.length <= maxCharsPerLine * 2) {
+      for (const breakPoint of breakPoints) {
+        const index = text.indexOf(breakPoint, Math.floor(text.length * 0.3));
+        if (index > 0 && index < Math.floor(text.length * 0.7)) {
+          return [
+            text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim(),
+            text.substring(index + breakPoint.length).trim()
+          ];
+        }
+      }
+    }
+
+    // Fallback to word boundary breaking
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+        if (lines.length >= 1) break; // Max 2 lines for readability
+      }
+    }
+
+    if (currentLine) lines.push(currentLine);
+    return lines.slice(0, 2); // Enforce 2-line max for optimal readability
   }
 }
 
