@@ -1,28 +1,21 @@
 [phases.setup]
-nixPkgs = [
-  "nodejs_18",
-  "ffmpeg",
-  "fontconfig",
-  "dejavu_fonts",
-  "liberation_ttf",
-  "roboto",
-  "roboto-slab"
-]
+nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'dejavu_fonts', 'liberation_ttf', 'roboto', 'roboto-slab']
 
 [phases.build]
 cmds = [
-  "mkdir -p /app/.fontconfig",
-  "mkdir -p /app/.cache/fontconfig",
-  "printf '%s' '<?xml version=\"1.0\"?><!DOCTYPE fontconfig SYSTEM \"fonts.dtd\"><fontconfig><dir>/nix/var/nix/profiles/default/share/fonts</dir><dir>/root/.nix-profile/share/fonts</dir><cachedir>/app/.cache/fontconfig</cachedir><config><rescan><int>30</int></rescan></config></fontconfig>' > /app/.fontconfig/fonts.conf",
-  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv",
-  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i roboto || echo 'No Roboto found'",
-  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i arial || echo 'No Arial found'"
+  'cd audio-trimmer-server && npm ci',
+  'mkdir -p /app/.fontconfig',
+  'mkdir -p /app/.cache/fontconfig',
+  'printf \'%s\' \'<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>/nix/var/nix/profiles/default/share/fonts</dir><dir>/root/.nix-profile/share/fonts</dir><cachedir>/app/.cache/fontconfig</cachedir><config><rescan><int>30</int></rescan></config></fontconfig>\' > /app/.fontconfig/fonts.conf',
+  'FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv',
+  'FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i roboto || echo "No Roboto found"',
+  'FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i arial || echo "No Arial found"'
 ]
 
 [phases.start]
-cmd = "cd audio-trimmer-server && npm start"
+cmd = 'cd audio-trimmer-server && npm start'
 
 [phases.start.env]
-FONTCONFIG_FILE = "/app/.fontconfig/fonts.conf"
-FONTCONFIG_PATH = "/app/.fontconfig"
-XDG_CACHE_HOME = "/app/.cache"
+FONTCONFIG_FILE = '/app/.fontconfig/fonts.conf'
+FONTCONFIG_PATH = '/app/.fontconfig'
+XDG_CACHE_HOME = '/app/.cache'
