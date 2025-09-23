@@ -13,7 +13,7 @@ nixPkgs = [
 cmds = [
   "mkdir -p /app/.fontconfig",
   "mkdir -p /app/.cache/fontconfig",
-  "echo '<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n<fontconfig>\n  <dir>/nix/var/nix/profiles/default/share/fonts</dir>\n  <dir>/root/.nix-profile/share/fonts</dir>\n  <cachedir>/app/.cache/fontconfig</cachedir>\n  <config>\n    <rescan>\n      <int>30</int>\n    </rescan>\n  </config>\n</fontconfig>' > /app/.fontconfig/fonts.conf",
+  "cat > /app/.fontconfig/fonts.conf << 'EOF'\n<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n<fontconfig>\n  <dir>/nix/var/nix/profiles/default/share/fonts</dir>\n  <dir>/root/.nix-profile/share/fonts</dir>\n  <cachedir>/app/.cache/fontconfig</cachedir>\n</fontconfig>\nEOF",
   "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv",
   "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i roboto || echo 'No Roboto found'",
   "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i arial || echo 'No Arial found'"
