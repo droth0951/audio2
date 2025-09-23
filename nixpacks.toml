@@ -13,17 +13,16 @@ nixPkgs = [
 cmds = [
   "mkdir -p /app/.fontconfig",
   "mkdir -p /app/.cache/fontconfig",
-  "mkdir -p /usr/share/fonts/truetype/custom",
-  "fc-cache -fv",
-  "fc-list | grep -i roboto || echo 'No Roboto found'",
-  "fc-list | grep -i arial || echo 'No Arial found'"
+  "echo '<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n<fontconfig>\n  <dir>/nix/var/nix/profiles/default/share/fonts</dir>\n  <dir>/root/.nix-profile/share/fonts</dir>\n  <cachedir>/app/.cache/fontconfig</cachedir>\n  <config>\n    <rescan>\n      <int>30</int>\n    </rescan>\n  </config>\n</fontconfig>' > /app/.fontconfig/fonts.conf",
+  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv",
+  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i roboto || echo 'No Roboto found'",
+  "FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-list | grep -i arial || echo 'No Arial found'"
 ]
 
 [phases.start]
 cmd = "cd audio-trimmer-server && npm start"
 
 [phases.start.env]
-FONTCONFIG_PATH = "/etc/fonts:/app/.fontconfig"
-FONTCONFIG_FILE = "/etc/fonts/fonts.conf"
+FONTCONFIG_FILE = "/app/.fontconfig/fonts.conf"
+FONTCONFIG_PATH = "/app/.fontconfig"
 XDG_CACHE_HOME = "/app/.cache"
-FC_DEBUG = "1"
