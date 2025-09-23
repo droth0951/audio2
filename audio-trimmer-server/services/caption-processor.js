@@ -103,12 +103,13 @@ class CaptionProcessor {
             32  // chars_per_caption - CRITICAL for mobile optimization as per AssemblyAI docs
           );
 
-          // Parse SRT into structured format
-          completedTranscript.srtCaptions = this.parseSRT(srtSubtitles);
+          // Parse SRT into structured format with speaker gap detection
+          completedTranscript.srtCaptions = this.parseSRT(srtSubtitles, completedTranscript);
 
           logger.debug('✅ SRT subtitles fetched and parsed', {
             jobId,
             captionCount: completedTranscript.srtCaptions?.length || 0,
+            speakerCount: completedTranscript.utterances?.length || 0,
             sampleCaption: completedTranscript.srtCaptions?.[0]
           });
         } catch (srtError) {
@@ -238,12 +239,35 @@ class CaptionProcessor {
     return process.env.ENABLE_SERVER_CAPTIONS === 'true' && this.assemblyai !== null;
   }
 
-  // Parse SRT format into structured captions with timing
-  parseSRT(srtString) {
+  // Parse SRT format into structured captions with timing and speaker gaps
+  parseSRT(srtString, transcript) {
     if (!srtString) return [];
 
     const captions = [];
     const blocks = srtString.trim().split('\n\n');
+
+    // Get speaker change points from utterances if available
+    const speakerChanges = [];
+    if (transcript?.utterances?.length > 1) {
+      for (let i = 0; i < transcript.utterances.length - 1; i++) {
+        const currentSpeaker = transcript.utterances[i].speaker || 'A';
+        const nextSpeaker = transcript.utterances[i + 1].speaker || 'B';
+
+        if (currentSpeaker !== nextSpeaker) {
+          speakerChanges.push({
+            changeTime: transcript.utterances[i].end,
+            fromSpeaker: currentSpeaker,
+            toSpeaker: nextSpeaker
+          });
+
+          logger.debug('Speaker change detected', {
+            changeTime: transcript.utterances[i].end,
+            from: currentSpeaker,
+            to: nextSpeaker
+          });
+        }
+      }
+    }
 
     for (const block of blocks) {
       const lines = block.split('\n');
@@ -257,7 +281,21 @@ class CaptionProcessor {
 
         if (timingMatch) {
           const startMs = this.srtTimeToMs(timingMatch[1], timingMatch[2], timingMatch[3], timingMatch[4]);
-          const endMs = this.srtTimeToMs(timingMatch[5], timingMatch[6], timingMatch[7], timingMatch[8]);
+          let endMs = this.srtTimeToMs(timingMatch[5], timingMatch[6], timingMatch[7], timingMatch[8]);
+
+          // Check if there's a speaker change during or right after this caption
+          const SPEAKER_GAP_MS = 200; // Brief gap to clear captions between speakers
+          for (const change of speakerChanges) {
+            // If speaker change happens right after this caption, end it slightly early
+            if (change.changeTime > startMs && change.changeTime < endMs + 500) {
+              endMs = Math.min(endMs, change.changeTime - SPEAKER_GAP_MS);
+              logger.debug('Adjusted caption end for speaker change', {
+                originalEnd: endMs,
+                adjustedEnd: change.changeTime - SPEAKER_GAP_MS,
+                text: text.substring(0, 30)
+              });
+            }
+          }
 
           // Validate timing (1.5-7 seconds as per industry standards)
           const duration = endMs - startMs;
