@@ -415,7 +415,7 @@ class FrameGenerator {
           jobId,
           frame: frameIndex,
           total: `${totalFrameTime}ms`,
-          captionLookup: captionTime ? `${captionTime}ms` : 'N/A',
+          captionLookup: 'pre-calculated',
           svgTemplate: `${timings.svgTemplate}ms`,
           sharpConversion: `${timings.sharpConversion}ms`,
           artworkComposite: timings.artworkComposite ? `${timings.artworkComposite}ms` : 'N/A',
