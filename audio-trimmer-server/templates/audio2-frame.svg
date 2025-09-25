@@ -90,29 +90,41 @@
         fill="url(#progressFill)"
         rx="{{progressElements.progressBar.height}}" ry="{{progressElements.progressBar.height}}"/>
 
-  <!-- CAPTIONS - Positioned between progress bar and watermark -->
+  <!-- MVP CAPTIONS - Dynamic 1 or 2 line display with pre-calculated highlighting -->
   {{#if captionsEnabled}}
-  {{#if captionWords.length}}
-  <!-- Word-level highlighting captions -->
+  {{#if (eq captionDisplayMode "one-line")}}
+  <!-- One-line caption mode for short sentences with pauses -->
+  {{#if captionLines.0}}
+  <text x="{{centerX}}" y="{{captionY}}"
+        text-anchor="middle"
+        font-size="56" font-weight="800"
+        font-family="Arial, Helvetica, sans-serif"
+        filter="url(#textShadow)">
+    {{#if captionWords.0}}
+    {{#each captionWords.0}}
+    <tspan fill="{{#if isHighlighted}}#f59e0b{{else}}#ffffff{{/if}}">{{text}} </tspan>
+    {{/each}}
+    {{else}}
+    <tspan fill="#ffffff">{{captionLines.0}}</tspan>
+    {{/if}}
+  </text>
+  {{/if}}
+  {{else}}
+  <!-- Two-line caption mode (default) for engagement -->
   {{#each captionLines}}
   <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
         text-anchor="middle"
         font-size="56" font-weight="800"
         font-family="Arial, Helvetica, sans-serif"
         filter="url(#textShadow)">
-    {{#each (wordsInLine this ../captionWords ../currentTimeMs)}}
+    {{#if ../captionWords}}
+    {{#each (lookup ../captionWords @index)}}
     <tspan fill="{{#if isHighlighted}}#f59e0b{{else}}#ffffff{{/if}}">{{text}} </tspan>
     {{/each}}
+    {{else}}
+    <tspan fill="#ffffff">{{this}}</tspan>
+    {{/if}}
   </text>
-  {{/each}}
-  {{else}}
-  <!-- Fallback simple captions -->
-  {{#each captionLines}}
-  <text x="{{../centerX}}" y="{{../captionY}}" dy="{{@index}}em"
-        text-anchor="middle" fill="#ffffff"
-        font-size="56" font-weight="800"
-        font-family="Arial, Helvetica, sans-serif"
-        filter="url(#textShadow)">{{this}}</text>
   {{/each}}
   {{/if}}
   {{/if}}

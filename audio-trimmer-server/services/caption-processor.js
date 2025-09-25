@@ -284,7 +284,7 @@ class CaptionProcessor {
           let endMs = this.srtTimeToMs(timingMatch[5], timingMatch[6], timingMatch[7], timingMatch[8]);
 
           // Check if there's a speaker change during or right after this caption
-          const SPEAKER_GAP_MS = 200; // Brief gap to clear captions between speakers
+          const SPEAKER_GAP_MS = 300; // MVP: 300ms gap between speakers for better visual separation
           for (const change of speakerChanges) {
             // If speaker change happens right after this caption, end it slightly early
             if (change.changeTime > startMs && change.changeTime < endMs + 500) {
@@ -304,6 +304,15 @@ class CaptionProcessor {
           // Extract word-level timing for this caption
           const wordTimings = this.extractWordTimingsForCaption(transcript, text, validatedTiming.startMs, validatedTiming.endMs);
 
+          // MVP: Determine display mode (1 or 2 lines)
+          const displayMode = this.determineCaptionDisplayMode(
+            text,
+            validatedTiming.startMs,
+            validatedTiming.endMs,
+            speakerChanges,
+            captions // previous captions for context
+          );
+
           captions.push({
             index,
             startMs: validatedTiming.startMs,
@@ -311,7 +320,8 @@ class CaptionProcessor {
             text: text,
             duration: validatedTiming.endMs - validatedTiming.startMs,
             lines: this.optimizeLineBreaks(text, 32), // Smart line breaking at 32 chars
-            words: wordTimings // Word-level timing for highlighting
+            words: wordTimings, // Word-level timing for highlighting
+            displayMode: displayMode // MVP: 'one-line', 'two-lines'
           });
         }
       }
@@ -388,6 +398,48 @@ class CaptionProcessor {
     }
 
     return captionWords;
+  }
+
+  // MVP: Determine whether caption should display as 1 or 2 lines
+  determineCaptionDisplayMode(text, startMs, endMs, speakerChanges, previousCaptions) {
+    // a) Default: Two lines for viewer engagement
+    let mode = 'two-lines';
+
+    // b) Goes to one line when there's a pause and short sentence
+    const isShortSentence = text.length <= 25; // Threshold for "short"
+
+    // Check for pause before this caption (gap from previous caption)
+    const previousCaption = previousCaptions[previousCaptions.length - 1];
+    const hasPauseBefore = previousCaption ? (startMs - previousCaption.endMs > 800) : false; // 800ms+ = pause
+
+    // Check for sentence-ending punctuation indicating natural break
+    const hasNaturalBreak = /[.!?](\s|$)/.test(text);
+
+    if (isShortSentence && (hasPauseBefore || hasNaturalBreak)) {
+      mode = 'one-line';
+      logger.debug('Caption using one-line mode', {
+        reason: hasPauseBefore ? 'pause-before' : 'natural-break',
+        textLength: text.length,
+        text: text.substring(0, 30) + '...'
+      });
+    }
+
+    // c) Speaker change resets to default (two lines unless short)
+    const hasSpeakerChange = speakerChanges.some(change =>
+      Math.abs(change.changeTime - startMs) < 500 // Speaker change within 500ms of caption start
+    );
+
+    if (hasSpeakerChange) {
+      // New speaker starts fresh - use two lines unless it's very short
+      mode = text.length <= 20 ? 'one-line' : 'two-lines';
+      logger.debug('Caption after speaker change', {
+        mode,
+        textLength: text.length,
+        text: text.substring(0, 30) + '...'
+      });
+    }
+
+    return mode;
   }
 
   // Optimize line breaks for readability (smart grammatical breaks)

@@ -36,6 +36,16 @@ class FrameGenerator {
       return a + b;
     });
 
+    // MVP: Helper for equality comparison in templates
+    Handlebars.registerHelper('eq', function(a, b) {
+      return a === b;
+    });
+
+    // MVP: Helper for array lookup by index
+    Handlebars.registerHelper('lookup', function(array, index) {
+      return array && array[index] ? array[index] : null;
+    });
+
     // Add helper for word-level highlighting in captions
     Handlebars.registerHelper('wordsInLine', function(lineText, captionWords, currentTimeMs) {
       if (!lineText || !captionWords || captionWords.length === 0) {
@@ -116,6 +126,20 @@ class FrameGenerator {
       // Load cached SVG template
       const template = await this.getTemplate();
 
+      // MVP: Pre-calculate caption states for all frames to improve performance
+      let captionStates = null;
+      if (captionsEnabled && transcript) {
+        const captionStartTime = Date.now();
+        captionStates = this.precalculateCaptionStates(transcript, duration, fps, clipStartMs, clipEndMs, jobId);
+        const captionTime = Date.now() - captionStartTime;
+        logger.debug('📋 Caption states pre-calculated', {
+          jobId,
+          captionStatesCount: Object.keys(captionStates).length,
+          precalcTime: `${captionTime}ms`,
+          performance: 'optimized'
+        });
+      }
+
       // Download and process podcast artwork once - cache for all frames
       let processedArtwork = null;
       if (podcast.artwork) {
@@ -173,7 +197,7 @@ class FrameGenerator {
         const progress = frameTime / duration;
 
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs);
+        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates);
         frames.push(framePath);
 
         const frameRenderTime = Date.now() - frameStartTime;
@@ -241,7 +265,7 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
+  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0, captionStates = null) {
     const frameStartTime = Date.now();
     const timings = {};
 
@@ -302,25 +326,12 @@ class FrameGenerator {
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
-      // NEW: Get current caption text using production-tested logic
-      const clipDurationMs = clipEndMs - clipStartMs;
-      const currentTimeMs = clipStartMs + (progress * clipDurationMs); // Absolute time for transcript lookup
-
-      const captionStartTime = Date.now();
-      const currentCaptionData = captionsEnabled && transcript
-        ? this.getCurrentCaptionFromTranscript(transcript, currentTimeMs)
-        : null;
-      const currentCaption = currentCaptionData?.text || '';
-      const captionTime = Date.now() - captionStartTime;
-
-      // Log if caption processing is slow
-      if (captionTime > 50) {
-        logger.debug('Slow caption lookup', {
-          jobId,
-          frame: frameIndex,
-          captionTime: `${captionTime}ms`,
-          hasCaption: !!currentCaption
-        });
+      // MVP: Use pre-calculated caption state for performance
+      let currentCaptionData = null;
+      let currentCaption = '';
+      if (captionsEnabled && captionStates) {
+        currentCaptionData = captionStates[frameIndex] || null;
+        currentCaption = currentCaptionData?.text || '';
       }
 
       // NEW: Precise caption positioning - between progress bar and watermark
@@ -349,15 +360,16 @@ class FrameGenerator {
         episodeTitleLines: episodeTitleLines,
         progressElements: progressElements,
 
-        // NEW: Add caption data to existing template (NO visual changes to existing elements)
-        captionText: currentCaption,          // Caption text for current time
-        captionsEnabled: captionsEnabled,     // Show/hide captions
-        captionLines: currentCaption ? this.splitCaptionIntoLines(currentCaption, 32) : [], // Industry standard 32 chars
-        captionY: Math.floor(captionY),       // Precise Y position between progress bar and watermark
+        // MVP: Pre-calculated caption data for performance
+        captionText: currentCaption,                    // Caption text for current time
+        captionsEnabled: captionsEnabled,               // Show/hide captions
+        captionLines: currentCaptionData?.lines || [],  // Pre-calculated line breaks
+        captionY: Math.floor(captionY),                 // Precise Y position between progress bar and watermark
+        captionDisplayMode: currentCaptionData?.displayMode || 'two-lines', // MVP: 'one-line' or 'two-lines'
 
-        // NEW: Word-level highlighting data
-        captionWords: currentCaptionData?.words || [], // Word-level timing for highlighting
-        currentTimeMs: currentTimeMs          // Current video time for word highlighting
+        // Pre-calculated word highlighting data (no per-frame processing)
+        captionWords: currentCaptionData?.highlightedWords || [], // Pre-processed word highlighting
+        currentTimeMs: clipStartMs + (progress * (clipEndMs - clipStartMs)) // For template reference only
       };
 
       // Time SVG template rendering
@@ -701,6 +713,102 @@ class FrameGenerator {
     }
 
     return null;
+  }
+
+  // MVP: Pre-calculate caption states for all frames to improve performance
+  precalculateCaptionStates(transcript, duration, fps, clipStartMs, clipEndMs, jobId) {
+    const captionStates = {};
+    const frameCount = Math.round(duration * fps);
+
+    // Get SRT captions if available (best performance)
+    const captions = transcript?.srtCaptions || [];
+    if (captions.length === 0) {
+      logger.warn('No SRT captions found for pre-calculation', { jobId });
+      return captionStates;
+    }
+
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+      const frameProgress = frameIndex / (frameCount - 1);
+      const currentTimeMs = clipStartMs + (frameProgress * (clipEndMs - clipStartMs));
+
+      // Find current caption
+      const currentCaption = captions.find(caption =>
+        currentTimeMs >= caption.startMs && currentTimeMs <= caption.endMs
+      );
+
+      if (currentCaption) {
+        // Pre-process word highlighting for this frame
+        const highlightedWords = this.preprocessWordHighlighting(
+          currentCaption.lines,
+          currentCaption.words || [],
+          currentTimeMs
+        );
+
+        captionStates[frameIndex] = {
+          text: currentCaption.text,
+          lines: currentCaption.lines,
+          displayMode: currentCaption.displayMode || 'two-lines', // From caption processor
+          words: currentCaption.words,
+          highlightedWords: highlightedWords,
+          startMs: currentCaption.startMs,
+          endMs: currentCaption.endMs
+        };
+      }
+    }
+
+    logger.debug('Caption states pre-calculated', {
+      jobId,
+      totalFrames: frameCount,
+      captionFrames: Object.keys(captionStates).length,
+      coverage: `${Math.round(Object.keys(captionStates).length / frameCount * 100)}%`
+    });
+
+    return captionStates;
+  }
+
+  // Pre-process word highlighting to avoid per-frame calculation
+  preprocessWordHighlighting(lines, words, currentTimeMs) {
+    if (!lines || !words || words.length === 0) {
+      return [];
+    }
+
+    const result = [];
+
+    for (const lineText of lines) {
+      if (!lineText) continue;
+
+      const lineWords = lineText.split(' ');
+      const lineResult = [];
+
+      // Match each word in the line to timing data
+      let wordIndex = 0;
+      for (const lineWord of lineWords) {
+        const cleanLineWord = lineWord.toLowerCase().replace(/[^\w]/g, '');
+        let isHighlighted = false;
+
+        // Find matching word in caption timing data
+        for (let i = wordIndex; i < words.length; i++) {
+          const captionWord = words[i];
+          const cleanCaptionWord = captionWord.text?.toLowerCase().replace(/[^\w]/g, '') || '';
+
+          if (cleanLineWord === cleanCaptionWord) {
+            // Check if this word should be highlighted at this time
+            isHighlighted = currentTimeMs >= captionWord.start && currentTimeMs <= captionWord.end;
+            wordIndex = i + 1; // Move to next word
+            break;
+          }
+        }
+
+        lineResult.push({
+          text: lineWord,
+          isHighlighted: isHighlighted
+        });
+      }
+
+      result.push(lineResult);
+    }
+
+    return result;
   }
 
   // Helper to split long captions (respects 2-line max rule for readability)
