@@ -94,21 +94,21 @@
   {{#if captionsEnabled}}
   {{#if (eq captionDisplayMode "one-line")}}
   <!-- One-line caption mode for short sentences with pauses -->
-  {{#if captionLines.0}}
-  <text x="{{centerX}}" y="{{captionY}}"
+  {{#with (lookup captionLines 0)}}
+  <text x="{{../centerX}}" y="{{../captionY}}"
         text-anchor="middle"
         font-size="56" font-weight="800"
         font-family="Arial, Helvetica, sans-serif"
         filter="url(#textShadow)">
-    {{#if captionWords.0}}
-    {{#each captionWords.0}}
+    {{#with (lookup ../captionWords 0)}}
+    {{#each this}}
     <tspan fill="{{#if isHighlighted}}#f59e0b{{else}}#ffffff{{/if}}">{{text}} </tspan>
     {{/each}}
     {{else}}
-    <tspan fill="#ffffff">{{captionLines.0}}</tspan>
-    {{/if}}
+    <tspan fill="#ffffff">{{../this}}</tspan>
+    {{/with}}
   </text>
-  {{/if}}
+  {{/with}}
   {{else}}
   <!-- Two-line caption mode (default) for engagement -->
   {{#each captionLines}}
