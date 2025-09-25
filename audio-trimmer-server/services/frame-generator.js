@@ -766,11 +766,15 @@ class FrameGenerator {
     return captionStates;
   }
 
-  // Pre-process word highlighting to avoid per-frame calculation
-  preprocessWordHighlighting(lines, words, currentTimeMs) {
+  // Pre-process word highlighting with predictive overlap logic (no lag!)
+  preprocessWordHighlighting(lines, words, currentTimeMs, frameDurationMs = 83.33) {
     if (!lines || !words || words.length === 0) {
       return [];
     }
+
+    // Calculate frame's time window for overlap detection
+    const frameStartMs = currentTimeMs;
+    const frameEndMs = currentTimeMs + frameDurationMs; // 12fps = ~83.33ms per frame
 
     const result = [];
 
@@ -792,8 +796,14 @@ class FrameGenerator {
           const cleanCaptionWord = captionWord.text?.toLowerCase().replace(/[^\w]/g, '') || '';
 
           if (cleanLineWord === cleanCaptionWord) {
-            // Check if this word should be highlighted at this time
-            isHighlighted = currentTimeMs >= captionWord.start && currentTimeMs <= captionWord.end;
+            // PREDICTIVE HIGHLIGHTING: Check for overlap between word time and frame time window
+            // Word should be highlighted if ANY part of the word's duration overlaps with frame's display time
+            const wordOverlapsFrame = (
+              captionWord.start < frameEndMs && // Word starts before frame ends
+              captionWord.end > frameStartMs    // Word ends after frame starts
+            );
+
+            isHighlighted = wordOverlapsFrame;
             wordIndex = i + 1; // Move to next word
             break;
           }
