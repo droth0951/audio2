@@ -722,6 +722,22 @@ class FrameGenerator {
 
     // Get SRT captions if available (best performance)
     const captions = transcript?.srtCaptions || [];
+
+    logger.debug('🔍 DEBUG Caption pre-calculation input', {
+      jobId,
+      transcriptKeys: Object.keys(transcript || {}),
+      captionCount: captions.length,
+      sampleCaption: captions[0] ? {
+        text: captions[0].text,
+        startMs: captions[0].startMs,
+        endMs: captions[0].endMs,
+        duration: captions[0].endMs - captions[0].startMs
+      } : null,
+      clipStartMs,
+      clipEndMs,
+      clipDuration: clipEndMs - clipStartMs
+    });
+
     if (captions.length === 0) {
       logger.warn('No SRT captions found for pre-calculation', { jobId });
       return captionStates;
@@ -729,7 +745,9 @@ class FrameGenerator {
 
     for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
       const frameProgress = frameIndex / (frameCount - 1);
-      const currentTimeMs = clipStartMs + (frameProgress * (clipEndMs - clipStartMs));
+      // FIXED: File-upload captions start from 0ms, so use duration-based timing
+      const clipDurationMs = clipEndMs - clipStartMs;
+      const currentTimeMs = frameProgress * clipDurationMs;
 
       // Find current caption
       const currentCaption = captions.find(caption =>

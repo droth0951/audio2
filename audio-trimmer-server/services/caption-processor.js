@@ -257,6 +257,7 @@ class CaptionProcessor {
       if (!text) continue;
 
       // Split long utterances into chunks while keeping complete thoughts
+      // NOTE: utterance.start/end are already relative to clip since we use file upload
       const chunks = this.splitUtteranceIntoChunks(text, utterance.start, utterance.end);
 
       for (const chunk of chunks) {
