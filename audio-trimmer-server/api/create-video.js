@@ -15,20 +15,36 @@ module.exports = async (req, res) => {
     // ✅ Following lines 46-62: Request format validation
     const {
       audioUrl,
-      clipStart,
-      clipEnd,
+      // Support both field name formats for backward compatibility
+      clipStart: requestClipStart,
+      clipEnd: requestClipEnd,
+      audio_start_from: audioStartFrom,
+      audio_end_at: audioEndAt,
       podcast,
       userEmail,
       aspectRatio = '9:16',  // Default to vertical
       template = 'professional'
     } = req.body;
 
+    // Map field names for backward compatibility
+    const clipStart = requestClipStart ?? audioStartFrom;
+    const clipEnd = requestClipEnd ?? audioEndAt;
+
+    // Log which field format was used for debugging
+    const fieldFormat = requestClipStart !== undefined ? 'clipStart/clipEnd' : 'audio_start_from/audio_end_at';
+    logger.debug('Field format detected', {
+      format: fieldFormat,
+      clipStart,
+      clipEnd,
+      providedFields: Object.keys(req.body)
+    });
+
     // Validate required fields
     if (!audioUrl || clipStart === undefined || clipEnd === undefined) {
       logger.error('Missing required fields', { provided: Object.keys(req.body) });
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: audioUrl, clipStart, clipEnd'
+        error: 'Missing required fields: audioUrl and either (clipStart, clipEnd) or (audio_start_from, audio_end_at)'
       });
     }
 
