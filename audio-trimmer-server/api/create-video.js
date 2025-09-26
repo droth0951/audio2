@@ -6,11 +6,16 @@ const logger = require('../services/logger');
 const config = require('../config/settings');
 
 module.exports = async (req, res) => {
+  // Big celebratory announcement for new video requests
+  console.log('\n' + '🎉'.repeat(20));
+  console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
+  console.log('🎉'.repeat(20));
+
   logger.info('🎉🎉 Video creation request received', {
     ip: req.ip,
     userAgent: req.headers['user-agent']?.substring(0, 50)
   });
-  
+
   try {
     // ✅ Following lines 46-62: Request format validation
     const {
@@ -24,6 +29,13 @@ module.exports = async (req, res) => {
       captionsEnabled = false,        // NEW: Caption toggle
       enableSmartFeatures = true      // NEW: Smart features toggle
     } = req.body;
+
+    // Log the request details prominently
+    console.log(`\n📹 Podcast: ${podcast?.podcastName || 'Unknown'}`);
+    console.log(`📝 Episode: ${podcast?.title?.substring(0, 50) || 'Unknown'}...`);
+    console.log(`⏱️  Duration: ${((clipEnd - clipStart) / 1000).toFixed(1)}s`);
+    console.log(`💬 Captions: ${captionsEnabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+    console.log('═'.repeat(60) + '\n');
 
     // Validate required fields
     if (!audioUrl || clipStart === undefined || clipEnd === undefined) {

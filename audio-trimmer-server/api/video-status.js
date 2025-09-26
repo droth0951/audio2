@@ -36,6 +36,7 @@ module.exports = async (req, res) => {
       ...(result.failedAt && { failedAt: result.failedAt }),
       ...(result.result && {
         videoUrl: result.result.videoUrl,
+        downloadUrl: `http://localhost:3001/api/download-video/${result.jobId}`,
         cost: result.result.cost,
         processingTime: result.processingTime
       }),
@@ -48,6 +49,13 @@ module.exports = async (req, res) => {
         retries: result.retries || 0
       }
     };
+
+    // Add helpful message when completed
+    if (result.status === 'completed') {
+      console.log('\n🎥 VIDEO READY FOR DOWNLOAD!');
+      console.log(`📥 Download URL: http://localhost:3001/api/download-video/${result.jobId}`);
+      console.log(`🌐 Or open in browser: http://localhost:3001/temp/video_${result.jobId}.mp4\n`);
+    }
 
     logger.debug('Status check completed', { 
       jobId, 

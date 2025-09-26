@@ -103,8 +103,14 @@ class CaptionProcessor {
             32  // chars_per_caption - CRITICAL for mobile optimization as per AssemblyAI docs
           );
 
-          // Parse SRT into structured format with speaker gap detection
-          completedTranscript.srtCaptions = this.parseSRT(srtSubtitles, completedTranscript);
+          // Create better captions from utterances instead of using awkward SRT chunks
+          logger.info('🔄 Using utterance-based caption generation for better boundaries', { jobId });
+          completedTranscript.srtCaptions = this.createCaptionsFromUtterances(completedTranscript);
+          logger.info('✅ Utterance-based captions created', {
+            jobId,
+            captionCount: completedTranscript.srtCaptions?.length,
+            sampleCaption: completedTranscript.srtCaptions?.[0]?.text
+          });
 
           logger.debug('✅ SRT subtitles fetched and parsed', {
             jobId,
@@ -239,7 +245,129 @@ class CaptionProcessor {
     return process.env.ENABLE_SERVER_CAPTIONS === 'true' && this.assemblyai !== null;
   }
 
-  // Parse SRT format into structured captions with timing and speaker gaps
+  // Create captions from utterances for better speaker boundaries and complete thoughts
+  createCaptionsFromUtterances(transcript) {
+    if (!transcript?.utterances?.length) return [];
+
+    const captions = [];
+    let captionIndex = 1;
+
+    for (const utterance of transcript.utterances) {
+      const text = utterance.text.trim();
+      if (!text) continue;
+
+      // Split long utterances into chunks while keeping complete thoughts
+      const chunks = this.splitUtteranceIntoChunks(text, utterance.start, utterance.end);
+
+      for (const chunk of chunks) {
+        const displayMode = this.determineCaptionDisplayMode(
+          chunk.text,
+          chunk.startMs,
+          chunk.endMs,
+          [], // Speaker changes handled by utterance boundaries
+          captions
+        );
+
+        const wordTimings = this.extractWordTimingsForCaption(
+          transcript,
+          chunk.text,
+          chunk.startMs,
+          chunk.endMs
+        );
+
+        // Debug: log chunk text and line breaks
+        const lines = this.optimizeLineBreaks(chunk.text, 32);
+        logger.info('📝 Caption chunk created', {
+          text: chunk.text,
+          length: chunk.text.length,
+          lines: lines,
+          displayMode: displayMode
+        });
+
+        captions.push({
+          index: captionIndex++,
+          startMs: chunk.startMs,
+          endMs: chunk.endMs,
+          text: chunk.text,
+          duration: chunk.endMs - chunk.startMs,
+          lines: lines,
+          words: wordTimings,
+          displayMode: displayMode,
+          speaker: utterance.speaker || 'A'
+        });
+      }
+    }
+
+    return captions;
+  }
+
+  // Split utterance into natural chunks while preserving complete thoughts
+  splitUtteranceIntoChunks(text, startMs, endMs) {
+    const maxChunkLength = 50; // Max 50 chars total to fit on 2 lines of ~25-30 chars each
+
+    console.log(`🔍 CHUNKING DEBUG: Input text: "${text}", length: ${text.length}`);
+
+    // For very short text, return as is
+    if (text.length <= 35) {
+      console.log(`✅ Short text (≤35), returning as single chunk`);
+      return [{ text, startMs, endMs }];
+    }
+
+    // For medium text that fits in maxChunkLength, return as single chunk
+    if (text.length <= maxChunkLength) {
+      console.log(`✅ Medium text (≤50), returning as single chunk`);
+      return [{ text, startMs, endMs }];
+    }
+
+    console.log(`⚠️ Long text (>${maxChunkLength}), MUST split into chunks`);
+    const chunks = [];
+
+    // Force split any text longer than 50 characters
+    // Simple word-boundary splitting for reliable results
+    const words = text.split(' ');
+    let currentChunk = '';
+    let chunkStartMs = startMs;
+    const totalDuration = endMs - startMs;
+    const avgMsPerChar = totalDuration / text.length;
+
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const testChunk = currentChunk ? `${currentChunk} ${word}` : word;
+
+      // If adding this word would make chunk too long, finish current chunk
+      if (testChunk.length > 50 && currentChunk.length > 0) {
+        const chunkEndMs = chunkStartMs + (currentChunk.length * avgMsPerChar);
+        chunks.push({
+          text: currentChunk.trim(),
+          startMs: Math.round(chunkStartMs),
+          endMs: Math.round(chunkEndMs)
+        });
+
+        console.log(`📦 Created chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+
+        // Start new chunk with current word
+        currentChunk = word;
+        chunkStartMs = chunkEndMs;
+      } else {
+        currentChunk = testChunk;
+      }
+    }
+
+    // Add final chunk if any
+    if (currentChunk.trim()) {
+      chunks.push({
+        text: currentChunk.trim(),
+        startMs: Math.round(chunkStartMs),
+        endMs: endMs
+      });
+      console.log(`📦 Final chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+    }
+
+    console.log(`🎯 CHUNKING RESULT: Created ${chunks.length} chunks from ${text.length}-char text`);
+    return chunks.length > 0 ? chunks : [{ text, startMs, endMs }];
+  }
+
+  // Parse SRT format into structured captions with timing and speaker gaps (BACKUP METHOD)
   parseSRT(srtString, transcript) {
     if (!srtString) return [];
 
@@ -284,7 +412,7 @@ class CaptionProcessor {
           let endMs = this.srtTimeToMs(timingMatch[5], timingMatch[6], timingMatch[7], timingMatch[8]);
 
           // Check if there's a speaker change during or right after this caption
-          const SPEAKER_GAP_MS = 300; // MVP: 300ms gap between speakers for better visual separation
+          const SPEAKER_GAP_MS = 300; // 300ms gap between speakers for better visual separation
           for (const change of speakerChanges) {
             // If speaker change happens right after this caption, end it slightly early
             if (change.changeTime > startMs && change.changeTime < endMs + 500) {
@@ -402,40 +530,27 @@ class CaptionProcessor {
 
   // MVP: Determine whether caption should display as 1 or 2 lines
   determineCaptionDisplayMode(text, startMs, endMs, speakerChanges, previousCaptions) {
-    // a) Default: Two lines for viewer engagement
+    // Default to two lines for engagement
     let mode = 'two-lines';
 
-    // b) Goes to one line when there's a pause and short sentence
-    const isShortSentence = text.length <= 25; // Threshold for "short"
+    // One-line only for very short phrases (like "LinkedIn news")
+    const isShortPhrase = text.length <= 15; // "LinkedIn news" = 14 chars
+    const hasNoCommasOrConjunctions = !text.includes(',') && !text.includes(' and ') && !text.includes(' where ');
 
-    // Check for pause before this caption (gap from previous caption)
-    const previousCaption = previousCaptions[previousCaptions.length - 1];
-    const hasPauseBefore = previousCaption ? (startMs - previousCaption.endMs > 800) : false; // 800ms+ = pause
-
-    // Check for sentence-ending punctuation indicating natural break
-    const hasNaturalBreak = /[.!?](\s|$)/.test(text);
-
-    if (isShortSentence && (hasPauseBefore || hasNaturalBreak)) {
+    if (isShortPhrase && hasNoCommasOrConjunctions) {
       mode = 'one-line';
       logger.debug('Caption using one-line mode', {
-        reason: hasPauseBefore ? 'pause-before' : 'natural-break',
+        reason: 'short-phrase',
         textLength: text.length,
-        text: text.substring(0, 30) + '...'
+        text: text
       });
-    }
-
-    // c) Speaker change resets to default (two lines unless short)
-    const hasSpeakerChange = speakerChanges.some(change =>
-      Math.abs(change.changeTime - startMs) < 500 // Speaker change within 500ms of caption start
-    );
-
-    if (hasSpeakerChange) {
-      // New speaker starts fresh - use two lines unless it's very short
-      mode = text.length <= 20 ? 'one-line' : 'two-lines';
-      logger.debug('Caption after speaker change', {
-        mode,
+    } else {
+      // Everything else uses two lines for engagement
+      mode = 'two-lines';
+      logger.debug('Caption using two-line mode', {
+        reason: 'engagement-default',
         textLength: text.length,
-        text: text.substring(0, 30) + '...'
+        text: text.substring(0, 40) + '...'
       });
     }
 
@@ -443,45 +558,117 @@ class CaptionProcessor {
   }
 
   // Optimize line breaks for readability (smart grammatical breaks)
-  optimizeLineBreaks(text, maxCharsPerLine = 32) {
-    if (!text || text.length <= maxCharsPerLine) {
+  optimizeLineBreaks(text, maxCharsPerLine = 35) { // Cap at ~35 chars like "Today we're hearing from Dan Porter,"
+    // Only extremely short phrases stay as single line
+    if (!text || text.length <= 15) {
       return [text];
     }
 
-    // Try to break at punctuation or conjunctions for natural reading
-    const breakPoints = [', ', ' and ', ' but ', ' or ', ' - ', ': ', '; '];
+    // ALWAYS try to split into 2 lines for better engagement (unless very short)
+    // Prioritize complete thoughts over character limits
 
-    // If text fits in 2 lines, find optimal break point
-    if (text.length <= maxCharsPerLine * 2) {
-      for (const breakPoint of breakPoints) {
-        const index = text.indexOf(breakPoint, Math.floor(text.length * 0.3));
-        if (index > 0 && index < Math.floor(text.length * 0.7)) {
-          return [
-            text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim(),
-            text.substring(index + breakPoint.length).trim()
-          ];
+    // First, try to break at strong natural boundaries that preserve complete thoughts
+    const strongBreakPoints = [' where ', ' that ', ' which ', ' when ', ' while ', ' because ', ' since '];
+
+    for (const breakPoint of strongBreakPoints) {
+      const index = text.indexOf(breakPoint);
+      if (index > 15) { // Ensure first part has substance
+        const line1 = text.substring(0, index).trim();
+        const line2 = text.substring(index + 1).trim(); // Skip the space
+
+        // Cap lines at 35 chars max ("Today we're hearing from Dan Porter," length)
+        if (line1.length >= 15 && line2.length >= 10 &&
+            line1.length <= 35 && line2.length <= 35) {
+          return [line1, line2];
         }
       }
     }
 
-    // Fallback to word boundary breaking
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = '';
+    // Secondary: try punctuation and weaker conjunctions
+    const weakerBreakPoints = [', ', ' and ', ' but ', ' or ', ' - ', ': ', '; ', '. '];
 
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      if (testLine.length <= maxCharsPerLine) {
-        currentLine = testLine;
-      } else {
-        if (currentLine) lines.push(currentLine);
-        currentLine = word;
-        if (lines.length >= 1) break; // Max 2 lines for readability
+    for (const breakPoint of weakerBreakPoints) {
+      const index = text.indexOf(breakPoint);
+      if (index > 10 && index < text.length - 10) {
+        const line1 = text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim();
+        const line2 = text.substring(index + breakPoint.length).trim();
+
+        // Cap at 35 chars per line max
+        if (line1.length >= 8 && line2.length >= 8 &&
+            line1.length <= 35 && line2.length <= 35) {
+          return [line1, line2];
+        }
       }
     }
 
-    if (currentLine) lines.push(currentLine);
-    return lines.slice(0, 2); // Enforce 2-line max for optimal readability
+    // If no natural break point, try to split at phrase boundaries
+    const words = text.split(' ');
+
+    // Look for natural phrase patterns to avoid awkward splits
+    const phrasePatterns = [
+      /^(Hey there|Hello there|Hi there),?\s*/i,
+      /^(I'm|I am)\s+\w+/i,
+      /^(Welcome to|Thanks for|This is)\s+/i,
+      /\s+(where we|that we|when we)\s+/i,
+      /(the|a|an)\s+\w+\s+(of|for|in|at|with)\s+/i
+    ];
+
+    // Try to find a good split point that respects phrase patterns
+    let bestSplitIndex = Math.floor(words.length / 2); // Default to middle
+
+    for (let i = 2; i < words.length - 2; i++) {
+      const beforePhrase = words.slice(0, i).join(' ');
+      const afterPhrase = words.slice(i).join(' ');
+
+      // Check if this creates a natural phrase boundary
+      const isGoodSplit = !phrasePatterns.some(pattern => {
+        const match = text.match(pattern);
+        if (match) {
+          const patternEnd = match.index + match[0].length;
+          const splitPoint = beforePhrase.length;
+          // Avoid splitting in the middle of a pattern
+          return splitPoint > match.index && splitPoint < patternEnd;
+        }
+        return false;
+      });
+
+      if (isGoodSplit && Math.abs(beforePhrase.length - afterPhrase.length) < Math.abs(words.slice(0, bestSplitIndex).join(' ').length - words.slice(bestSplitIndex).join(' ').length)) {
+        bestSplitIndex = i;
+      }
+    }
+
+    // Create two balanced lines avoiding awkward phrase splits
+    const line1 = words.slice(0, bestSplitIndex).join(' ');
+    const line2 = words.slice(bestSplitIndex).join(' ');
+
+    // Only return two lines if both have content
+    if (line1 && line2) {
+      return [line1, line2];
+    }
+
+    // Fallback: Force split if text is too long (never return single line > 35 chars)
+    if (text.length > 35) {
+      const words = text.split(' ');
+      const midPoint = Math.floor(words.length / 2);
+      const line1 = words.slice(0, midPoint).join(' ');
+      const line2 = words.slice(midPoint).join(' ');
+
+      // If either line is still too long, try a different split
+      if (line1.length > 35 || line2.length > 35) {
+        // More aggressive splitting - find a split that keeps both under 35
+        for (let i = 1; i < words.length - 1; i++) {
+          const testLine1 = words.slice(0, i).join(' ');
+          const testLine2 = words.slice(i).join(' ');
+          if (testLine1.length <= 35 && testLine2.length <= 35) {
+            return [testLine1, testLine2];
+          }
+        }
+      }
+
+      return [line1, line2];
+    }
+
+    return [text];
   }
 }
 

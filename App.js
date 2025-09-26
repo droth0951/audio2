@@ -41,6 +41,9 @@ import SearchBar from './src/components/SearchBar';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// API base URL - uses environment variable for easy switching between local/production
+const API_BASE_URL = process.env.EXPO_PUBLIC_CAPTION_PROXY_BASE || 'https://audio-trimmer-service-production.up.railway.app';
+
 // Utility function for formatting time
 const formatTime = (millis) => {
   if (typeof millis !== 'number' || isNaN(millis) || millis < 0) {
@@ -2163,7 +2166,7 @@ export default function App() {
         // Debug: Log the exact payload being sent to Railway
         console.log('🚨 RAILWAY DEBUG - Payload being sent:', JSON.stringify(assemblyAIPayload, null, 2));
 
-        const submitResponse = await fetch('https://audio-trimmer-service-production.up.railway.app/api/transcript', {
+        const submitResponse = await fetch(`${API_BASE_URL}/api/transcript`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2205,7 +2208,7 @@ export default function App() {
           
           await new Promise(resolve => setTimeout(resolve, 5000));
           
-          const checkResponse = await fetch(`https://audio-trimmer-service-production.up.railway.app/api/transcript/${job.id}`, {
+          const checkResponse = await fetch(`${API_BASE_URL}/api/transcript/${job.id}`, {
             headers: { 'Content-Type': 'application/json' }
           });
           
@@ -2460,7 +2463,7 @@ export default function App() {
       // Use original URL - no resolution to avoid CDN session mismatch
       
       // Call Railway server for timing validation
-      const response = await fetch('https://audio-trimmer-service-production.up.railway.app/api/trim-audio', {
+      const response = await fetch(`${API_BASE_URL}/api/trim-audio`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

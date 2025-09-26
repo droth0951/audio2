@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node -r dotenv/config server.js dotenv_config_path=.env.local",
+    "dev-setup": "node dev-setup.js"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
@@ -25,6 +26,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "dotenv": "^17.2.2",
     "vercel": "^32.0.0"
   }
 }
