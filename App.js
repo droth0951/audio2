@@ -2125,7 +2125,14 @@ export default function App() {
           format_text: true,
           speaker_labels: true,
           speakers_expected: 2,
-          word_boost: []
+          word_boost: [],
+          // NEW: Add podcast metadata for future server-side video generation
+          podcast: {
+            title: selectedEpisode?.title,
+            artwork: selectedEpisode?.artwork,
+            podcastName: selectedEpisode?.podcastName
+          },
+          captionsEnabled: true // Always true when calling transcript API
         };
 
         console.log('🎬 AssemblyAI Request Payload:', {
