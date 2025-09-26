@@ -365,6 +365,55 @@ const PADDING = {
 const RSS_CACHE_KEY = 'rss_cache';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
+// Canonical URL extraction service - solves CDN timing issues
+const extractCanonicalUrl = (trackingUrl) => {
+  if (!trackingUrl) return null;
+
+  try {
+    // Megaphone (NPR, etc.) - Extract direct host URL
+    if (trackingUrl.includes('traffic.megaphone.fm/')) {
+      const match = trackingUrl.match(/traffic\.megaphone\.fm\/([^?]+)/);
+      return match ? `https://traffic.megaphone.fm/${match[1]}` : null;
+    }
+
+    // Libsyn - Extract direct host URL
+    if (trackingUrl.includes('.libsyn.com/')) {
+      const match = trackingUrl.match(/([^\/]+\.libsyn\.com\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
+    // Spotify/Anchor - Extract direct host URL
+    if (trackingUrl.includes('anchor.fm/') || trackingUrl.includes('spotify.com/')) {
+      const match = trackingUrl.match(/(anchor\.fm\/[^?]+|spotify\.com\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
+    // Buzzsprout - Extract direct host URL
+    if (trackingUrl.includes('.buzzsprout.com/')) {
+      const match = trackingUrl.match(/([^\/]+\.buzzsprout\.com\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
+    // Podbean - Extract direct host URL
+    if (trackingUrl.includes('.podbean.com/')) {
+      const match = trackingUrl.match(/([^\/]+\.podbean\.com\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
+    // Spreaker - Extract direct host URL
+    if (trackingUrl.includes('.spreaker.com/')) {
+      const match = trackingUrl.match(/(api\.spreaker\.com\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
+    return null; // No canonical pattern found
+
+  } catch (error) {
+    console.log('🔗 Canonical URL extraction failed:', error.message);
+    return null;
+  }
+};
+
 // Performance-optimized RSS parser
 const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
   try {
@@ -386,9 +435,26 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
       const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([^<>\]]+)(?:\]\]>)?<\/title>/);
       const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
       
-      // Fast audio URL extraction
+      // Fast audio URL extraction with canonical URL resolution
       const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/);
-      const audioUrl = audioMatch ? audioMatch[1] : null;
+      const trackingUrl = audioMatch ? audioMatch[1] : null;
+      const canonicalUrl = trackingUrl ? extractCanonicalUrl(trackingUrl) : null;
+      const audioUrl = canonicalUrl || trackingUrl; // Prefer canonical, fallback to tracking
+
+      // Log URL resolution for debugging CDN timing issues
+      if (trackingUrl && canonicalUrl) {
+        console.log('🔗 URL Resolution Success:', {
+          original: trackingUrl.substring(0, 80) + '...',
+          canonical: canonicalUrl.substring(0, 80) + '...',
+          episode: title.substring(0, 50) + '...'
+        });
+      } else if (trackingUrl && !canonicalUrl) {
+        console.log('🔗 URL Resolution Fallback:', {
+          original: trackingUrl.substring(0, 80) + '...',
+          reason: 'No canonical pattern found',
+          episode: title.substring(0, 50) + '...'
+        });
+      }
       
       // Fast description extraction
       let description = 'No description available.';
