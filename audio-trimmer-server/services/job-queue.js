@@ -204,13 +204,31 @@ class JobQueue {
         duration: `${(request.clipEnd - request.clipStart) / 1000}s`
       });
 
-      // Step 1: Download audio segment
-      const audioResult = await audioDownload.downloadAudioSegment(
+      // Step 1: Download and extract audio clip
+      const audioProcessor = require('./audio-processor');
+
+      // Download full file and extract the exact clip for video composition
+      const audioClipBuffer = await audioProcessor.downloadAndExtractClip(
         request.audioUrl,
         request.clipStart,
         request.clipEnd,
         jobId
       );
+
+      // Save clipped audio to temp file for video composition
+      const fs = require('fs').promises;
+      const path = require('path');
+      const tempDir = path.join(__dirname, '../temp');
+      await fs.mkdir(tempDir, { recursive: true });
+      const clippedAudioPath = path.join(tempDir, `clipped_audio_${jobId}.mp3`);
+      await fs.writeFile(clippedAudioPath, audioClipBuffer);
+
+      const audioResult = {
+        tempPath: clippedAudioPath,
+        fileSize: audioClipBuffer.length,
+        downloadTime: 0, // Will be included in audioProcessor timing
+        duration: (request.clipEnd - request.clipStart) / 1000
+      };
 
       logger.success('Audio download completed', {
         jobId,
@@ -224,17 +242,11 @@ class JobQueue {
         try {
           logger.info('🎬 Starting caption generation using file upload method', { jobId });
 
-          // Download and extract exact audio clip for AssemblyAI
-          const audioBuffer = await audioProcessor.downloadAndExtractClip(
-            request.audioUrl,
-            request.clipStart,
-            request.clipEnd,
-            jobId
-          );
+          // Use the audio clip buffer we already extracted in Step 1
 
           // Generate captions using file upload (solves CDN timing issue)
           transcript = await captionProcessor.generateCaptions(
-            audioBuffer,
+            audioClipBuffer,
             request.clipStart,
             request.clipEnd,
             jobId,
