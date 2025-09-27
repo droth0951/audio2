@@ -37,12 +37,19 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTi
 import * as KeepAwake from 'expo-keep-awake';
 import AboutModal from './src/components/AboutModal';
 import SearchBar from './src/components/SearchBar';
+import VideoReadyBanner from './src/components/VideoReadyBanner';
+import PushNotificationService from './src/services/PushNotificationService';
+import VideoService from './src/services/VideoService';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // API base URL - uses environment variable for easy switching between local/production
 const API_BASE_URL = process.env.EXPO_PUBLIC_CAPTION_PROXY_BASE || 'https://audio-trimmer-service-production.up.railway.app';
+
+// Feature flags
+const ENABLE_SERVER_VIDEO = process.env.EXPO_PUBLIC_ENABLE_SERVER_VIDEO === 'true' || false;
+const ENABLE_PUSH_NOTIFICATIONS = process.env.EXPO_PUBLIC_ENABLE_PUSH_NOTIFICATIONS === 'true' || ENABLE_SERVER_VIDEO;
 
 // Utility function for formatting time
 const formatTime = (millis) => {
@@ -728,6 +735,10 @@ export default function App() {
     hadRecordingError: false
   });
 
+  // Push notification state
+  const [deviceToken, setDeviceToken] = useState(null);
+  const [videoReadyBanner, setVideoReadyBanner] = useState(null); // { jobId, podcastName, episodeTitle }
+
   // App state listener - ONLY for recording cleanup (not audio position)
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
@@ -743,7 +754,99 @@ export default function App() {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
   }, [isRecording]); // Only depend on isRecording, not audio states
-  
+
+  // Initialize push notifications (only if enabled)
+  useEffect(() => {
+    if (!ENABLE_PUSH_NOTIFICATIONS) {
+      console.log('🔔 Push notifications disabled by feature flag');
+      return;
+    }
+
+    const initializePushNotifications = async () => {
+      try {
+        console.log('🔔 Initializing push notifications...');
+
+        // Configure notification behavior
+        PushNotificationService.configure();
+
+        // Request permissions and get device token
+        const token = await PushNotificationService.requestPermissions();
+        if (token) {
+          setDeviceToken(token);
+          console.log('✅ Push notifications ready with token:', token.substring(0, 20) + '...');
+        }
+
+        // Set up notification listeners
+        PushNotificationService.setupNotificationListeners(
+          // On notification received (while app is open)
+          (notification) => {
+            console.log('📱 Push notification received while app open:', notification);
+          },
+
+          // On notification tapped
+          (jobId, data) => {
+            console.log('👆 Push notification tapped:', jobId, data);
+
+            // Show video ready banner
+            if (jobId && data.podcastName) {
+              setVideoReadyBanner({
+                jobId,
+                podcastName: data.podcastName,
+                episodeTitle: data.episodeTitle || 'Unknown Episode'
+              });
+            }
+          }
+        );
+
+        // Handle deep links (when app opens from notification)
+        const handleInitialURL = async () => {
+          const initialUrl = await Linking.getInitialURL();
+          if (initialUrl) {
+            console.log('🔗 App opened with deep link:', initialUrl);
+            handleDeepLink(initialUrl);
+          }
+        };
+
+        // Listen for deep links while app is running
+        const handleDeepLink = (url) => {
+          console.log('🔗 Deep link received:', url);
+
+          // Parse audio2://video-ready?jobId=xyz URLs
+          if (url.startsWith('audio2://video-ready')) {
+            const urlParams = new URLSearchParams(url.split('?')[1]);
+            const jobId = urlParams.get('jobId');
+
+            if (jobId) {
+              console.log('📹 Deep link to video ready:', jobId);
+              // Note: We'd need podcast info from the server to show the banner
+              // For now, just show a generic banner
+              setVideoReadyBanner({
+                jobId,
+                podcastName: 'Audio2',
+                episodeTitle: 'Your video is ready!'
+              });
+            }
+          }
+        };
+
+        handleInitialURL();
+        const subscription = Linking.addEventListener('url', (event) => {
+          handleDeepLink(event.url);
+        });
+
+        return () => {
+          subscription?.remove();
+          PushNotificationService.removeNotificationListeners();
+        };
+
+      } catch (error) {
+        console.error('❌ Failed to initialize push notifications:', error);
+      }
+    };
+
+    initializePushNotifications();
+  }, []);
+
   // URL input state
   const [urlInput, setUrlInput] = useState('');
   const [currentRssFeed, setCurrentRssFeed] = useState('');
@@ -2563,6 +2666,79 @@ export default function App() {
     }
   };
 
+  // Server-side video creation (alternative to screen recording)
+  const createServerSideVideo = async () => {
+    if (!selectedEpisode || clipStart === null || clipEnd === null) {
+      Alert.alert('Error', 'Please select an episode and set clip start/end times');
+      return;
+    }
+
+    if (!deviceToken) {
+      Alert.alert('Push Notifications Required', 'Push notifications must be enabled to use server-side video generation. Please restart the app and allow notifications.');
+      return;
+    }
+
+    try {
+      setRecordingStatus('Creating video on server...');
+      setIsRecording(true);
+
+      const podcast = {
+        podcastName: podcastTitle || 'Unknown Podcast',
+        title: selectedEpisode.title || 'Unknown Episode',
+        artwork: selectedEpisode.artwork
+      };
+
+      console.log('🎬 Creating server-side video:', {
+        podcast,
+        clipStart,
+        clipEnd,
+        duration: (clipEnd - clipStart) / 1000
+      });
+
+      const result = await VideoService.createVideoWithPushNotifications(
+        selectedEpisode.audio,
+        clipStart,
+        clipEnd,
+        podcast,
+        deviceToken
+      );
+
+      setRecordingStatus(`Video queued! You'll get a notification when it's ready (${result.estimatedTime}s)`);
+
+      // Show success message
+      Alert.alert(
+        '🎬 Video Creation Started',
+        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: ${result.estimatedTime} seconds`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsRecording(false);
+              setShowRecordingView(false);
+              setRecordingStatus('');
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Server video creation failed:', error);
+      Alert.alert(
+        'Video Creation Failed',
+        error.message || 'Failed to create video on server. Please try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsRecording(false);
+              setRecordingStatus('');
+            }
+          }
+        ]
+      );
+    }
+  };
+
   const startVideoRecording = async () => {
 
     
@@ -3177,11 +3353,26 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={styles.container}>
-        <StatusBar 
-          style="light" 
-          backgroundColor="#1c1c1c" 
+        <StatusBar
+          style="light"
+          backgroundColor="#1c1c1c"
           translucent={false}
         />
+
+        {/* Video Ready Banner */}
+        {videoReadyBanner && (
+          <VideoReadyBanner
+            jobId={videoReadyBanner.jobId}
+            podcastName={videoReadyBanner.podcastName}
+            episodeTitle={videoReadyBanner.episodeTitle}
+            onDismiss={() => setVideoReadyBanner(null)}
+            onDownloadComplete={(result) => {
+              console.log('✅ Video downloaded successfully:', result);
+              setVideoReadyBanner(null);
+            }}
+          />
+        )}
+
         <LinearGradient
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.gradient}
@@ -3202,7 +3393,7 @@ export default function App() {
                   preparedTranscript={preparedTranscript}
                   isRecording={isRecording}
                   recordingStatus={recordingStatus}
-                  startVideoRecording={startVideoRecording}
+                  startVideoRecording={ENABLE_SERVER_VIDEO ? createServerSideVideo : startVideoRecording}
                   cleanupRecording={cleanupRecording}
                   setShowRecordingView={setShowRecordingView}
                   styles={styles}
