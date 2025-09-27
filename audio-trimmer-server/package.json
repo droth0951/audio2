@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node -r dotenv/config server.js dotenv_config_path=.env.local",
-    "dev-setup": "node dev-setup.js"
+    "dev-setup": "node dev-setup.js",
+    "postinstall": "npm rebuild sharp --platform=linux --arch=x64"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
