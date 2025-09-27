@@ -29,7 +29,7 @@ class CaptionProcessor {
   }
 
   // Generate captions using file upload method (not URL)
-  async generateCaptions(audioBuffer, clipStartMs, clipEndMs, jobId, enableSmartFeatures = true) {
+  async generateCaptions(audioBuffer, clipStartMs, clipEndMs, jobId, enableSmartFeatures = true, textStyle = 'normal') {
     try {
       if (!this.assemblyai) {
         logger.warn('⚠️ AssemblyAI not available - skipping captions', { jobId });
@@ -104,10 +104,14 @@ class CaptionProcessor {
           );
 
           // Create better captions from utterances instead of using awkward SRT chunks
-          logger.info('🔄 Using utterance-based caption generation for better boundaries', { jobId });
-          completedTranscript.srtCaptions = this.createCaptionsFromUtterances(completedTranscript);
+          logger.info('🔄 Using utterance-based caption generation for better boundaries', {
+            jobId,
+            textStyle: textStyle
+          });
+          completedTranscript.srtCaptions = this.createCaptionsFromUtterances(completedTranscript, textStyle);
           logger.info('✅ Utterance-based captions created', {
             jobId,
+            textStyle,
             captionCount: completedTranscript.srtCaptions?.length,
             sampleCaption: completedTranscript.srtCaptions?.[0]?.text
           });
@@ -245,16 +249,86 @@ class CaptionProcessor {
     return process.env.ENABLE_SERVER_CAPTIONS === 'true' && this.assemblyai !== null;
   }
 
+  // Clean up punctuation for caption optimization (vs transcript)
+  cleanupCaptionPunctuation(text) {
+    if (!text) return text;
+
+    // Remove excessive periods that are speech pauses, not sentence ends
+    // Keep periods only for true sentence boundaries
+    let cleaned = text
+      // Remove periods after very short fragments (likely speech pauses)
+      .replace(/\b\w{1,3}\./g, (match) => {
+        const word = match.slice(0, -1);
+        // Keep periods after common abbreviations
+        if (['Mr', 'Ms', 'Dr', 'vs', 'etc'].includes(word)) {
+          return match;
+        }
+        return word; // Remove period from short words
+      })
+      // Remove periods before conjunctions (indicates pause, not sentence end)
+      .replace(/\.\s+(and|but|or|so|yet|for|nor)\s+/gi, ' $1 ')
+      // Remove periods before transition words (indicates pause)
+      .replace(/\.\s+(then|now|well|you know|I mean|like)\s+/gi, ' $1 ')
+      // Clean up multiple spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Ensure proper sentence endings for true sentence boundaries
+    // Add period only if text doesn't end with punctuation and seems complete
+    if (cleaned.length > 10 && !/[.!?]$/.test(cleaned)) {
+      // Only add period if it looks like a complete thought
+      const words = cleaned.split(' ');
+      if (words.length >= 4) { // Reasonably complete sentences
+        cleaned += '.';
+      }
+    }
+
+    return cleaned;
+  }
+
+  // Apply text style transformation (normal, uppercase, etc.)
+  applyTextStyle(text, style) {
+    switch (style) {
+      case 'uppercase':
+      case 'caps':
+      case 'allcaps':
+        return text.toUpperCase();
+      case 'lowercase':
+        return text.toLowerCase();
+      case 'title':
+        // Smart title case that handles contractions properly
+        return text.replace(/\b\w+(?:'\w+)*\b/g, (word) => {
+          // Handle contractions like "don't", "we're", "George's"
+          if (word.includes("'")) {
+            const parts = word.split("'");
+            return parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase() +
+                   "'" + parts.slice(1).join("'").toLowerCase();
+          }
+          // Regular title case for normal words
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        });
+      case 'normal':
+      default:
+        return text;
+    }
+  }
+
   // Create captions from utterances for better speaker boundaries and complete thoughts
-  createCaptionsFromUtterances(transcript) {
+  createCaptionsFromUtterances(transcript, textStyle = 'normal') {
     if (!transcript?.utterances?.length) return [];
 
     const captions = [];
     let captionIndex = 1;
 
     for (const utterance of transcript.utterances) {
-      const text = utterance.text.trim();
+      let text = utterance.text.trim();
       if (!text) continue;
+
+      // First cleanup punctuation for caption optimization
+      text = this.cleanupCaptionPunctuation(text);
+
+      // Then apply text style transformation
+      text = this.applyTextStyle(text, textStyle);
 
       // Split long utterances into chunks while keeping complete thoughts
       // NOTE: utterance.start/end are already relative to clip since we use file upload
