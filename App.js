@@ -431,8 +431,9 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
       
       const item = itemContent.substring(0, itemEndIndex);
       
-      // Fast title extraction
-      const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([^<>\]]+)(?:\]\]>)?<\/title>/);
+      // Fast title extraction - handle both CDATA and plain text
+      const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                        item.match(/<title>(.*?)<\/title>/);
       const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
       
       // Fast audio URL extraction with canonical URL resolution
@@ -456,9 +457,10 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
         });
       }
       
-      // Fast description extraction
+      // Fast description extraction - handle both CDATA and plain text
       let description = 'No description available.';
-      const descriptionMatch = item.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
+      const descriptionMatch = item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ||
+                              item.match(/<description>([\s\S]*?)<\/description>/);
       console.log('🔍 Description match for episode', count + 1, ':', descriptionMatch ? 'Found' : 'Not found');
       if (descriptionMatch && descriptionMatch[1]) {
         description = descriptionMatch[1]
