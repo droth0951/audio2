@@ -26,6 +26,7 @@ const transcribeStatusHandler = require('./api/transcribe-status.js');
 // ✅ New video generation endpoints (lines 39-44 from instructions)
 const createVideoHandler = require('./api/create-video.js');
 const videoStatusHandler = require('./api/video-status.js');
+const videoMetadataHandler = require('./api/video-metadata.js');
 const downloadVideoHandler = require('./api/download-video.js');
 const cleanupStatsHandler = require('./api/cleanup-stats.js');
 const emergencyCleanupHandler = require('./api/emergency-cleanup.js');
@@ -47,6 +48,7 @@ app.get('/api/transcript/:id', transcribeStatusHandler);
 app.post('/api/create-video', createVideoHandler);
 app.post('/api/create-frame', createFrameHandler);
 app.get('/api/video-status/:id', videoStatusHandler);
+app.get('/api/video-metadata/:jobId', videoMetadataHandler);
 app.get('/api/download-video/:id', downloadVideoHandler);
 
 // ✅ Test endpoint (lines 214-222 from instructions)
@@ -65,6 +67,10 @@ app.post('/api/emergency-cleanup', emergencyCleanupHandler);
 
 // Test email endpoint
 app.post('/api/test-email', testEmailHandler);
+
+// Test push notification endpoint
+const testPushHandler = require('./api/test-push.js');
+app.post('/api/test-push', testPushHandler);
 
 // OPTIONS handlers for CORS preflight
 app.options('/api/transcript', (req, res) => {

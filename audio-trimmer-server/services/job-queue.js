@@ -161,6 +161,11 @@ class JobQueue {
     };
   }
 
+  // Get job by ID for metadata endpoint
+  getJob(jobId) {
+    return this.jobs.get(jobId);
+  }
+
   // Process next job if slot available
   async processNextJob() {
     try {
@@ -250,7 +255,8 @@ class JobQueue {
             request.clipStart,
             request.clipEnd,
             jobId,
-            request.enableSmartFeatures
+            request.enableSmartFeatures,
+            request.captionStyle || 'normal'
           );
 
           if (transcript) {
@@ -318,6 +324,24 @@ class JobQueue {
 
       // Step 4: Generate video URL and complete job
       const videoUrl = getVideoComposer().generateVideoUrl(videoResult.videoPath, jobId);
+
+      // 🎉 Big celebratory video completion announcement with URL! 🎉
+      console.log('\n' + '🎬'.repeat(30));
+      console.log('🎬🎬🎬  VIDEO READY! DOWNLOAD NOW!  🎬🎬🎬');
+      console.log('🎬'.repeat(30));
+      console.log(`\n🔗 VIDEO URL: ${videoUrl}`);
+      console.log(`📹 JOB ID: ${jobId}`);
+      console.log(`💾 FILE SIZE: ${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
+      console.log(`⏱️ DURATION: ${videoResult.duration}s`);
+      console.log('═'.repeat(60) + '\n');
+
+      logger.success('🎬 VIDEO READY FOR DOWNLOAD! 🎬', {
+        jobId,
+        videoUrl,
+        downloadUrl: `http://localhost:3001/api/download-video/${jobId}`,
+        fileSize: `${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
+        duration: `${videoResult.duration}s`
+      });
 
       // Step 5: Cleanup temp files (keep video for now - cleanup after download)
       await audioDownload.cleanupTempFile(audioResult.tempPath, jobId);
@@ -400,9 +424,22 @@ class JobQueue {
       outputSize: result.fileSize ? `${Math.round(result.fileSize / 1024 / 1024 * 100) / 100}MB` : 'Unknown'
     });
 
-    // Send notification  
+    // Send notifications (both email for admin and push for user)
     const notifications = require('./email-notifications');
+    const iosPush = require('./ios-push-notifications');
+
+    // Admin email notification (existing)
     notifications.sendJobNotification(job, 'completed');
+
+    // User iOS push notification (new)
+    if (job.request?.deviceToken && job.request?.podcast) {
+      await iosPush.sendVideoReadyNotification(
+        job.request.deviceToken,
+        job.jobId,
+        job.request.podcast.podcastName || 'Unknown Podcast',
+        job.request.podcast.title || 'Unknown Episode'
+      );
+    }
 
     // Process next job
     this.processNextJob();

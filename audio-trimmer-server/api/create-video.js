@@ -30,7 +30,9 @@ module.exports = async (req, res) => {
       aspectRatio = '9:16',  // Default to vertical
       template = 'professional',
       captionsEnabled = false,        // NEW: Caption toggle
-      enableSmartFeatures = true      // NEW: Smart features toggle
+      enableSmartFeatures = true,     // NEW: Smart features toggle
+      captionStyle = 'normal',        // NEW: Caption text style (normal, uppercase, lowercase, title)
+      deviceToken                     // NEW: iOS device token for push notifications
     } = req.body;
 
     // Map field names for backward compatibility
@@ -42,6 +44,13 @@ module.exports = async (req, res) => {
     console.log(`📝 Episode: ${podcast?.title?.substring(0, 50) || 'Unknown'}...`);
     console.log(`⏱️  Duration: ${((clipEnd - clipStart) / 1000).toFixed(1)}s`);
     console.log(`💬 Captions: ${captionsEnabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+    if (captionsEnabled) {
+      console.log(`🎨 Caption Style: ${captionStyle.toUpperCase()}`);
+    }
+    console.log(`📱 Push Notifications: ${deviceToken ? '✅ ENABLED' : '❌ DISABLED'}`);
+    if (deviceToken) {
+      console.log(`🔔 Device Token: ${deviceToken.substring(0, 8)}...`);
+    }
     console.log('═'.repeat(60) + '\n');
 
     // Log which field format was used for debugging
