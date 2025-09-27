@@ -53,6 +53,19 @@ module.exports = async (req, res) => {
       providedFields: Object.keys(req.body)
     });
 
+    // Log URL type for CDN timing analysis
+    const isCanonicalUrl = !audioUrl.includes('podtrac') &&
+                          !audioUrl.includes('chartable') &&
+                          !audioUrl.includes('chrt.fm') &&
+                          !audioUrl.includes('prfx.byspotify.com');
+
+    logger.info('🔗 URL Analysis', {
+      jobId: 'pending',
+      urlType: isCanonicalUrl ? 'canonical' : 'tracking',
+      domain: audioUrl.split('/')[2] || 'unknown',
+      isCanonical: isCanonicalUrl,
+      audioUrlPreview: audioUrl.substring(0, 100) + '...'
+    });
     // Validate required fields
     if (!audioUrl || clipStart === undefined || clipEnd === undefined) {
       logger.error('Missing required fields', { provided: Object.keys(req.body) });

@@ -1122,3 +1122,49 @@
   "error": "HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu",
   "stack": "Error: HTTP Network: getaddrinfo ENOTFOUND www2.cs.uic.edu\n    at AudioDownloadService.fetchAudioWithTimeout (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:122:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AudioDownloadService.downloadAudioSegment (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/audio-download.js:42:49)\n    at async JobQueue.processVideoJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:184:27)"
 }
+{
+  "timestamp": "2025-09-26T21:28:32.475Z",
+  "level": "error",
+  "message": "Job creation failed",
+  "error": "Server-side video generation is currently disabled",
+  "request": {
+    "audioUrl": "https://traffic.megaphone.fm/NPR6305213446.mp3",
+    "clipStart": 17954,
+    "clipEnd": 47954,
+    "podcast": {
+      "title": "NPR News: 09-26-2025 5PM EDT",
+      "artwork": "https://media.npr.org/assets/img/2023/03/01/npr-news-now_square.png?s=1400&c=66"
+    },
+    "captionsEnabled": true
+  }
+}
+{
+  "timestamp": "2025-09-26T21:28:32.475Z",
+  "level": "error",
+  "message": "Video creation failed",
+  "error": "Server-side video generation is currently disabled",
+  "stack": "Error: Server-side video generation is currently disabled\n    at JobQueue.checkFeatureEnabled (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:43:13)\n    at JobQueue.createJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:82:12)\n    at module.exports (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/api/create-video.js:89:29)\n    at Layer.handle [as handle_request] (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/layer.js:95:5)\n    at next (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/route.js:149:13)\n    at Route.dispatch (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/route.js:119:3)\n    at Layer.handle [as handle_request] (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/layer.js:95:5)\n    at /Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:284:15\n    at Function.process_params (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:346:12)\n    at next (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:280:10)"
+}
+{
+  "timestamp": "2025-09-26T21:32:01.481Z",
+  "level": "error",
+  "message": "Job creation failed",
+  "error": "Server-side video generation is currently disabled",
+  "request": {
+    "audioUrl": "https://traffic.megaphone.fm/NPR6305213446.mp3",
+    "clipStart": 17954,
+    "clipEnd": 47954,
+    "podcast": {
+      "title": "NPR News: 09-26-2025 5PM EDT",
+      "artwork": "https://media.npr.org/assets/img/2023/03/01/npr-news-now_square.png?s=1400&c=66"
+    },
+    "captionsEnabled": true
+  }
+}
+{
+  "timestamp": "2025-09-26T21:32:01.481Z",
+  "level": "error",
+  "message": "Video creation failed",
+  "error": "Server-side video generation is currently disabled",
+  "stack": "Error: Server-side video generation is currently disabled\n    at JobQueue.checkFeatureEnabled (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:43:13)\n    at JobQueue.createJob (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/services/job-queue.js:82:12)\n    at module.exports (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/api/create-video.js:89:29)\n    at Layer.handle [as handle_request] (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/layer.js:95:5)\n    at next (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/route.js:149:13)\n    at Route.dispatch (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/route.js:119:3)\n    at Layer.handle [as handle_request] (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/layer.js:95:5)\n    at /Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:284:15\n    at Function.process_params (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:346:12)\n    at next (/Users/droth/Downloads/Projects/podknowledge/audio-trimmer-server/node_modules/express/lib/router/index.js:280:10)"
+}

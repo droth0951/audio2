@@ -174,7 +174,8 @@ class VideoComposer {
   generateVideoUrl(videoPath, jobId) {
     // For now, return temp path - TODO: Upload to storage
     const filename = path.basename(videoPath);
-    return `http://localhost:3001/temp/${filename}`;
+    const port = process.env.PORT || 3000;
+    return `http://localhost:${port}/temp/${filename}`;
   }
 
   // REVIEW-COST: Estimate video composition cost
