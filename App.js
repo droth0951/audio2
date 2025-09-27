@@ -437,7 +437,7 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
       const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
       
       // Fast audio URL extraction with canonical URL resolution
-      const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/);
+      const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/?>/);
       const trackingUrl = audioMatch ? audioMatch[1] : null;
       const canonicalUrl = trackingUrl ? extractCanonicalUrl(trackingUrl) : null;
       const audioUrl = canonicalUrl || trackingUrl; // Prefer canonical, fallback to tracking
