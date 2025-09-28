@@ -5,10 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node -r dotenv/config server.js dotenv_config_path=.env.local",
+    "dev-setup": "node dev-setup.js"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
+    "assemblyai": "^4.0.0",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -18,11 +20,15 @@
     "form-data": "^4.0.4",
     "fs-extra": "^11.3.1",
     "handlebars": "^4.7.8",
+    "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "pg": "^8.16.3",
     "resend": "^6.0.3",
     "sharp": "^0.34.3",
     "uuid": "^9.0.1"
+  },
+  "optionalDependencies": {
+    "@img/sharp-linux-x64": "^0.34.3"
   },
   "devDependencies": {
     "vercel": "^32.0.0"

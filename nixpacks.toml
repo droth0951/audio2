@@ -1,2 +1,20 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x", "npm-9_x", "ffmpeg"]
+nixPkgs = ['nodejs_18', 'ffmpeg', 'fontconfig', 'dejavu_fonts', 'liberation_ttf', 'roboto', 'roboto-slab']
+
+[phases.build]
+cmds = [
+  'cd audio-trimmer-server && npm ci',
+  'mkdir -p /app/.fontconfig',
+  'mkdir -p /app/.cache/fontconfig',
+  'echo "<?xml version=\"1.0\"?><!DOCTYPE fontconfig SYSTEM \"fonts.dtd\"><fontconfig><dir>/nix/var/nix/profiles/default/share/fonts</dir><dir>/root/.nix-profile/share/fonts</dir><cachedir>/app/.cache/fontconfig</cachedir><config><rescan><int>30</int></rescan></config></fontconfig>" > /app/.fontconfig/fonts.conf',
+  'FONTCONFIG_FILE=/app/.fontconfig/fonts.conf fc-cache -fv',
+  'chmod +x audio-trimmer-server/start.sh'
+]
+
+[phases.start]
+cmd = 'cd audio-trimmer-server && ./start.sh'
+
+[variables]
+FONTCONFIG_FILE = '/app/.fontconfig/fonts.conf'
+FONTCONFIG_PATH = '/app/.fontconfig'
+XDG_CACHE_HOME = '/app/.cache'

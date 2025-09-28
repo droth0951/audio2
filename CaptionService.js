@@ -164,7 +164,7 @@ class BulletproofCaptionService {
         const utteranceDuration = currentUtterance.endMs - currentUtterance.startMs;
         const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
         const progressRatio = timeIntoUtterance / utteranceDuration;
-        
+
         // For long text, break into chunks but preserve the corrected capitalization
         if (text.length > 120) {
           const chunks = this.breakIntoChunks(text, 120);
@@ -257,7 +257,7 @@ class BulletproofCaptionService {
       .replace(/([.!?])\s*([a-z])/g, '$1 $2');
     
     const MAX_CHARS = 120; // Same as normalizeText limit
-    
+
     // If text is short enough, just return it with smart capitalization
     if (normalizedText.length <= MAX_CHARS) {
       return this.smartCapitalize(normalizedText, true); // true = this is the start of utterance

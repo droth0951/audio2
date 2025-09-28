@@ -71,6 +71,10 @@ class EmailNotificationService {
 
     if (status === 'completed') {
       subject = `🎬 Video Created: ${podcast.title || 'Podcast'}`;
+
+      // Generate video download URL
+      const videoUrl = this.generateVideoUrl(job.jobId);
+
       body = `
 📹 **Video Generation Complete**
 
@@ -78,12 +82,16 @@ class EmailNotificationService {
 **Episode**: ${podcast.episode || 'Unknown'}
 **Clip**: ${clipStart} - ${clipEnd} (${duration}s)
 
+🔗 **Download Your Video**:
+${videoUrl}
+
 **Processing Details**:
 • Job ID: ${job.jobId}
 • Status: ✅ Completed
 • Processing Time: ${processingTime}
 • Cost: $${cost.toFixed(4)}
 • Video Size: ${this.formatFileSize(result.fileSize)}
+• Captions: ${request.captionsEnabled ? '✅ Enabled' : '❌ Disabled'}
 
 **Audio Source**: ${this.sanitizeUrl(request.audioUrl)}
 
@@ -142,11 +150,19 @@ Failed at ${this.formatTimestamp(new Date())}
 
   // REVIEW-CRITICAL: Send notification via Resend API
   async sendWithResend(notification) {
+    // Convert text to HTML for better formatting
+    const htmlBody = notification.body
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // Bold
+      .replace(/^• (.+)$/gm, '• $1')  // Bullet points
+      .replace(/\n/g, '<br>')  // Line breaks
+      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>'); // Clickable links
+
     const emailData = {
-      from: 'Audio2 Server <noreply@yourdomain.com>', // You'll need to verify your domain in Resend
+      from: 'Audio2 Server <noreply@resend.dev>', // Using Resend's default domain
       to: [notification.to],
       subject: notification.subject,
       text: notification.body,
+      html: htmlBody,
       headers: {
         'X-Job-ID': notification.metadata.jobId,
         'X-Notification-Type': notification.metadata.status
@@ -204,6 +220,20 @@ Failed at ${this.formatTimestamp(new Date())}
       second: '2-digit',
       timeZoneName: 'short'
     });
+  }
+
+  // Helper: Generate video download URL for Railway deployment
+  generateVideoUrl(jobId) {
+    // Use Railway deployment URL
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+      || process.env.RAILWAY_STATIC_URL
+      || 'amusing-education-production.up.railway.app';
+
+    // Ensure https:// protocol
+    const url = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+
+    // Return direct download link for the video
+    return `${url}/api/download-video/${jobId}`;
   }
 
   // Helper: Determine failure stage for debugging

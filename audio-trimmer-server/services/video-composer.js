@@ -70,7 +70,10 @@ class VideoComposer {
   async createVideoWithFFmpeg(audioPath, frameResult, outputPath, jobId, duration) {
     return new Promise((resolve, reject) => {
       const framePattern = path.join(frameResult.frameDir, 'frame_%06d.png');
-      
+
+      const ffmpegStartTime = Date.now();
+      let lastProgressTime = Date.now();
+
       // REVIEW-COST: FFmpeg settings optimized for Railway deployment
       const command = ffmpeg()
         .input(framePattern)
@@ -91,22 +94,36 @@ class VideoComposer {
         ])
         .output(outputPath)
         .on('start', (commandLine) => {
-          logger.debug('FFmpeg command started', {
+          logger.debug('⏱️ FFmpeg encoding started', {
             jobId,
+            frameCount: frameResult.frameCount,
+            fps: frameResult.fps,
+            duration: `${duration}s`,
             command: commandLine.split(' ').slice(0, 10).join(' ') + '...' // Truncate for logging
           });
         })
         .on('progress', (progress) => {
-          if (progress.percent) {
-            logger.debug('FFmpeg progress', {
+          const now = Date.now();
+          const timeSinceLastProgress = now - lastProgressTime;
+          lastProgressTime = now;
+
+          if (progress.percent && (Math.round(progress.percent) % 20 === 0 || timeSinceLastProgress > 5000)) {
+            logger.debug('⏱️ FFmpeg encoding progress', {
               jobId,
               percent: Math.round(progress.percent) + '%',
-              timemark: progress.timemark
+              timemark: progress.timemark,
+              elapsed: `${Math.round((now - ffmpegStartTime) / 1000)}s`,
+              progressDelay: `${timeSinceLastProgress}ms`
             });
           }
         })
         .on('end', () => {
-          logger.debug('FFmpeg processing completed', { jobId });
+          const totalEncodingTime = Date.now() - ffmpegStartTime;
+          logger.success('⏱️ FFmpeg encoding completed', {
+            jobId,
+            totalTime: `${totalEncodingTime}ms`,
+            seconds: `${Math.round(totalEncodingTime / 1000)}s`
+          });
           resolve();
         })
         .on('error', (err) => {
@@ -157,7 +174,8 @@ class VideoComposer {
   generateVideoUrl(videoPath, jobId) {
     // For now, return temp path - TODO: Upload to storage
     const filename = path.basename(videoPath);
-    return `http://localhost:3001/temp/${filename}`;
+    const port = process.env.PORT || 3000;
+    return `http://localhost:${port}/temp/${filename}`;
   }
 
   // REVIEW-COST: Estimate video composition cost

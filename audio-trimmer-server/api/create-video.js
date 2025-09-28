@@ -6,11 +6,16 @@ const logger = require('../services/logger');
 const config = require('../config/settings');
 
 module.exports = async (req, res) => {
+  // Big celebratory announcement for new video requests
+  console.log('\n' + '🎉'.repeat(20));
+  console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
+  console.log('🎉'.repeat(20));
+
   logger.info('🎉🎉 Video creation request received', {
     ip: req.ip,
     userAgent: req.headers['user-agent']?.substring(0, 50)
   });
-  
+
   try {
     // ✅ Following lines 46-62: Request format validation
     const {
@@ -23,12 +28,30 @@ module.exports = async (req, res) => {
       podcast,
       userEmail,
       aspectRatio = '9:16',  // Default to vertical
-      template = 'professional'
+      template = 'professional',
+      captionsEnabled = false,        // NEW: Caption toggle
+      enableSmartFeatures = true,     // NEW: Smart features toggle
+      captionStyle = 'normal',        // NEW: Caption text style (normal, uppercase, lowercase, title)
+      deviceToken                     // NEW: iOS device token for push notifications
     } = req.body;
 
     // Map field names for backward compatibility
     const clipStart = requestClipStart ?? audioStartFrom;
     const clipEnd = requestClipEnd ?? audioEndAt;
+
+    // Log the request details prominently
+    console.log(`\n📹 Podcast: ${podcast?.podcastName || 'Unknown'}`);
+    console.log(`📝 Episode: ${podcast?.title?.substring(0, 50) || 'Unknown'}...`);
+    console.log(`⏱️  Duration: ${((clipEnd - clipStart) / 1000).toFixed(1)}s`);
+    console.log(`💬 Captions: ${captionsEnabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+    if (captionsEnabled) {
+      console.log(`🎨 Caption Style: ${captionStyle.toUpperCase()}`);
+    }
+    console.log(`📱 Push Notifications: ${deviceToken ? '✅ ENABLED' : '❌ DISABLED'}`);
+    if (deviceToken) {
+      console.log(`🔔 Device Token: ${deviceToken.substring(0, 8)}...`);
+    }
+    console.log('═'.repeat(60) + '\n');
 
     // Log which field format was used for debugging
     const fieldFormat = requestClipStart !== undefined ? 'clipStart/clipEnd' : 'audio_start_from/audio_end_at';
@@ -52,7 +75,6 @@ module.exports = async (req, res) => {
       isCanonical: isCanonicalUrl,
       audioUrlPreview: audioUrl.substring(0, 100) + '...'
     });
-
     // Validate required fields
     if (!audioUrl || clipStart === undefined || clipEnd === undefined) {
       logger.error('Missing required fields', { provided: Object.keys(req.body) });
@@ -83,6 +105,13 @@ module.exports = async (req, res) => {
         success: false,
         error: 'Audio URL must be a valid HTTP/HTTPS URL'
       });
+    }
+
+    // Feature flag protection for captions
+    if (captionsEnabled && process.env.ENABLE_SERVER_CAPTIONS !== 'true') {
+      logger.warn('⚠️ Captions requested but not enabled via environment variable', { jobId: 'pending' });
+      // Continue without captions instead of failing (graceful degradation)
+      req.body.captionsEnabled = false;
     }
 
     // Create job through queue system (handles all safety checks)

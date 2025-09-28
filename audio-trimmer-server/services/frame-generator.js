@@ -24,10 +24,73 @@ class FrameGenerator {
     this.tempDir = path.join(__dirname, '../temp');
     this.templatePath = path.join(__dirname, '../templates/audio2-frame.svg');
     this.compiledTemplate = null; // Cache compiled template
+
+    // Register Handlebars helpers for captions
+    this.registerHandlebarsHelpers();
+  }
+
+  // Register Handlebars helpers for template processing
+  registerHandlebarsHelpers() {
+    // Add helper for numeric addition (needed for caption positioning)
+    Handlebars.registerHelper('add', function(a, b) {
+      return a + b;
+    });
+
+    // MVP: Helper for equality comparison in templates
+    Handlebars.registerHelper('eq', function(a, b) {
+      return a === b;
+    });
+
+    // MVP: Helper for array lookup by index
+    Handlebars.registerHelper('lookup', function(array, index) {
+      return array && array[index] ? array[index] : null;
+    });
+
+    // Add helper for word-level highlighting in captions
+    Handlebars.registerHelper('wordsInLine', function(lineText, captionWords, currentTimeMs) {
+      if (!lineText || !captionWords || captionWords.length === 0) {
+        // Fallback: split line into words without highlighting
+        return lineText.split(' ').map(word => ({
+          text: word,
+          isHighlighted: false
+        }));
+      }
+
+      // Split line text into words
+      const lineWords = lineText.split(' ');
+      const result = [];
+
+      // Match each word in the line to timing data
+      let wordIndex = 0;
+      for (const lineWord of lineWords) {
+        const cleanLineWord = lineWord.toLowerCase().replace(/[^\w]/g, '');
+        let isHighlighted = false;
+
+        // Find matching word in caption timing data
+        for (let i = wordIndex; i < captionWords.length; i++) {
+          const captionWord = captionWords[i];
+          const cleanCaptionWord = captionWord.text?.toLowerCase().replace(/[^\w]/g, '') || '';
+
+          if (cleanLineWord === cleanCaptionWord) {
+            // Check if this word should be highlighted (current time within word timing)
+            isHighlighted = currentTimeMs >= captionWord.start && currentTimeMs <= captionWord.end;
+            wordIndex = i + 1; // Move to next word for next iteration
+            break;
+          }
+        }
+
+        result.push({
+          text: lineWord,
+          isHighlighted: isHighlighted
+        });
+      }
+
+      return result;
+    });
   }
 
   // REVIEW-CRITICAL: Generate video frames with Audio2 design using SVG
-  async generateFrames(audioPath, duration, podcast, jobId, transcript = null) {
+  async generateFrames(audioPath, duration, podcast, jobId, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
     try {
       // REVIEW-CRITICAL: Feature flag check for frame generation
       if (!config.features.ENABLE_SERVER_VIDEO) {
@@ -63,18 +126,62 @@ class FrameGenerator {
       // Load cached SVG template
       const template = await this.getTemplate();
 
-      // Download podcast artwork if available
-      let artworkBuffer = null;
+      // MVP: Pre-calculate caption states for all frames to improve performance
+      let captionStates = null;
+      if (captionsEnabled && transcript) {
+        const captionStartTime = Date.now();
+        captionStates = this.precalculateCaptionStates(transcript, duration, fps, clipStartMs, clipEndMs, jobId);
+        const captionTime = Date.now() - captionStartTime;
+        logger.debug('📋 Caption states pre-calculated', {
+          jobId,
+          captionStatesCount: Object.keys(captionStates).length,
+          precalcTime: `${captionTime}ms`,
+          performance: 'optimized'
+        });
+      }
+
+      // Download and process podcast artwork once - cache for all frames
+      let processedArtwork = null;
       if (podcast.artwork) {
         try {
-          artworkBuffer = await this.downloadArtwork(podcast.artwork, jobId);
-          logger.debug('Podcast artwork downloaded', { 
-            jobId, 
+          const artworkStartTime = Date.now();
+          const artworkBuffer = await this.downloadArtwork(podcast.artwork, jobId);
+          logger.debug('Podcast artwork downloaded', {
+            jobId,
             artworkUrl: this.sanitizeUrl(podcast.artwork),
             size: `${Math.round(artworkBuffer.length / 1024)}KB`
           });
+
+          // Pre-process artwork once for all frames (resize + rounded corners)
+          const dimensions = this.getAspectRatioDimensions('9:16');
+          const scaleFactor = dimensions.width / 375;
+          const artworkSize = Math.floor(140 * scaleFactor);
+
+          const resizedArtwork = await getSharp()(artworkBuffer)
+            .resize(artworkSize, artworkSize, { fit: 'cover' })
+            .png()
+            .toBuffer();
+
+          // Add rounded corners using Sharp's built-in method (20px to match app)
+          processedArtwork = await getSharp()(resizedArtwork)
+            .composite([{
+              input: Buffer.from(
+                `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
+              ),
+              blend: 'dest-in'
+            }])
+            .png()
+            .toBuffer();
+
+          const artworkProcessTime = Date.now() - artworkStartTime;
+          logger.debug('📊 Artwork pre-processed and cached', {
+            jobId,
+            processTime: `${artworkProcessTime}ms`,
+            size: `${artworkSize}x${artworkSize}`,
+            cacheForFrames: frameCount
+          });
         } catch (error) {
-          logger.warn('Failed to download podcast artwork, using placeholder', {
+          logger.warn('Failed to download/process podcast artwork, using placeholder', {
             jobId,
             error: error.message
           });
@@ -85,21 +192,39 @@ class FrameGenerator {
       
       // Generate frames
       for (let i = 0; i < frameCount; i++) {
+        const frameStartTime = Date.now();
         const frameTime = i / fps;
         const progress = frameTime / duration;
-        
+
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        // Calculate current time in milliseconds for caption lookup
-        const currentTimeMs = (i / fps) * 1000;
-        await this.generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, i, transcript, currentTimeMs);
+        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates);
         frames.push(framePath);
-        
-        logger.debug('Generated frame', {
-          jobId,
-          frame: i + 1,
-          totalFrames: frameCount,
-          progress: `${Math.round(progress * 100)}%`
-        });
+
+        const frameRenderTime = Date.now() - frameStartTime;
+
+        // Log slow frames and progress milestones
+        if (frameRenderTime > 1000 || i % 30 === 0 || i === frameCount - 1) {
+          logger.debug('Frame generation progress', {
+            jobId,
+            frame: i + 1,
+            totalFrames: frameCount,
+            progress: `${Math.round(progress * 100)}%`,
+            frameTime: `${frameRenderTime}ms`,
+            avgTime: `${Math.round((Date.now() - startTime) / (i + 1))}ms`,
+            hasCaptions: captionsEnabled && transcript ? 'yes' : 'no'
+          });
+        }
+
+        // Warn on very slow frames
+        if (frameRenderTime > 2000) {
+          logger.warn(`⚠️ Slow frame detected`, {
+            jobId,
+            frame: i + 1,
+            renderTime: `${frameRenderTime}ms`,
+            captionsEnabled,
+            hasTranscript: !!transcript
+          });
+        }
       }
 
       const generationTime = Date.now() - startTime;
@@ -140,7 +265,10 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, artworkBuffer, template, duration, jobId, frameIndex = 0, transcript = null, currentTimeMs = 0) {
+  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0, captionStates = null) {
+    const frameStartTime = Date.now();
+    const timings = {};
+
     try {
       // Calculate dimensions for 9:16 aspect ratio
       const dimensions = this.getAspectRatioDimensions('9:16');
@@ -198,18 +326,18 @@ class FrameGenerator {
       // Move branding up to leave caption space at bottom
       const brandingY = dimensions.height - captionSpaceHeight + Math.floor(30 * scaleFactor);
 
-      // Calculate caption font size based on available space
+      // MVP: Use pre-calculated caption state for performance
+      let currentCaptionData = null;
+      let currentCaption = '';
+      if (captionsEnabled && captionStates) {
+        currentCaptionData = captionStates[frameIndex] || null;
+        currentCaption = currentCaptionData?.text || '';
+      }
+
+      // NEW: Precise caption positioning - between progress bar and watermark
       const progressBarBottom = progressElements.progressBar.y + progressElements.progressBar.height;
-      const watermarkTop = progressElements.watermarkText.y - 20; // 20px buffer above watermark
-      const availableCaptionHeight = watermarkTop - progressBarBottom;
-
-      // Choose font size based on available space (use 40% of available height)
-      const maxFontSize = Math.min(72, availableCaptionHeight * 0.4);
-      const safeFontSize = Math.max(48, maxFontSize); // Minimum 48px, maximum based on space
-      const captionFontSize = Math.floor(safeFontSize);
-
-      // Calculate precise caption Y position (30% of space between progress bar and watermark)
-      const captionY = Math.floor(progressBarBottom + ((watermarkTop - progressBarBottom) * 0.3));
+      const watermarkY = progressElements.watermarkText.y;
+      const captionY = progressBarBottom + ((watermarkY - progressBarBottom) * 0.3); // 30% of space between elements
 
       const templateData = {
         width: dimensions.width,
@@ -231,55 +359,69 @@ class FrameGenerator {
         podcastNameLines: podcastTitleLines,
         episodeTitleLines: episodeTitleLines,
         progressElements: progressElements,
-        // Caption data
-        captionsEnabled: transcript && transcript.length > 0,
-        captionY: captionY,
-        captionFontSize: captionFontSize,
-        captionLines: this.getCurrentCaption(transcript, currentTimeMs)
+
+        // MVP: Pre-calculated caption data for performance
+        captionText: currentCaption,                    // Caption text for current time
+        captionsEnabled: captionsEnabled,               // Show/hide captions
+        captionLines: currentCaptionData?.lines || [],  // Pre-calculated line breaks
+        captionY: Math.floor(captionY),                 // Precise Y position between progress bar and watermark
+        captionDisplayMode: currentCaptionData?.displayMode || 'two-lines', // MVP: 'one-line' or 'two-lines'
+
+        // Pre-calculated word highlighting data (no per-frame processing)
+        captionWords: currentCaptionData?.highlightedWords || [], // Pre-processed word highlighting
+        currentTimeMs: clipStartMs + (progress * (clipEndMs - clipStartMs)) // For template reference only
       };
 
-
+      // Time SVG template rendering
+      const svgStartTime = Date.now();
       // Render SVG with professional layout
       const svgContent = template(templateData);
+      timings.svgTemplate = Date.now() - svgStartTime;
 
+      // Time Sharp PNG conversion
+      const sharpStartTime = Date.now();
       // Convert SVG to PNG using Sharp
       let frameBuffer = await getSharp()(Buffer.from(svgContent))
         .png()
         .toBuffer();
+      timings.sharpConversion = Date.now() - sharpStartTime;
 
-      // REVIEW-DESIGN: Composite podcast artwork if available
-      if (artworkBuffer) {
-        // Resize artwork to match the larger size
-        const resizedArtwork = await getSharp()(artworkBuffer)
-          .resize(artworkSize, artworkSize, { fit: 'cover' })
-          .png()
-          .toBuffer();
-
-        // Add rounded corners to artwork using Sharp's built-in method (20px to match app)
-        const roundedArtwork = await getSharp()(resizedArtwork)
-          .composite([{
-            input: Buffer.from(
-              `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
-            ),
-            blend: 'dest-in'
-          }])
-          .png()
-          .toBuffer();
-
-        // Composite artwork onto frame with correct positioning
+      // REVIEW-DESIGN: Composite pre-processed artwork if available
+      if (processedArtwork) {
+        const artworkStartTime = Date.now();
+        // Composite pre-processed artwork onto frame with correct positioning
         frameBuffer = await getSharp()(frameBuffer)
           .composite([{
-            input: roundedArtwork,
+            input: processedArtwork,
             left: Math.round((dimensions.width - artworkSize) / 2),
             top: Math.round(artworkY),
             blend: 'over'
           }])
           .png()
           .toBuffer();
+        timings.artworkComposite = Date.now() - artworkStartTime;
       }
 
+      // Time file writing
+      const writeStartTime = Date.now();
       // Save frame
       await fs.writeFile(framePath, frameBuffer);
+      timings.fileWrite = Date.now() - writeStartTime;
+
+      // Log total frame time and breakdown for slow frames
+      const totalFrameTime = Date.now() - frameStartTime;
+      if (totalFrameTime > 500 || frameIndex % 50 === 0) {
+        logger.debug('📊 Frame timing breakdown', {
+          jobId,
+          frame: frameIndex,
+          total: `${totalFrameTime}ms`,
+          captionLookup: 'pre-calculated',
+          svgTemplate: `${timings.svgTemplate}ms`,
+          sharpConversion: `${timings.sharpConversion}ms`,
+          artworkComposite: timings.artworkComposite ? `${timings.artworkComposite}ms` : 'N/A',
+          fileWrite: `${timings.fileWrite}ms`
+        });
+      }
 
     } catch (error) {
       logger.error('Single SVG frame generation failed', {
@@ -304,12 +446,12 @@ class FrameGenerator {
     const progressFillWidth = progressWidth * progress; // progress = 0.0 to 1.0
 
     // ========================================
-    // 2. DANCING BARS WATERMARK (BOTTOM-RIGHT)
+    // 2. DANCING BARS WATERMARK (UPPER-RIGHT)
     // ========================================
     const watermarkRightMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
-    const watermarkBottomMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
+    const watermarkTopMargin = 60 * scaleFactor; // 60px from top edge for social media safe zone
     const watermarkX = dimensions.width - watermarkRightMargin - (60 * scaleFactor); // Even smaller total width
-    const watermarkY = dimensions.height - watermarkBottomMargin;
+    const watermarkY = watermarkTopMargin;
 
     // Dancing bars configuration
     const barHeights = [6, 10, 8, 12, 7]; // Base heights in logical pixels
@@ -492,112 +634,252 @@ class FrameGenerator {
     return frameCount * costPerFrame;
   }
 
-  // Get current caption using EXACT mobile app logic (word-by-word)
-  getCurrentCaption(transcript, currentTimeMs) {
-    // Handle mock transcript format for testing
-    if (Array.isArray(transcript) && transcript.length > 0 && transcript[0].text) {
-      const currentUtterance = transcript.find(utterance => {
-        const startMs = utterance.start || 0;
-        const endMs = utterance.end || (utterance.start + 3000);
-        return currentTimeMs >= startMs && currentTimeMs <= endMs;
-      });
+  // NEW: Use SRT captions with proper timing (industry standard 1.5-7 seconds)
+  getCurrentCaptionFromTranscript(transcript, currentTimeMs) {
+    // PRIORITY 1: Use SRT captions if available (best for readability)
+    if (transcript?.srtCaptions?.length) {
+      // Find the caption that should be displayed at current time
+      const currentCaption = transcript.srtCaptions.find(caption =>
+        currentTimeMs >= caption.startMs && currentTimeMs <= caption.endMs
+      );
 
-      if (!currentUtterance || !currentUtterance.text) {
-        return [];
+      if (currentCaption) {
+        // Return both text and word-level timing data
+        return {
+          text: currentCaption.text,
+          words: currentCaption.words || [], // Word-level timing from caption processor
+          startMs: currentCaption.startMs,
+          endMs: currentCaption.endMs
+        };
       }
-
-      const formattedText = this.formatCaptionText(currentUtterance.text);
-      return this.splitIntoLines(formattedText, 2);
+      return null;
     }
 
-    // EXACT MOBILE APP LOGIC: Word-by-word processing
-    if (!transcript?.words?.length) return [];
+    // FALLBACK: Use word-level data if no SRT captions
+    if (transcript?.words?.length) {
+      // IMPROVED: Time-based caption chunks for better readability
+      const CAPTION_WINDOW_MS = 3000; // 3 second window for stable display
+      const MAX_WORDS_PER_CAPTION = 8; // Reduced for 30-char limit
 
-    // Convert to clip-relative time (like mobile app)
-    const clipRelativeTime = currentTimeMs; // Already relative in server context
+      // Find words in current time window
+      const windowStart = Math.max(0, currentTimeMs - CAPTION_WINDOW_MS);
+      const windowEnd = currentTimeMs + 1000; // Small lookahead
 
-    // CORRECTED MOBILE APP LOGIC: Show words that have already started (progressive captions)
-    const wordsSpokenSoFar = transcript.words.filter(word =>
-      word.start <= clipRelativeTime
+      const wordsInWindow = transcript.words.filter(word =>
+        word.start >= windowStart && word.start <= windowEnd
+      );
+
+      if (wordsInWindow.length === 0) {
+        // Fallback: show recent words if no words in window
+        const wordsSpokenSoFar = transcript.words.filter(word =>
+          word.start <= currentTimeMs
+        );
+        const recentWords = wordsSpokenSoFar.slice(-6); // Reduced for better readability
+        const fallbackText = recentWords.map(w => w.text).join(' ').trim();
+        return {
+          text: fallbackText,
+          words: recentWords,
+          startMs: recentWords[0]?.start || currentTimeMs,
+          endMs: recentWords[recentWords.length - 1]?.end || currentTimeMs
+        };
+      }
+
+      // Take reasonable chunk size
+      const captionWords = wordsInWindow.slice(0, MAX_WORDS_PER_CAPTION);
+      const captionText = captionWords.map(w => w.text).join(' ');
+
+      return {
+        text: captionText.trim(),
+        words: captionWords,
+        startMs: captionWords[0]?.start || currentTimeMs,
+        endMs: captionWords[captionWords.length - 1]?.end || currentTimeMs
+      };
+    }
+
+    // Final fallback to utterance-based if no word-level data
+    if (!transcript?.utterances?.length) return null;
+
+    const currentUtterance = transcript.utterances.find(utterance =>
+      currentTimeMs >= utterance.start && currentTimeMs <= utterance.end
     );
 
-    // Show recent words (like mobile app) - last 8 words that have been spoken
-    const recentWords = wordsSpokenSoFar.slice(-8);
-    const captionText = recentWords.map(w => w.text).join(' ');
+    if (currentUtterance) {
+      return {
+        text: currentUtterance.text,
+        words: [], // No word-level data available
+        startMs: currentUtterance.start,
+        endMs: currentUtterance.end
+      };
+    }
 
-    if (!captionText.trim()) {
+    return null;
+  }
+
+  // MVP: Pre-calculate caption states for all frames to improve performance
+  precalculateCaptionStates(transcript, duration, fps, clipStartMs, clipEndMs, jobId) {
+    const captionStates = {};
+    const frameCount = Math.round(duration * fps);
+
+    // Get SRT captions if available (best performance)
+    const captions = transcript?.srtCaptions || [];
+
+    logger.debug('🔍 DEBUG Caption pre-calculation input', {
+      jobId,
+      transcriptKeys: Object.keys(transcript || {}),
+      captionCount: captions.length,
+      sampleCaption: captions[0] ? {
+        text: captions[0].text,
+        startMs: captions[0].startMs,
+        endMs: captions[0].endMs,
+        duration: captions[0].endMs - captions[0].startMs
+      } : null,
+      clipStartMs,
+      clipEndMs,
+      clipDuration: clipEndMs - clipStartMs
+    });
+
+    if (captions.length === 0) {
+      logger.warn('No SRT captions found for pre-calculation', { jobId });
+      return captionStates;
+    }
+
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+      const frameProgress = frameIndex / (frameCount - 1);
+      // FIXED: File-upload captions start from 0ms, so use duration-based timing
+      const clipDurationMs = clipEndMs - clipStartMs;
+      const currentTimeMs = frameProgress * clipDurationMs;
+
+      // Find current caption
+      const currentCaption = captions.find(caption =>
+        currentTimeMs >= caption.startMs && currentTimeMs <= caption.endMs
+      );
+
+      if (currentCaption) {
+        // Pre-process word highlighting for this frame
+        const highlightedWords = this.preprocessWordHighlighting(
+          currentCaption.lines,
+          currentCaption.words || [],
+          currentTimeMs
+        );
+
+        captionStates[frameIndex] = {
+          text: currentCaption.text,
+          lines: currentCaption.lines,
+          displayMode: currentCaption.displayMode || 'two-lines', // From caption processor
+          words: currentCaption.words,
+          highlightedWords: highlightedWords,
+          startMs: currentCaption.startMs,
+          endMs: currentCaption.endMs
+        };
+      }
+    }
+
+    logger.debug('Caption states pre-calculated', {
+      jobId,
+      totalFrames: frameCount,
+      captionFrames: Object.keys(captionStates).length,
+      coverage: `${Math.round(Object.keys(captionStates).length / frameCount * 100)}%`
+    });
+
+    return captionStates;
+  }
+
+  // Pre-process word highlighting with predictive overlap logic (no lag!)
+  preprocessWordHighlighting(lines, words, currentTimeMs, frameDurationMs = 83.33) {
+    if (!lines || !words || words.length === 0) {
       return [];
     }
 
-    // Format and split into lines
-    const formattedText = this.formatCaptionText(captionText);
-    return this.splitIntoLines(formattedText, 2);
+    // Calculate frame's time window for overlap detection
+    const frameStartMs = currentTimeMs;
+    const frameEndMs = currentTimeMs + frameDurationMs; // 12fps = ~83.33ms per frame
+
+    const result = [];
+
+    for (const lineText of lines) {
+      if (!lineText) continue;
+
+      const lineWords = lineText.split(' ');
+      const lineResult = [];
+
+      // Match each word in the line to timing data
+      let wordIndex = 0;
+      for (const lineWord of lineWords) {
+        const cleanLineWord = lineWord.toLowerCase().replace(/[^\w]/g, '');
+        let isHighlighted = false;
+
+        // Find matching word in caption timing data
+        for (let i = wordIndex; i < words.length; i++) {
+          const captionWord = words[i];
+          const cleanCaptionWord = captionWord.text?.toLowerCase().replace(/[^\w]/g, '') || '';
+
+          if (cleanLineWord === cleanCaptionWord) {
+            // PREDICTIVE HIGHLIGHTING: Check for overlap between word time and frame time window
+            // Word should be highlighted if ANY part of the word's duration overlaps with frame's display time
+            const wordOverlapsFrame = (
+              captionWord.start < frameEndMs && // Word starts before frame ends
+              captionWord.end > frameStartMs    // Word ends after frame starts
+            );
+
+            isHighlighted = wordOverlapsFrame;
+            wordIndex = i + 1; // Move to next word
+            break;
+          }
+        }
+
+        lineResult.push({
+          text: lineWord,
+          isHighlighted: isHighlighted
+        });
+      }
+
+      result.push(lineResult);
+    }
+
+    return result;
   }
 
-  // Break text into chunks (matching mobile app's approach)
-  breakIntoChunks(text, maxChunkLength = 120) {
-    const words = text.split(' ');
-    const chunks = [];
-    let currentChunk = '';
+  // Helper to split long captions (respects 2-line max rule for readability)
+  splitCaptionIntoLines(text, maxCharsPerLine = 30) { // Reduced by 2 chars for better line breaks
+    if (!text || text.length <= maxCharsPerLine) return [text];
 
-    for (const word of words) {
-      const testChunk = currentChunk ? `${currentChunk} ${word}` : word;
+    // For SRT captions, lines may already be optimized
+    if (text.includes('\n')) {
+      return text.split('\n').slice(0, 2); // Max 2 lines
+    }
 
-      if (testChunk.length > maxChunkLength && currentChunk) {
-        chunks.push(currentChunk);
-        currentChunk = word;
-      } else {
-        currentChunk = testChunk;
+    // Try smart breaking at punctuation/conjunctions first
+    const breakPoints = [', ', ' and ', ' but ', ' or ', ' - ', ': '];
+
+    if (text.length <= maxCharsPerLine * 2) {
+      for (const breakPoint of breakPoints) {
+        const index = text.indexOf(breakPoint, Math.floor(text.length * 0.3));
+        if (index > 0 && index < Math.floor(text.length * 0.7)) {
+          return [
+            text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim(),
+            text.substring(index + breakPoint.length).trim()
+          ].slice(0, 2);
+        }
       }
     }
 
-    if (currentChunk) {
-      chunks.push(currentChunk);
-    }
-
-    return chunks.length > 0 ? chunks : [text];
-  }
-
-  // Format caption text with proper capitalization
-  formatCaptionText(text) {
-    if (!text) return '';
-
-    // Clean up text
-    let cleanText = text.trim();
-
-    // Only capitalize first character if it looks like start of sentence
-    if (cleanText.length > 0) {
-      cleanText = cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
-    }
-
-    return cleanText;
-  }
-
-  // Split text into maximum number of lines
-  splitIntoLines(text, maxLines = 2) {
-    if (!text) return [];
-
+    // Fallback to word boundary breaking
     const words = text.split(' ');
     const lines = [];
     let currentLine = '';
 
     for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-
-      // Rough character limit per line (adjust based on font size)
-      if (testLine.length > 35 && currentLine && lines.length < maxLines - 1) {
-        lines.push(currentLine);
-        currentLine = word;
+      if ((currentLine + ' ' + word).length <= maxCharsPerLine) {
+        currentLine += (currentLine ? ' ' : '') + word;
       } else {
-        currentLine = testLine;
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+        if (lines.length >= 1) break; // Max 2 lines total for better readability
       }
     }
 
-    if (currentLine && lines.length < maxLines) {
-      lines.push(currentLine);
-    }
-
-    return lines;
+    if (currentLine) lines.push(currentLine);
+    return lines.slice(0, 2); // Enforce 2-line max for optimal mobile viewing
   }
 }
 

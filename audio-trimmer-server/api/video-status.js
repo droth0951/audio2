@@ -3,6 +3,7 @@
 
 const jobQueue = require('../services/job-queue');
 const logger = require('../services/logger');
+const { generateVideoUrl, generateDownloadUrl } = require('../utils/url-helper');
 
 module.exports = async (req, res) => {
   const jobId = req.params.id;
@@ -36,6 +37,7 @@ module.exports = async (req, res) => {
       ...(result.failedAt && { failedAt: result.failedAt }),
       ...(result.result && {
         videoUrl: result.result.videoUrl,
+        downloadUrl: generateDownloadUrl(result.jobId),
         cost: result.result.cost,
         processingTime: result.processingTime
       }),
@@ -48,6 +50,13 @@ module.exports = async (req, res) => {
         retries: result.retries || 0
       }
     };
+
+    // Add helpful message when completed
+    if (result.status === 'completed') {
+      console.log('\n🎥 VIDEO READY FOR DOWNLOAD!');
+      console.log(`📥 Download URL: ${generateDownloadUrl(result.jobId)}`);
+      console.log(`🌐 Or open in browser: ${generateVideoUrl(result.jobId)}\n`);
+    }
 
     logger.debug('Status check completed', { 
       jobId, 
