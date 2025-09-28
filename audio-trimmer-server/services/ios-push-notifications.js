@@ -1,7 +1,7 @@
 // iOS Push Notification service using APNs (Apple Push Notification service)
 // Sends push notifications to iOS devices when videos are ready
 
-const https = require('https');
+const http2 = require('http2');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
@@ -136,58 +136,70 @@ class IOSPushNotificationService {
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(payload);
 
-      const options = {
-        hostname: this.apnsHost,
-        port: 443,
-        path: `/3/device/${deviceToken}`,
-        method: 'POST',
-        headers: {
-          'authorization': `bearer ${authToken}`,
-          'apns-id': jobId,
-          'apns-expiration': '0',
-          'apns-priority': '10',
-          'apns-topic': this.bundleId,
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(postData)
-        },
-        // Add TLS options for better Railway compatibility
+      // Create HTTP/2 client session
+      const client = http2.connect(`https://${this.apnsHost}`, {
+        // TLS settings for Apple's servers
         secureProtocol: 'TLSv1_2_method',
-        ciphers: 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384'
-      };
+      });
 
-      const req = https.request(options, (res) => {
+      client.on('error', (error) => {
+        logger.error('HTTP/2 client error:', {
+          error: error.message,
+          code: error.code,
+          host: this.apnsHost
+        });
+        reject(error);
+      });
+
+      // Set up the request
+      const req = client.request({
+        ':method': 'POST',
+        ':path': `/3/device/${deviceToken}`,
+        'authorization': `bearer ${authToken}`,
+        'apns-id': jobId,
+        'apns-expiration': '0',
+        'apns-priority': '10',
+        'apns-topic': this.bundleId,
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(postData)
+      });
+
+      req.on('response', (headers) => {
+        const status = headers[':status'];
         let responseData = '';
 
-        res.on('data', (chunk) => {
+        req.on('data', (chunk) => {
           responseData += chunk;
         });
 
-        res.on('end', () => {
-          if (res.statusCode === 200) {
+        req.on('end', () => {
+          client.close();
+
+          if (status === 200) {
             resolve({ success: true, response: responseData });
           } else {
-            reject(new Error(`APNs error: ${res.statusCode} - ${responseData}`));
+            reject(new Error(`APNs error: ${status} - ${responseData}`));
           }
         });
       });
 
       req.on('error', (error) => {
-        // Enhanced error logging for debugging
-        logger.error('APNs connection error:', {
+        client.close();
+        logger.error('APNs request error:', {
           error: error.message,
           code: error.code,
-          host: this.apnsHost,
-          port: 443
+          host: this.apnsHost
         });
         reject(error);
       });
 
-      // Set timeout to prevent hanging connections
+      // Set timeout
       req.setTimeout(10000, () => {
-        req.destroy();
+        client.close();
         reject(new Error('APNs request timeout'));
       });
 
+      // Send the payload
       req.write(postData);
       req.end();
     });
