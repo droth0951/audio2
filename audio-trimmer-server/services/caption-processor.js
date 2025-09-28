@@ -44,7 +44,9 @@ class CaptionProcessor {
       });
 
       const uploadResponse = await this.assemblyai.files.upload(audioBuffer);
-      logger.debug('AssemblyAI upload response:', { jobId, uploadResponse });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('AssemblyAI upload response:', { jobId, uploadResponse });
+      }
 
       // 2. Enhanced transcription request with Phase 1 AI features
       const audioUrl = uploadResponse.upload_url || uploadResponse;
@@ -76,10 +78,12 @@ class CaptionProcessor {
       const transcript = await this.assemblyai.transcripts.create(transcriptRequest);
 
       // 3. Wait for completion with progress logging
-      logger.debug('⏳ Waiting for transcription completion', {
-        jobId,
-        transcriptId: transcript.id
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('⏳ Waiting for transcription completion', {
+          jobId,
+          transcriptId: transcript.id
+        });
+      }
 
       const completedTranscript = await this.assemblyai.transcripts.waitUntilReady(transcript.id);
 
@@ -160,7 +164,9 @@ class CaptionProcessor {
           start: h.start,
           end: h.end
         }));
-        logger.debug('🎯 Found highlights', { jobId, count: highlights.length, highlights });
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug('🎯 Found highlights', { jobId, count: highlights.length, highlights });
+        }
       }
 
       // Extract entities for future "Smart Tags" feature
@@ -169,7 +175,9 @@ class CaptionProcessor {
           acc[entity.entity_type] = (acc[entity.entity_type] || 0) + 1;
           return acc;
         }, {});
-        logger.debug('🏷️ Found entities', { jobId, entitySummary });
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug('🏷️ Found entities', { jobId, entitySummary });
+        }
       }
 
       // Extract sentiment for future "Mood Captions" feature
@@ -178,7 +186,9 @@ class CaptionProcessor {
           acc[item.sentiment] = (acc[item.sentiment] || 0) + 1;
           return acc;
         }, {});
-        logger.debug('😊 Sentiment analysis', { jobId, sentimentSummary });
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug('😊 Sentiment analysis', { jobId, sentimentSummary });
+        }
       }
 
       // Extract topics for future "Auto-Themed Videos" feature
@@ -186,7 +196,9 @@ class CaptionProcessor {
         const topTopics = Object.entries(transcript.iab_categories_result.summary)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 3);
-        logger.debug('📂 Top topics', { jobId, topTopics });
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug('📂 Top topics', { jobId, topTopics });
+        }
       }
 
     } catch (error) {
@@ -380,21 +392,29 @@ class CaptionProcessor {
   splitUtteranceIntoChunks(text, startMs, endMs) {
     const maxChunkLength = 50; // Max 50 chars total to fit on 2 lines of ~25-30 chars each
 
-    console.log(`🔍 CHUNKING DEBUG: Input text: "${text}", length: ${text.length}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🔍 CHUNKING DEBUG: Input text: "${text}", length: ${text.length}`);
+    }
 
     // For very short text, return as is
     if (text.length <= 35) {
-      console.log(`✅ Short text (≤35), returning as single chunk`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`✅ Short text (≤35), returning as single chunk`);
+      }
       return [{ text, startMs, endMs }];
     }
 
     // For medium text that fits in maxChunkLength, return as single chunk
     if (text.length <= maxChunkLength) {
-      console.log(`✅ Medium text (≤50), returning as single chunk`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`✅ Medium text (≤50), returning as single chunk`);
+      }
       return [{ text, startMs, endMs }];
     }
 
-    console.log(`⚠️ Long text (>${maxChunkLength}), MUST split into chunks`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`⚠️ Long text (>${maxChunkLength}), MUST split into chunks`);
+    }
     const chunks = [];
 
     // Force split any text longer than 50 characters
@@ -418,7 +438,9 @@ class CaptionProcessor {
           endMs: Math.round(chunkEndMs)
         });
 
-        console.log(`📦 Created chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`📦 Created chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+        }
 
         // Start new chunk with current word
         currentChunk = word;
@@ -435,10 +457,14 @@ class CaptionProcessor {
         startMs: Math.round(chunkStartMs),
         endMs: endMs
       });
-      console.log(`📦 Final chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`📦 Final chunk: "${currentChunk.trim()}", length: ${currentChunk.trim().length}`);
+      }
     }
 
-    console.log(`🎯 CHUNKING RESULT: Created ${chunks.length} chunks from ${text.length}-char text`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🎯 CHUNKING RESULT: Created ${chunks.length} chunks from ${text.length}-char text`);
+    }
     return chunks.length > 0 ? chunks : [{ text, startMs, endMs }];
   }
 

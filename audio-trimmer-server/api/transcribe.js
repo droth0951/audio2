@@ -5,16 +5,18 @@ const { AudioFileProcessor } = require('./upload-utils');
 const ASSEMBLY_AI_API_KEY = process.env.ASSEMBLYAI_API_KEY || process.env.ASSEMBLYAI_KEY || 'your-assembly-ai-api-key';
 
 module.exports = async (req, res) => {
-  // IMMEDIATE LOG - ABSOLUTE FIRST THING
-  console.log('⚡ TRANSCRIBE HANDLER CALLED - TIMESTAMP:', new Date().toISOString());
-  console.log('⚡ TRANSCRIBE HANDLER - REQUEST RECEIVED');
-  
-  // COMPREHENSIVE ERROR LOGGING - Catch everything before it fails silently
-  console.log('🚀 TRANSCRIPT ENDPOINT ENTRY');
-  console.log('📥 Raw request method:', req.method);
-  console.log('📥 Raw request headers:', JSON.stringify(req.headers, null, 2));
-  console.log('📥 Raw request body type:', typeof req.body);
-  console.log('📥 Raw request body:', JSON.stringify(req.body, null, 2));
+  // IMMEDIATE LOG - ABSOLUTE FIRST THING (development only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('⚡ TRANSCRIBE HANDLER CALLED - TIMESTAMP:', new Date().toISOString());
+    console.log('⚡ TRANSCRIBE HANDLER - REQUEST RECEIVED');
+
+    // COMPREHENSIVE ERROR LOGGING - Catch everything before it fails silently
+    console.log('🚀 TRANSCRIPT ENDPOINT ENTRY');
+    console.log('📥 Raw request method:', req.method);
+    console.log('📥 Raw request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('📥 Raw request body type:', typeof req.body);
+    console.log('📥 Raw request body:', JSON.stringify(req.body, null, 2));
+  }
 
   try {
     // Validate HTTP method
@@ -39,14 +41,16 @@ module.exports = async (req, res) => {
     // Extract and validate parameters
     const { audio_url, audio_start_from, audio_end_at, punctuate, format_text, speaker_labels, speakers_expected, word_boost } = req.body;
     
-    console.log('🔍 PARAMETER EXTRACTION:');
-    console.log('  audio_url:', audio_url);
-    console.log('  audio_start_from:', audio_start_from, typeof audio_start_from);
-    console.log('  audio_end_at:', audio_end_at, typeof audio_end_at);
-    console.log('  punctuate:', punctuate);
-    console.log('  format_text:', format_text);
-    console.log('  speaker_labels:', speaker_labels);
-    console.log('  speakers_expected:', speakers_expected);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 PARAMETER EXTRACTION:');
+      console.log('  audio_url:', audio_url);
+      console.log('  audio_start_from:', audio_start_from, typeof audio_start_from);
+      console.log('  audio_end_at:', audio_end_at, typeof audio_end_at);
+      console.log('  punctuate:', punctuate);
+      console.log('  format_text:', format_text);
+      console.log('  speaker_labels:', speaker_labels);
+      console.log('  speakers_expected:', speakers_expected);
+    }
     
     // Validate required fields
     if (!audio_url) {
@@ -77,12 +81,14 @@ module.exports = async (req, res) => {
     const endSeconds = Math.floor(endMs / 1000);
     const durationSeconds = endSeconds - startSeconds;
     
-    console.log('🔄 MILLISECONDS TO SECONDS CONVERSION:');
-    console.log('  Input startMs:', startMs);
-    console.log('  Input endMs:', endMs);
-    console.log('  Converted startSeconds:', startSeconds);
-    console.log('  Converted endSeconds:', endSeconds);
-    console.log('  Duration seconds:', durationSeconds);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔄 MILLISECONDS TO SECONDS CONVERSION:');
+      console.log('  Input startMs:', startMs);
+      console.log('  Input endMs:', endMs);
+      console.log('  Converted startSeconds:', startSeconds);
+      console.log('  Converted endSeconds:', endSeconds);
+      console.log('  Duration seconds:', durationSeconds);
+    }
     
     // Validate duration
     if (durationSeconds > 240) {
@@ -96,9 +102,11 @@ module.exports = async (req, res) => {
     }
     
     // FILE UPLOAD APPROACH - Download segment and upload to AssemblyAI
-    console.log('🎯 STARTING FILE UPLOAD APPROACH');
-    console.log('  Original URL:', audio_url);
-    console.log('  Time range:', `${startSeconds}s - ${endSeconds}s`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🎯 STARTING FILE UPLOAD APPROACH');
+      console.log('  Original URL:', audio_url);
+      console.log('  Time range:', `${startSeconds}s - ${endSeconds}s`);
+    }
     
     let assemblyAIAudioUrl = null;
     let useFileUpload = true;
@@ -115,7 +123,9 @@ module.exports = async (req, res) => {
         ASSEMBLY_AI_API_KEY
       );
       
-      console.log('✅ FILE UPLOAD SUCCESS - AssemblyAI URL:', assemblyAIAudioUrl);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ FILE UPLOAD SUCCESS - AssemblyAI URL:', assemblyAIAudioUrl);
+      }
       
     } catch (fileError) {
       console.error('❌ FILE UPLOAD FAILED:', fileError.message);
@@ -140,24 +150,28 @@ module.exports = async (req, res) => {
     };
     
     // No timing parameters needed - file contains exact segment
-    console.log('✂️ File upload approach - no timing parameters needed');
-    
-    console.log('🎬 ASSEMBLYAI REQUEST PAYLOAD:');
-    console.log('  🔗 AUDIO SOURCE:');
-    console.log('    Original URL:', audio_url);
-    console.log('    AssemblyAI File URL:', assemblyAIAudioUrl);
-    console.log('    Method: FILE UPLOAD ONLY');
-    
-    console.log('  📤 Full payload:', JSON.stringify(assemblyAIPayload, null, 2));
-    
-    console.log('  🕐 TIMING INFORMATION:');
-    console.log('    Original clip timing (ms):', { startMs, endMs, durationMs: endMs - startMs });
-    console.log('    File contains exact segment - no timing parameters needed');
-    
-    console.log('  🎯 EXPECTED OUTCOME: PERFECT SYNC');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✂️ File upload approach - no timing parameters needed');
+
+      console.log('🎬 ASSEMBLYAI REQUEST PAYLOAD:');
+      console.log('  🔗 AUDIO SOURCE:');
+      console.log('    Original URL:', audio_url);
+      console.log('    AssemblyAI File URL:', assemblyAIAudioUrl);
+      console.log('    Method: FILE UPLOAD ONLY');
+
+      console.log('  📤 Full payload:', JSON.stringify(assemblyAIPayload, null, 2));
+
+      console.log('  🕐 TIMING INFORMATION:');
+      console.log('    Original clip timing (ms):', { startMs, endMs, durationMs: endMs - startMs });
+      console.log('    File contains exact segment - no timing parameters needed');
+
+      console.log('  🎯 EXPECTED OUTCOME: PERFECT SYNC');
+    }
     
     // Make request to AssemblyAI
-    console.log('📡 Making request to AssemblyAI...');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📡 Making request to AssemblyAI...');
+    }
     const response = await axios.post('https://api.assemblyai.com/v2/transcript', assemblyAIPayload, {
       headers: {
         'Authorization': `Bearer ${ASSEMBLY_AI_API_KEY}`,
@@ -169,9 +183,11 @@ module.exports = async (req, res) => {
       validateStatus: () => true, // Don't throw on non-2xx status
     });
     
-    console.log('📡 AssemblyAI response status:', response.status);
-    console.log('📡 AssemblyAI response headers:', JSON.stringify(response.headers, null, 2));
-    console.log('📡 AssemblyAI response data:', JSON.stringify(response.data, null, 2));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📡 AssemblyAI response status:', response.status);
+      console.log('📡 AssemblyAI response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('📡 AssemblyAI response data:', JSON.stringify(response.data, null, 2));
+    }
     
     // Handle different response statuses
     if (response.status === 401 || response.status === 403) {
@@ -206,8 +222,10 @@ module.exports = async (req, res) => {
       });
     }
     
-    console.log('✅ AssemblyAI request successful!');
-    console.log('📤 Returning response to client:', JSON.stringify(response.data, null, 2));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ AssemblyAI request successful!');
+      console.log('📤 Returning response to client:', JSON.stringify(response.data, null, 2));
+    }
     
     res.json(response.data);
     

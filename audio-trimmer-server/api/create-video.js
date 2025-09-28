@@ -6,12 +6,10 @@ const logger = require('../services/logger');
 const config = require('../config/settings');
 
 module.exports = async (req, res) => {
-  // Big celebratory announcement for new video requests (development only)
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('\n' + '🎉'.repeat(20));
-    console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
-    console.log('🎉'.repeat(20));
-  }
+  // Big celebratory announcement for new video requests
+  console.log('\n' + '🎉'.repeat(20));
+  console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
+  console.log('🎉'.repeat(20));
 
   logger.info('🎉🎉 Video creation request received', {
     ip: req.ip,
