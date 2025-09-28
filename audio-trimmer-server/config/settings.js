@@ -13,7 +13,7 @@ module.exports = {
     MAX_CONCURRENT: 3,
     MAX_QUEUE_SIZE: 10,
     JOB_TIMEOUT_MS: 120000, // 2 minutes
-    CLEANUP_AFTER_HOURS: 6
+    CLEANUP_AFTER_HOURS: 2160 // 3 months (90 days × 24 hours)
   },
   
   // Cost control

@@ -48,8 +48,8 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const API_BASE_URL = process.env.EXPO_PUBLIC_CAPTION_PROXY_BASE || 'https://audio-trimmer-service-production.up.railway.app';
 
 // Feature flags
-const ENABLE_SERVER_VIDEO = process.env.EXPO_PUBLIC_ENABLE_SERVER_VIDEO === 'true' || false;
-const ENABLE_PUSH_NOTIFICATIONS = process.env.EXPO_PUBLIC_ENABLE_PUSH_NOTIFICATIONS === 'true' || ENABLE_SERVER_VIDEO;
+const ENABLE_SERVER_VIDEO = true; // Server-side video is the default in 2.0
+const ENABLE_PUSH_NOTIFICATIONS = true; // Required for server-side video notifications
 
 // Utility function for formatting time
 const formatTime = (millis) => {
@@ -805,6 +805,13 @@ export default function App() {
   const [deviceToken, setDeviceToken] = useState(null);
   const [videoReadyBanner, setVideoReadyBanner] = useState(null); // { jobId, podcastName, episodeTitle }
 
+  // Notification history state
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+
+  // Calculate unread count from notifications array
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   // App state listener - ONLY for recording cleanup (not audio position)
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
@@ -847,6 +854,20 @@ export default function App() {
           // On notification received (while app is open)
           (notification) => {
             console.log('📱 Push notification received while app open:', notification);
+
+            // Add notification to history
+            const newNotification = {
+              id: Date.now().toString(),
+              title: notification.request?.content?.title || 'Video Ready',
+              body: notification.request?.content?.body || 'Your video has been processed',
+              timestamp: new Date(),
+              read: false,
+              jobId: notification.request?.content?.data?.jobId,
+              podcastName: notification.request?.content?.data?.podcastName,
+              episodeTitle: notification.request?.content?.data?.episodeTitle,
+            };
+
+            setNotifications(prev => [newNotification, ...prev]);
           },
 
           // On notification tapped
@@ -2201,12 +2222,9 @@ export default function App() {
                 if (isProblematic) {
                   setCaptionsEnabled(captionsEnabledForRecording);
                 }
-                // For server-side video, directly create video without showing recording view
-                if (ENABLE_SERVER_VIDEO) {
-                  createServerSideVideo();
-                } else {
-                  setShowRecordingView(true);
-                }
+                // Server-side video generation (2.0 default)
+                console.log('🎬 Record button - using server-side video generation');
+                createServerSideVideo();
               }}
             >
               <Text style={{
@@ -2623,12 +2641,8 @@ export default function App() {
       await loadEpisode(selectedEpisode);
     }
 
-    // For server-side video, skip the modal and go directly to video creation
-    if (ENABLE_SERVER_VIDEO) {
-      createServerSideVideo();
-    } else {
-      setShowRecordingGuidance(true);
-    }
+    // Server-side video generation (2.0 default)
+    createServerSideVideo();
   };
 
   // Add caption status info display (optional)
@@ -2771,7 +2785,14 @@ export default function App() {
 
   // Server-side video creation (alternative to screen recording)
   const createServerSideVideo = async () => {
+    console.log('🚀 SERVER-SIDE VIDEO CREATION TRIGGERED');
+    console.log('🚀 ENABLE_SERVER_VIDEO:', ENABLE_SERVER_VIDEO);
+    console.log('🚀 Selected episode:', selectedEpisode?.title);
+    console.log('🚀 Device token:', deviceToken ? 'Available' : 'Missing');
+    console.log('🚀 Clip times:', { clipStart, clipEnd });
+
     if (!selectedEpisode || clipStart === null || clipEnd === null) {
+      console.log('❌ Missing episode or clip times');
       Alert.alert('Error', 'Please select an episode and set clip start/end times');
       return;
     }
@@ -3497,7 +3518,7 @@ export default function App() {
                   preparedTranscript={preparedTranscript}
                   isRecording={isRecording}
                   recordingStatus={recordingStatus}
-                  startVideoRecording={ENABLE_SERVER_VIDEO ? createServerSideVideo : startVideoRecording}
+                  startVideoRecording={createServerSideVideo}
                   cleanupRecording={cleanupRecording}
                   setShowRecordingView={setShowRecordingView}
                   styles={styles}
@@ -3567,8 +3588,8 @@ export default function App() {
                           {/* Header */}
                           <View style={styles.header}>
                             <View style={styles.logoContainer}>
-                              <HomeAnimatedWaveform 
-                                isPlaying={isPlaying} 
+                              <HomeAnimatedWaveform
+                                isPlaying={isPlaying}
                                 size="large"
                                 style={{ width: 200, height: 80, marginBottom: -8 }}
                               />
@@ -3588,6 +3609,24 @@ export default function App() {
                               </TouchableOpacity>
                               <Text style={styles.subtitle}>Turn audio to clips for social sharing</Text>
                             </View>
+                            {/* Notification Bell */}
+                            <TouchableOpacity
+                              style={styles.notificationBell}
+                              onPress={() => setShowNotificationsModal(true)}
+                            >
+                              <MaterialCommunityIcons
+                                name="bell-outline"
+                                size={24}
+                                color="#f4f4f4"
+                              />
+                              {unreadCount > 0 && (
+                                <View style={styles.notificationBadge}>
+                                  <Text style={styles.notificationBadgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                  </Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
                           </View>
 
                           {/* Search Bar Component */}
@@ -4026,6 +4065,99 @@ export default function App() {
               {showRecordingGuidance && <RecordingGuidanceModal />}
         {showProcessingModal && <ProcessingModal />}
         {showAboutModal && <AboutModal visible={showAboutModal} onClose={() => setShowAboutModal(false)} />}
+
+        {/* Notifications Modal */}
+        <Modal
+          visible={showNotificationsModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowNotificationsModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.notificationsModal}>
+              <View style={styles.notificationsHeader}>
+                <Text style={styles.notificationsTitle}>Notifications</Text>
+                <TouchableOpacity
+                  onPress={() => setShowNotificationsModal(false)}
+                  style={styles.closeButton}
+                >
+                  <MaterialCommunityIcons name="close" size={24} color="#f4f4f4" />
+                </TouchableOpacity>
+              </View>
+
+              {notifications.length === 0 ? (
+                <View style={styles.emptyNotifications}>
+                  <MaterialCommunityIcons name="bell-outline" size={48} color="#666" />
+                  <Text style={styles.emptyNotificationsText}>No notifications yet</Text>
+                  <Text style={styles.emptyNotificationsSubtext}>
+                    You'll see video completion notifications here
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={notifications}
+                  keyExtractor={(item) => item.id}
+                  style={styles.notificationsList}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.notificationItem,
+                        !item.read && styles.unreadNotification
+                      ]}
+                      onPress={() => {
+                        // Mark as read
+                        setNotifications(prev =>
+                          prev.map(n =>
+                            n.id === item.id ? { ...n, read: true } : n
+                          )
+                        );
+
+                        // Show video ready banner if available
+                        if (item.jobId && item.podcastName) {
+                          setVideoReadyBanner({
+                            jobId: item.jobId,
+                            podcastName: item.podcastName,
+                            episodeTitle: item.episodeTitle || 'Unknown Episode'
+                          });
+                        }
+                        setShowNotificationsModal(false);
+                      }}
+                    >
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationTitle} numberOfLines={2}>{item.title}</Text>
+                        <Text style={styles.notificationBody} numberOfLines={3}>{item.body}</Text>
+                        {item.podcastName && (
+                          <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
+                        )}
+                        <Text style={styles.notificationTime}>
+                          {new Date(item.timestamp).toLocaleString()}
+                        </Text>
+                      </View>
+                      {!item.read && <View style={styles.unreadDot} />}
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+
+              {/* About Link */}
+              <TouchableOpacity
+                style={styles.notificationsAboutLink}
+                onPress={() => {
+                  setShowNotificationsModal(false);
+                  setShowAboutModal(true);
+                }}
+              >
+                <Text style={styles.notificationsAboutText}>About </Text>
+                <HomeAnimatedWaveform
+                  isPlaying={isPlaying}
+                  size="small"
+                  style={{ width: 60, height: 20, marginHorizontal: 4 }}
+                />
+                <Text style={styles.notificationsAboutText}> Audio2</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       
       {/* Episode Loading Spinner */}
       {isEpisodeLoading && (
@@ -4109,9 +4241,12 @@ const styles = StyleSheet.create({
   
   // Header styles
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20, // Reduced from 30
     marginTop: 10,    // Reduced from 20
+    paddingHorizontal: 20,
   },
   logo: {
     width: 460,  // Reduced from 552 
@@ -4132,6 +4267,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 5,
     paddingVertical: 20,
+    flex: 1,
+  },
+  notificationBell: {
+    padding: 8,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#ff4444',
+    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   
   appTitle: {
@@ -5619,6 +5777,116 @@ suggestionTagText: {
     textShadowColor: 'rgba(0, 0, 0, 0.9)',
     textShadowOffset: { width: 1, height: 2 },
     textShadowRadius: 4,
+  },
+
+  // Notifications Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationsModal: {
+    backgroundColor: '#2d2d2d',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 0,
+    overflow: 'hidden',
+  },
+  notificationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+  },
+  notificationsTitle: {
+    color: '#f4f4f4',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  emptyNotifications: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    paddingTop: 60,
+  },
+  emptyNotificationsText: {
+    color: '#f4f4f4',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyNotificationsSubtext: {
+    color: '#999',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  notificationsList: {
+    flex: 1,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+    backgroundColor: '#2d2d2d',
+  },
+  unreadNotification: {
+    backgroundColor: '#1a1a1a',
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTitle: {
+    color: '#f4f4f4',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  notificationBody: {
+    color: '#ccc',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  notificationPodcast: {
+    color: '#007AFF',
+    fontSize: 13,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  notificationTime: {
+    color: '#999',
+    fontSize: 12,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff4444',
+    marginLeft: 8,
+    marginTop: 8,
+  },
+  notificationsAboutLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#404040',
+    backgroundColor: '#2d2d2d',
+  },
+  notificationsAboutText: {
+    color: '#999',
+    fontSize: 14,
+    fontFamily: 'Lobster',
   },
 
 });
