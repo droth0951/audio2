@@ -44,7 +44,7 @@ class CaptionProcessor {
       });
 
       const uploadResponse = await this.assemblyai.files.upload(audioBuffer);
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
         logger.debug('AssemblyAI upload response:', { jobId, uploadResponse });
       }
 
@@ -78,7 +78,7 @@ class CaptionProcessor {
       const transcript = await this.assemblyai.transcripts.create(transcriptRequest);
 
       // 3. Wait for completion with progress logging
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
         logger.debug('⏳ Waiting for transcription completion', {
           jobId,
           transcriptId: transcript.id
@@ -164,7 +164,7 @@ class CaptionProcessor {
           start: h.start,
           end: h.end
         }));
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
           logger.debug('🎯 Found highlights', { jobId, count: highlights.length, highlights });
         }
       }
@@ -175,7 +175,7 @@ class CaptionProcessor {
           acc[entity.entity_type] = (acc[entity.entity_type] || 0) + 1;
           return acc;
         }, {});
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
           logger.debug('🏷️ Found entities', { jobId, entitySummary });
         }
       }
@@ -186,7 +186,7 @@ class CaptionProcessor {
           acc[item.sentiment] = (acc[item.sentiment] || 0) + 1;
           return acc;
         }, {});
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
           logger.debug('😊 Sentiment analysis', { jobId, sentimentSummary });
         }
       }
@@ -196,7 +196,7 @@ class CaptionProcessor {
         const topTopics = Object.entries(transcript.iab_categories_result.summary)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 3);
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
           logger.debug('📂 Top topics', { jobId, topTopics });
         }
       }
@@ -398,7 +398,7 @@ class CaptionProcessor {
 
     // For very short text, return as is
     if (text.length <= 35) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
         console.log(`✅ Short text (≤35), returning as single chunk`);
       }
       return [{ text, startMs, endMs }];
