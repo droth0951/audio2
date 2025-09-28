@@ -334,10 +334,10 @@ class FrameGenerator {
         currentCaption = currentCaptionData?.text || '';
       }
 
-      // NEW: Precise caption positioning - between progress bar and watermark
+      // NEW: Precise caption positioning - in lower third of video, below progress bar
       const progressBarBottom = progressElements.progressBar.y + progressElements.progressBar.height;
-      const watermarkY = progressElements.watermarkText.y;
-      const captionY = progressBarBottom + ((watermarkY - progressBarBottom) * 0.3); // 30% of space between elements
+      const captionSpacing = Math.floor(60 * scaleFactor); // Space below progress bar
+      const captionY = progressBarBottom + captionSpacing;
 
       const templateData = {
         width: dimensions.width,

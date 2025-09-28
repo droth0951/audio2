@@ -459,5 +459,47 @@
       "storage": 0.11381979,
       "processing": 0.569693
     }
+  },
+  "2025-09-28T04:00:00.000Z": {
+    "date": "2025-09-28T04:00:00.000Z",
+    "totalCost": 0.42248035000000006,
+    "jobCount": 2,
+    "jobs": [
+      {
+        "jobId": "vid_f09ba636",
+        "timestamp": "2025-09-28T14:55:59.996Z",
+        "costs": {
+          "audioDownload": 0.001,
+          "frameGeneration": 0.036000000000000004,
+          "videoComposition": 0.0015,
+          "storage": 0.008230340000000001,
+          "processing": 0.07423099999999999,
+          "processingTimeMs": 74231
+        },
+        "total": 0.12096134,
+        "processingTime": 74231
+      },
+      {
+        "jobId": "vid_1c086ae1",
+        "timestamp": "2025-09-28T14:57:54.700Z",
+        "costs": {
+          "audioDownload": 0.0025298,
+          "frameGeneration": 0.0911,
+          "videoComposition": 0.0037947,
+          "storage": 0.02361651,
+          "processing": 0.180478,
+          "processingTimeMs": 180478
+        },
+        "total": 0.30151901000000003,
+        "processingTime": 180478
+      }
+    ],
+    "breakdown": {
+      "audioDownload": 0.0035298,
+      "frameGeneration": 0.1271,
+      "videoComposition": 0.005294699999999999,
+      "storage": 0.03184685,
+      "processing": 0.25470899999999996
+    }
   }
 }

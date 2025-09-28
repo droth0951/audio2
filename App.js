@@ -807,6 +807,31 @@ export default function App() {
 
   // Notification history state
   const [notifications, setNotifications] = useState([]);
+
+  // Load stored notifications on app start
+  useEffect(() => {
+    const loadStoredNotifications = async () => {
+      try {
+        console.log('🔔 Loading stored notifications...');
+        const storedNotifications = await AsyncStorage.getItem('notifications');
+        console.log('🔔 Raw stored notifications:', storedNotifications);
+        if (storedNotifications) {
+          const parsedNotifications = JSON.parse(storedNotifications).map(n => ({
+            ...n,
+            timestamp: new Date(n.timestamp) // Convert timestamp back to Date object
+          }));
+          console.log('🔔 Parsed notifications:', parsedNotifications.length, 'items');
+          setNotifications(parsedNotifications);
+        } else {
+          console.log('🔔 No stored notifications found');
+        }
+      } catch (error) {
+        console.error('Failed to load stored notifications:', error);
+      }
+    };
+
+    loadStoredNotifications();
+  }, []);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   // Calculate unread count from notifications array
@@ -849,6 +874,63 @@ export default function App() {
           console.log('✅ Push notifications ready with token:', token.substring(0, 20) + '...');
         }
 
+        // Check for notification that launched the app
+        const checkInitialNotification = async () => {
+          try {
+            const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+            console.log('🔔 Last notification response:', lastNotificationResponse);
+
+            if (lastNotificationResponse && lastNotificationResponse.notification) {
+              const notification = lastNotificationResponse.notification;
+              const jobId = notification.request.content.data?.jobId;
+              const data = notification.request.content.data || {};
+
+              if (jobId) {
+                console.log('🔔 App opened from notification:', jobId, data);
+
+                // Add notification to history if not already present
+                const newNotification = {
+                  id: Date.now().toString(),
+                  title: notification.request.content.title || 'Video Ready',
+                  body: notification.request.content.body || 'Your video has been processed',
+                  timestamp: new Date(),
+                  read: false,
+                  jobId: jobId,
+                  podcastName: data.podcastName,
+                  episodeTitle: data.episodeTitle,
+                };
+
+                setNotifications(prev => {
+                  // Check if notification already exists to avoid duplicates
+                  const exists = prev.some(n => n.jobId === jobId);
+                  if (!exists) {
+                    const updatedNotifications = [newNotification, ...prev];
+                    // Persist notifications to storage
+                    AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                      console.error('Failed to save notifications:', error);
+                    });
+                    return updatedNotifications;
+                  }
+                  return prev;
+                });
+
+                // Show video ready banner
+                if (data.podcastName) {
+                  setVideoReadyBanner({
+                    jobId,
+                    podcastName: data.podcastName,
+                    episodeTitle: data.episodeTitle || 'Unknown Episode'
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Failed to check initial notification:', error);
+          }
+        };
+
+        await checkInitialNotification();
+
         // Set up notification listeners
         PushNotificationService.setupNotificationListeners(
           // On notification received (while app is open)
@@ -867,12 +949,45 @@ export default function App() {
               episodeTitle: notification.request?.content?.data?.episodeTitle,
             };
 
-            setNotifications(prev => [newNotification, ...prev]);
+            setNotifications(prev => {
+              const updatedNotifications = [newNotification, ...prev];
+              // Persist notifications to storage
+              AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                console.error('Failed to save notifications:', error);
+              });
+              return updatedNotifications;
+            });
           },
 
           // On notification tapped
           (jobId, data) => {
             console.log('👆 Push notification tapped:', jobId, data);
+
+            // Add notification to history if not already present (for notifications received while app was closed)
+            const newNotification = {
+              id: Date.now().toString(),
+              title: data.title || 'Video Ready',
+              body: data.body || 'Your video has been processed',
+              timestamp: new Date(),
+              read: false,
+              jobId: jobId,
+              podcastName: data.podcastName,
+              episodeTitle: data.episodeTitle,
+            };
+
+            setNotifications(prev => {
+              // Check if notification already exists to avoid duplicates
+              const exists = prev.some(n => n.jobId === jobId);
+              if (!exists) {
+                const updatedNotifications = [newNotification, ...prev];
+                // Persist notifications to storage
+                AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                  console.error('Failed to save notifications:', error);
+                });
+                return updatedNotifications;
+              }
+              return prev;
+            });
 
             // Show video ready banner
             if (jobId && data.podcastName) {
@@ -2828,12 +2943,12 @@ export default function App() {
         captionsEnabled
       );
 
-      setRecordingStatus(`Video queued! You'll get a notification when it's ready (~5 minutes)`);
+      setRecordingStatus(`Video queued! You'll get a notification when it's ready (less than 5 minutes)`);
 
       // Show success message
       Alert.alert(
         '🎬 Video Creation Started',
-        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: ~5 minutes`,
+        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: less than 5 minutes`,
         [
           {
             text: 'OK',
@@ -4085,6 +4200,8 @@ export default function App() {
                 </TouchableOpacity>
               </View>
 
+              {/* Debug notifications state */}
+              {console.log('🔔 Modal render - notifications.length:', notifications.length, 'notifications:', notifications)}
               {notifications.length === 0 ? (
                 <View style={styles.emptyNotifications}>
                   <MaterialCommunityIcons name="bell-outline" size={48} color="#666" />
@@ -4106,11 +4223,16 @@ export default function App() {
                       ]}
                       onPress={() => {
                         // Mark as read
-                        setNotifications(prev =>
-                          prev.map(n =>
+                        setNotifications(prev => {
+                          const updatedNotifications = prev.map(n =>
                             n.id === item.id ? { ...n, read: true } : n
-                          )
-                        );
+                          );
+                          // Persist updated notifications
+                          AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                            console.error('Failed to save notifications:', error);
+                          });
+                          return updatedNotifications;
+                        });
 
                         // Show video ready banner if available
                         if (item.jobId && item.podcastName) {
@@ -4264,7 +4386,7 @@ const styles = StyleSheet.create({
   
   logoContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Changed from 'center' to align waveform at top
     marginBottom: 5,
     paddingVertical: 20,
     flex: 1,
@@ -4272,6 +4394,8 @@ const styles = StyleSheet.create({
   notificationBell: {
     padding: 8,
     position: 'relative',
+    alignSelf: 'flex-start',
+    marginTop: 15, // Align with waveform position
   },
   notificationBadge: {
     position: 'absolute',
@@ -5791,6 +5915,7 @@ suggestionTagText: {
     borderRadius: 12,
     width: '90%',
     maxHeight: '80%',
+    minHeight: 400, // Add minimum height
     padding: 0,
     overflow: 'hidden',
   },
