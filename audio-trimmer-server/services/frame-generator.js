@@ -659,7 +659,7 @@ class FrameGenerator {
     if (transcript?.words?.length) {
       // IMPROVED: Time-based caption chunks for better readability
       const CAPTION_WINDOW_MS = 3000; // 3 second window for stable display
-      const MAX_WORDS_PER_CAPTION = 8; // Reduced for 32-char limit
+      const MAX_WORDS_PER_CAPTION = 8; // Reduced for 30-char limit
 
       // Find words in current time window
       const windowStart = Math.max(0, currentTimeMs - CAPTION_WINDOW_MS);
@@ -840,7 +840,7 @@ class FrameGenerator {
   }
 
   // Helper to split long captions (respects 2-line max rule for readability)
-  splitCaptionIntoLines(text, maxCharsPerLine = 32) { // Changed to 32 chars as per industry standard
+  splitCaptionIntoLines(text, maxCharsPerLine = 30) { // Reduced by 2 chars for better line breaks
     if (!text || text.length <= maxCharsPerLine) return [text];
 
     // For SRT captions, lines may already be optimized
