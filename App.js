@@ -2283,7 +2283,17 @@ export default function App() {
           },
           body: JSON.stringify(assemblyAIPayload)
         });
-          
+
+        // Check if the transcript service is unavailable (404)
+        if (submitResponse.status === 404) {
+          Alert.alert(
+            'Captions disabled in 1.4',
+            'Captions are no longer available in this version of Audio2. Check the App Store for a later version with enhanced video and caption options.',
+            [{ text: 'Continue Without Captions', onPress: () => setCaptionsEnabled(false) }]
+          );
+          throw new Error('Transcript service unavailable');
+        }
+
         const job = await submitResponse.json();
 
         console.log('🎬 AssemblyAI Job Created:', {
@@ -2321,7 +2331,17 @@ export default function App() {
           const checkResponse = await fetch(`${API_BASE_URL}/api/transcript/${job.id}`, {
             headers: { 'Content-Type': 'application/json' }
           });
-          
+
+          // Check if the transcript service is unavailable (404)
+          if (checkResponse.status === 404) {
+            Alert.alert(
+              'Captions disabled in 1.4',
+              'Captions are no longer available in this version of Audio2. Check the App Store for a later version with enhanced video and caption options.',
+              [{ text: 'Continue Without Captions', onPress: () => setCaptionsEnabled(false) }]
+            );
+            throw new Error('Transcript service unavailable');
+          }
+
           const result = await checkResponse.json();
           
                       if (result.status === 'completed') {
