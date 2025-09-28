@@ -4246,8 +4246,13 @@ export default function App() {
                       }}
                     >
                       <View style={styles.notificationContent}>
-                        <Text style={styles.notificationTitle} numberOfLines={2}>{item.title}</Text>
-                        <Text style={styles.notificationBody} numberOfLines={3}>{item.body}</Text>
+                        <Text style={styles.notificationTitle} numberOfLines={2}>Video Ready</Text>
+                        <Text style={styles.notificationBody} numberOfLines={3}>
+                          {item.episodeTitle ?
+                            `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
+                            'Your clip is now ready for saving and sharing!'
+                          }
+                        </Text>
                         {item.podcastName && (
                           <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
                         )}
