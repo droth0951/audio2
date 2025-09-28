@@ -131,7 +131,7 @@ class IOSPushNotificationService {
       to: deviceToken,
       sound: 'default',
       title: 'Audio2',
-      body: '🎧 Your Audio2 video clip is ready!',
+      body: `Your ${podcastName} clip is now ready for saving and sharing!`,
       data: {
         jobId: jobId,
         podcastName: podcastName,
@@ -175,7 +175,7 @@ class IOSPushNotificationService {
       aps: {
         alert: {
           title: 'Audio2',
-          body: '🎧 Your Audio2 video clip is ready!'
+          body: `Your ${podcastName} clip is now ready for saving and sharing!`
         },
         badge: 1,
         sound: 'default',
