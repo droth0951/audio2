@@ -101,30 +101,17 @@ class IOSPushNotificationService {
     }
 
     try {
-      const payload = {
-        aps: {
-          alert: {
-            title: 'Audio2',
-            body: '🎧 Your Audio2 video clip is ready!'
-          },
-          badge: 1,
-          sound: 'default',
-          category: 'VIDEO_READY'
-        },
-        // Custom data
-        jobId: jobId,
-        podcastName: podcastName,
-        episodeTitle: episodeTitle,
-        deepLink: `audio2://video-ready?jobId=${jobId}`
-      };
-
-      const authToken = this.generateAuthToken();
-      const apnsId = this.generateAPNsId(); // Generate proper UUID for APNs
-
-      await this.sendAPNsRequest(deviceToken, payload, authToken, apnsId);
+      // Check if this is an Expo push token
+      if (deviceToken.startsWith('ExponentPushToken[') || deviceToken.startsWith('Exponent')) {
+        await this.sendExpoPushNotification(deviceToken, jobId, podcastName, episodeTitle);
+      } else {
+        // Native APNs token
+        await this.sendNativeAPNsNotification(deviceToken, jobId, podcastName, episodeTitle);
+      }
 
       logger.success('📱 iOS push notification sent', {
         jobId,
+        tokenType: deviceToken.startsWith('ExponentPushToken') ? 'Expo' : 'Native APNs',
         deviceToken: deviceToken.substring(0, 8) + '...',
         podcastName
       });
@@ -136,6 +123,75 @@ class IOSPushNotificationService {
         stack: error.stack
       });
     }
+  }
+
+  // Send push notification via Expo Push API
+  async sendExpoPushNotification(deviceToken, jobId, podcastName, episodeTitle) {
+    const message = {
+      to: deviceToken,
+      sound: 'default',
+      title: 'Audio2',
+      body: '🎧 Your Audio2 video clip is ready!',
+      data: {
+        jobId: jobId,
+        podcastName: podcastName,
+        episodeTitle: episodeTitle,
+        deepLink: `audio2://video-ready?jobId=${jobId}`
+      },
+      categoryId: 'VIDEO_READY',
+      badge: 1
+    };
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Expo Push API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.data && result.data[0] && result.data[0].status === 'error') {
+      throw new Error(`Expo Push error: ${result.data[0].message}`);
+    }
+
+    logger.debug('✅ Expo push notification sent successfully', {
+      jobId,
+      response: result
+    });
+  }
+
+  // Send push notification via native APNs
+  async sendNativeAPNsNotification(deviceToken, jobId, podcastName, episodeTitle) {
+    const payload = {
+      aps: {
+        alert: {
+          title: 'Audio2',
+          body: '🎧 Your Audio2 video clip is ready!'
+        },
+        badge: 1,
+        sound: 'default',
+        category: 'VIDEO_READY'
+      },
+      // Custom data
+      jobId: jobId,
+      podcastName: podcastName,
+      episodeTitle: episodeTitle,
+      deepLink: `audio2://video-ready?jobId=${jobId}`
+    };
+
+    const authToken = this.generateAuthToken();
+    const apnsId = this.generateAPNsId(); // Generate proper UUID for APNs
+
+    await this.sendAPNsRequest(deviceToken, payload, authToken, apnsId);
   }
 
   // Send HTTP/2 request to APNs
