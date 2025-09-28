@@ -10,6 +10,9 @@ const costAnalytics = require('./cost-analytics');
 const audioProcessor = require('./audio-processor');
 const captionProcessor = require('./caption-processor');
 
+// URL helper for environment-aware URLs
+const { generateVideoUrl, generateDownloadUrl } = require('../utils/url-helper');
+
 // Lazy load video generation services to prevent Sharp loading at startup
 let frameGenerator = null;
 let videoComposer = null;
@@ -93,13 +96,17 @@ class JobQueue {
 
       // Generate job
       const jobId = `vid_${uuidv4().substring(0, 8)}`;
+
+      // Simple realistic estimate: ~5 minutes for Railway deployment
+      const estimatedTime = 300; // 5 minutes in seconds
+
       const job = {
         jobId,
         status: 'queued',
         request,
         estimatedCost,
         createdAt: new Date().toISOString(),
-        estimatedTime: Math.min(45 + (duration * 0.5), 90), // Scale with duration
+        estimatedTime,
         retries: 0,
         maxRetries: 2
       };
@@ -136,6 +143,7 @@ class JobQueue {
 
     return audioCost + processingCost + storageCost + captionCost;
   }
+
 
   // Get job position in queue
   getQueuePosition(jobId) {
@@ -338,7 +346,7 @@ class JobQueue {
       logger.success('🎬 VIDEO READY FOR DOWNLOAD! 🎬', {
         jobId,
         videoUrl,
-        downloadUrl: `http://localhost:3001/api/download-video/${jobId}`,
+        downloadUrl: generateDownloadUrl(jobId),
         fileSize: `${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
         duration: `${videoResult.duration}s`
       });
