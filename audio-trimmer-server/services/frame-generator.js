@@ -446,12 +446,12 @@ class FrameGenerator {
     const progressFillWidth = progressWidth * progress; // progress = 0.0 to 1.0
 
     // ========================================
-    // 2. DANCING BARS WATERMARK (BOTTOM-RIGHT)
+    // 2. DANCING BARS WATERMARK (UPPER-RIGHT)
     // ========================================
     const watermarkRightMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
-    const watermarkBottomMargin = 20 * scaleFactor; // Properly scaled for 1080p (~54px)
+    const watermarkTopMargin = 60 * scaleFactor; // 60px from top edge for social media safe zone
     const watermarkX = dimensions.width - watermarkRightMargin - (60 * scaleFactor); // Even smaller total width
-    const watermarkY = dimensions.height - watermarkBottomMargin;
+    const watermarkY = watermarkTopMargin;
 
     // Dancing bars configuration
     const barHeights = [6, 10, 8, 12, 7]; // Base heights in logical pixels

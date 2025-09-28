@@ -32,6 +32,16 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env*
+
+# temp files
+audio-trimmer-server/temp/frames_*
+audio-trimmer-server/temp/video_*.mp4
+audio-trimmer-server/temp/audio_*.mp3
+
+# logs and data
+audio-trimmer-server/logs/
+*.log
 
 # typescript
 *.tsbuildinfo

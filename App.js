@@ -2714,12 +2714,12 @@ export default function App() {
         captionsEnabled
       );
 
-      setRecordingStatus(`Video queued! You'll get a notification when it's ready (${result.estimatedTime}s)`);
+      setRecordingStatus(`Video queued! You'll get a notification when it's ready (~5 minutes)`);
 
       // Show success message
       Alert.alert(
         '🎬 Video Creation Started',
-        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: ${result.estimatedTime} seconds`,
+        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: ~5 minutes`,
         [
           {
             text: 'OK',

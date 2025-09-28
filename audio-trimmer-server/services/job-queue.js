@@ -13,6 +13,9 @@ const captionProcessor = require('./caption-processor');
 // URL helper for environment-aware URLs
 const { generateVideoUrl, generateDownloadUrl } = require('../utils/url-helper');
 
+// Database service for job persistence
+const jobDatabase = require('./job-database');
+
 // Lazy load video generation services to prevent Sharp loading at startup
 let frameGenerator = null;
 let videoComposer = null;
@@ -33,10 +36,124 @@ function getVideoComposer() {
 
 class JobQueue {
   constructor() {
-    this.jobs = new Map(); // jobId -> job data
+    this.jobs = new Map(); // jobId -> job data (in-memory cache)
     this.activeJobs = new Set(); // currently processing
     this.dailyCosts = new Map(); // date -> total cost
     this.startOfDay = this.getStartOfDay();
+    this.usingDatabase = false;
+
+    // Initialize database and restore jobs from previous session
+    this.initializeFromDatabase();
+  }
+
+  async initializeFromDatabase() {
+    try {
+      if (jobDatabase.isAvailable()) {
+        this.usingDatabase = true;
+
+        // Restore jobs that were in progress during restart
+        const processingJobs = await jobDatabase.getJobsByStatus('processing');
+        const queuedJobs = await jobDatabase.getJobsByStatus('queued');
+
+        // Convert database jobs back to memory format
+        [...processingJobs, ...queuedJobs].forEach(dbJob => {
+          const job = this.convertDbJobToMemory(dbJob);
+          this.jobs.set(job.jobId, job);
+
+          // Resume processing for jobs that were interrupted
+          if (dbJob.status === 'processing') {
+            logger.warn('Resuming interrupted job after restart', { jobId: job.jobId });
+            // Reset to queued so it can be processed again
+            job.status = 'queued';
+            jobDatabase.updateJobStatus(job.jobId, 'queued');
+          }
+        });
+
+        logger.success('📊 Job queue restored from database', {
+          restoredJobs: processingJobs.length + queuedJobs.length,
+          processingJobs: processingJobs.length,
+          queuedJobs: queuedJobs.length
+        });
+
+        // Start processing any queued jobs
+        this.processNextJob();
+
+      } else {
+        logger.debug('Using memory-only job storage (local development)');
+      }
+    } catch (error) {
+      logger.error('Failed to initialize from database', { error: error.message });
+      this.usingDatabase = false;
+    }
+  }
+
+  // Convert database job format to memory format
+  convertDbJobToMemory(dbJob) {
+    return {
+      jobId: dbJob.job_id,
+      status: dbJob.status,
+      request: dbJob.request_data,
+      estimatedCost: parseFloat(dbJob.estimated_cost),
+      estimatedTime: dbJob.estimated_time,
+      createdAt: dbJob.created_at.toISOString(),
+      startedAt: dbJob.started_at?.toISOString(),
+      completedAt: dbJob.completed_at?.toISOString(),
+      failedAt: dbJob.failed_at?.toISOString(),
+      error: dbJob.error_message,
+      result: dbJob.result_data,
+      processingTime: dbJob.processing_time,
+      retries: dbJob.retries || 0,
+      maxRetries: dbJob.max_retries || 2
+    };
+  }
+
+  // Helper method to update job status in both memory and database
+  updateJobStatus(jobId, status, additionalData = {}) {
+    const job = this.jobs.get(jobId);
+    if (!job) return;
+
+    // Update in-memory job
+    job.status = status;
+
+    // Update database
+    if (this.usingDatabase) {
+      const dbData = {
+        ...additionalData
+      };
+
+      // Add specific fields based on status
+      if (status === 'processing' && !job.startedAt) {
+        job.startedAt = new Date().toISOString();
+      } else if (status === 'completed') {
+        job.completedAt = new Date().toISOString();
+        if (additionalData.result) {
+          job.result = additionalData.result;
+          dbData.resultData = additionalData.result;
+        }
+        if (additionalData.processingTime) {
+          job.processingTime = additionalData.processingTime;
+          dbData.processingTime = additionalData.processingTime;
+        }
+      } else if (status === 'failed') {
+        job.failedAt = new Date().toISOString();
+        if (additionalData.error) {
+          job.error = additionalData.error;
+          dbData.errorMessage = additionalData.error;
+        }
+        if (additionalData.retries !== undefined) {
+          job.retries = additionalData.retries;
+          dbData.retries = additionalData.retries;
+        }
+      }
+
+      jobDatabase.updateJobStatus(jobId, status, dbData).catch(error => {
+        logger.error('Failed to update job status in database', {
+          jobId,
+          status,
+          error: error.message
+        });
+      });
+    }
   }
 
   getStartOfDay() {
@@ -113,7 +230,17 @@ class JobQueue {
 
       this.jobs.set(jobId, job);
       logger.logJobStart(jobId, request);
-      
+
+      // Save job to database for persistence
+      if (this.usingDatabase) {
+        jobDatabase.createJob(job).catch(error => {
+          logger.error('Failed to persist job to database', {
+            jobId,
+            error: error.message
+          });
+        });
+      }
+
       // Try to start processing immediately
       this.processNextJob();
 
@@ -191,8 +318,9 @@ class JobQueue {
 
       // Start processing
       this.activeJobs.add(nextJob.jobId);
-      nextJob.status = 'processing';
-      nextJob.startedAt = new Date().toISOString();
+
+      // Update job status to processing with database sync
+      this.updateJobStatus(nextJob.jobId, 'processing');
       
       logger.job(`Started processing job ${nextJob.jobId}`, {
         activeJobs: this.activeJobs.size,
@@ -403,10 +531,13 @@ class JobQueue {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    job.status = 'completed';
-    job.completedAt = new Date().toISOString();
-    job.result = result;
-    job.processingTime = Date.now() - new Date(job.startedAt).getTime();
+    const processingTime = Date.now() - new Date(job.startedAt).getTime();
+
+    // Update job status using helper method for database sync
+    this.updateJobStatus(jobId, 'completed', {
+      result,
+      processingTime
+    });
 
     // Track daily costs (legacy)
     this.addToDailyCost(result.cost);
@@ -462,16 +593,19 @@ class JobQueue {
 
     if (job.retries < job.maxRetries) {
       // Retry
-      job.status = 'queued';
+      this.updateJobStatus(jobId, 'queued', {
+        retries: job.retries
+      });
       logger.warn(`Job ${jobId} failed, retrying (${job.retries}/${job.maxRetries})`, {
         error: error.message
       });
       this.processNextJob();
     } else {
       // Give up
-      job.status = 'failed';
-      job.error = error.message;
-      job.failedAt = new Date().toISOString();
+      this.updateJobStatus(jobId, 'failed', {
+        error: error.message,
+        retries: job.retries
+      });
       
       logger.logJobError(jobId, error, 'final_failure');
       
