@@ -4274,32 +4274,7 @@ export default function App() {
                         !item.read && styles.unreadNotification
                       ]}
                     >
-                      <TouchableOpacity
-                        style={styles.notificationContent}
-                        onPress={() => {
-                          // Mark as read
-                          setNotifications(prev => {
-                            const updatedNotifications = prev.map(n =>
-                              n.id === item.id ? { ...n, read: true } : n
-                            );
-                            // Persist updated notifications
-                            AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
-                              console.error('Failed to save notifications:', error);
-                            });
-                            return updatedNotifications;
-                          });
-
-                          // Show video ready banner if available
-                          if (item.jobId && item.podcastName) {
-                            setVideoReadyBanner({
-                              jobId: item.jobId,
-                              podcastName: item.podcastName,
-                              episodeTitle: item.episodeTitle || 'Unknown Episode'
-                            });
-                          }
-                          setShowNotificationsModal(false);
-                        }}
-                      >
+                      <View style={styles.notificationContent}>
                         <Text style={styles.notificationBody} numberOfLines={3}>
                           {item.episodeTitle ?
                             `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
@@ -4312,18 +4287,16 @@ export default function App() {
                         <Text style={styles.notificationTime}>
                           {new Date(item.timestamp).toLocaleString()}
                         </Text>
-                      </TouchableOpacity>
+                      </View>
 
                       <View style={styles.notificationActions}>
                         <TouchableOpacity
-                          style={styles.saveButton}
+                          style={styles.actionButton}
                           onPress={async () => {
                             try {
                               if (item.jobId) {
                                 console.log('💾 Saving video from notification modal:', item.jobId);
                                 const result = await VideoService.downloadVideoToPhotos(item.jobId);
-
-                                // Mark as read when saved
                                 setNotifications(prev => {
                                   const updatedNotifications = prev.map(n =>
                                     n.id === item.id ? { ...n, read: true } : n
@@ -4333,7 +4306,6 @@ export default function App() {
                                   });
                                   return updatedNotifications;
                                 });
-
                                 Alert.alert('Success!', 'Video saved to Photos');
                               }
                             } catch (error) {
@@ -4342,9 +4314,24 @@ export default function App() {
                             }
                           }}
                         >
-                          <MaterialCommunityIcons name="download" size={20} color="#d97706" />
-                          <Text style={styles.saveButtonText}>Save</Text>
+                          <MaterialCommunityIcons name="download" size={16} color="#d97706" />
                         </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => {
+                            setNotifications(prev => {
+                              const updatedNotifications = prev.filter(n => n.id !== item.id);
+                              AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                                console.error('Failed to save notifications:', error);
+                              });
+                              return updatedNotifications;
+                            });
+                          }}
+                        >
+                          <MaterialCommunityIcons name="close" size={16} color="#999" />
+                        </TouchableOpacity>
+
                         {!item.read && <View style={styles.unreadDot} />}
                       </View>
                     </View>
@@ -4490,9 +4477,9 @@ const styles = StyleSheet.create({
   },
   notificationBell: {
     padding: 8,
-    position: 'relative',
-    alignSelf: 'flex-start',
-    marginTop: 15, // Align with waveform position
+    position: 'absolute',
+    right: 20,
+    top: 25,
     zIndex: 2,
   },
   notificationBadge: {
@@ -6098,9 +6085,19 @@ suggestionTagText: {
     marginTop: 8,
   },
   notificationActions: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingLeft: 12,
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: '#404040',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
   },
   saveButton: {
     flexDirection: 'row',
