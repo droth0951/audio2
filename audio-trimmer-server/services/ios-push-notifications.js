@@ -4,6 +4,7 @@
 const http2 = require('http2');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const logger = require('./logger');
 
 class IOSPushNotificationService {
@@ -87,6 +88,11 @@ class IOSPushNotificationService {
     });
   }
 
+  // Generate a proper UUID for APNs ID (Apple requires UUID format)
+  generateAPNsId() {
+    return crypto.randomUUID();
+  }
+
   // Send push notification to iOS device
   async sendVideoReadyNotification(deviceToken, jobId, podcastName, episodeTitle) {
     if (!this.enabled) {
@@ -113,8 +119,9 @@ class IOSPushNotificationService {
       };
 
       const authToken = this.generateAuthToken();
+      const apnsId = this.generateAPNsId(); // Generate proper UUID for APNs
 
-      await this.sendAPNsRequest(deviceToken, payload, authToken, jobId);
+      await this.sendAPNsRequest(deviceToken, payload, authToken, apnsId);
 
       logger.success('📱 iOS push notification sent', {
         jobId,
@@ -132,7 +139,7 @@ class IOSPushNotificationService {
   }
 
   // Send HTTP/2 request to APNs
-  async sendAPNsRequest(deviceToken, payload, authToken, jobId) {
+  async sendAPNsRequest(deviceToken, payload, authToken, apnsId) {
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(payload);
 
@@ -156,7 +163,7 @@ class IOSPushNotificationService {
         ':method': 'POST',
         ':path': `/3/device/${deviceToken}`,
         'authorization': `bearer ${authToken}`,
-        'apns-id': jobId,
+        'apns-id': apnsId, // Use proper UUID instead of jobId
         'apns-expiration': '0',
         'apns-priority': '10',
         'apns-topic': this.bundleId,
