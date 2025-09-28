@@ -195,7 +195,7 @@ class JobQueue {
   // Check queue size limit
   checkQueueLimit() {
     if (this.jobs.size >= config.jobs.MAX_QUEUE_SIZE) {
-      throw new Error(`Job queue full (${config.jobs.MAX_QUEUE_SIZE} max). Current: ${this.jobs.size}`);
+      throw new Error(`We're experiencing high demand! Please try again in a few minutes when some videos finish processing.`);
     }
   }
 
