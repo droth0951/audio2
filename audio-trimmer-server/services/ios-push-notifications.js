@@ -149,7 +149,10 @@ class IOSPushNotificationService {
           'apns-topic': this.bundleId,
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(postData)
-        }
+        },
+        // Add TLS options for better Railway compatibility
+        secureProtocol: 'TLSv1_2_method',
+        ciphers: 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384'
       };
 
       const req = https.request(options, (res) => {
@@ -169,7 +172,20 @@ class IOSPushNotificationService {
       });
 
       req.on('error', (error) => {
+        // Enhanced error logging for debugging
+        logger.error('APNs connection error:', {
+          error: error.message,
+          code: error.code,
+          host: this.apnsHost,
+          port: 443
+        });
         reject(error);
+      });
+
+      // Set timeout to prevent hanging connections
+      req.setTimeout(10000, () => {
+        req.destroy();
+        reject(new Error('APNs request timeout'));
       });
 
       req.write(postData);

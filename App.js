@@ -2135,7 +2135,12 @@ export default function App() {
                 if (isProblematic) {
                   setCaptionsEnabled(captionsEnabledForRecording);
                 }
-                setShowRecordingView(true);
+                // For server-side video, directly create video without showing recording view
+                if (ENABLE_SERVER_VIDEO) {
+                  createServerSideVideo();
+                } else {
+                  setShowRecordingView(true);
+                }
               }}
             >
               <Text style={{
@@ -2524,8 +2529,13 @@ export default function App() {
       console.log('🎬 Sound not loaded, loading now...');
       await loadEpisode(selectedEpisode);
     }
-    
-    setShowRecordingGuidance(true);
+
+    // For server-side video, skip the modal and go directly to video creation
+    if (ENABLE_SERVER_VIDEO) {
+      createServerSideVideo();
+    } else {
+      setShowRecordingGuidance(true);
+    }
   };
 
   // Add caption status info display (optional)
@@ -2696,11 +2706,12 @@ export default function App() {
       });
 
       const result = await VideoService.createVideoWithPushNotifications(
-        selectedEpisode.audio,
+        selectedEpisode.audioUrl,
         clipStart,
         clipEnd,
         podcast,
-        deviceToken
+        deviceToken,
+        captionsEnabled
       );
 
       setRecordingStatus(`Video queued! You'll get a notification when it's ready (${result.estimatedTime}s)`);

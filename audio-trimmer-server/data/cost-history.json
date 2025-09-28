@@ -365,8 +365,8 @@
   },
   "2025-09-27T04:00:00.000Z": {
     "date": "2025-09-27T04:00:00.000Z",
-    "totalCost": 1.0680575645030357,
-    "jobCount": 5,
+    "totalCost": 1.1633609145030357,
+    "jobCount": 6,
     "jobs": [
       {
         "jobId": "vid_a8f4c582",
@@ -436,14 +436,28 @@
         },
         "total": 0.26715691999999996,
         "processingTime": 132892
+      },
+      {
+        "jobId": "vid_73939d5f",
+        "timestamp": "2025-09-27T20:54:01.179Z",
+        "costs": {
+          "audioDownload": 0.001,
+          "frameGeneration": 0.036000000000000004,
+          "videoComposition": 0.0015,
+          "storage": 0.00694235,
+          "processing": 0.049860999999999996,
+          "processingTimeMs": 49861
+        },
+        "total": 0.09530335000000001,
+        "processingTime": 49861
       }
     ],
     "breakdown": {
-      "audioDownload": 0.0112,
-      "frameGeneration": 0.4032,
-      "videoComposition": 0.0168,
-      "storage": 0.10687744,
-      "processing": 0.519832
+      "audioDownload": 0.012199999999999999,
+      "frameGeneration": 0.43920000000000003,
+      "videoComposition": 0.0183,
+      "storage": 0.11381979,
+      "processing": 0.569693
     }
   }
 }

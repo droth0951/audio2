@@ -93,7 +93,7 @@ class VideoService {
   }
 
   // Create video with device token for push notifications
-  async createVideoWithPushNotifications(audioUrl, clipStart, clipEnd, podcast, deviceToken) {
+  async createVideoWithPushNotifications(audioUrl, clipStart, clipEnd, podcast, deviceToken, captionsEnabled = false) {
     try {
       console.log('🎬 Creating video with push notifications enabled');
 
@@ -105,7 +105,7 @@ class VideoService {
         deviceToken, // Include device token for push notifications
         aspectRatio: '9:16',
         template: 'professional',
-        captionsEnabled: false,
+        captionsEnabled,
         enableSmartFeatures: true
       };
 

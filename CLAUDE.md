@@ -37,6 +37,45 @@ The `/api/create-video` endpoint supports optional caption text styling:
 - Existing API calls without `captionStyle` continue working with normal sentence case
 - Feature only applies when `captionsEnabled: true`
 
+## EAS Build & Update Workflow
+
+### Ensuring New Builds Include All OTA Updates
+**Problem**: EAS builds and OTA updates can get out of sync, causing new development builds to miss recent updates.
+
+**Solution**: Always ensure both are built from the same git commit:
+
+1. **Before creating a new build**, check what commit your latest OTA update used:
+   ```bash
+   eas update:list --platform=ios --limit=1
+   ```
+
+2. **Make sure your local git includes all OTA changes**:
+   ```bash
+   git log --oneline -5  # Check recent commits
+   git status           # Ensure clean working directory
+   ```
+
+3. **If needed, commit any missing changes** that were in the OTA update:
+   ```bash
+   git add .
+   git commit -m "Include OTA update changes in build"
+   ```
+
+4. **Build from current git state**:
+   ```bash
+   eas build --platform ios --profile development
+   ```
+
+5. **Verify the build uses the correct commit** in build logs or:
+   ```bash
+   eas build:view [BUILD_ID]
+   ```
+
+### Key Point
+- **OTA updates** are published from your local git state when you run `eas update`
+- **EAS builds** are built from your local git state when you run `eas build`
+- Both must use the same git commit to stay in sync
+
 ## Common Commands
 - Lint: `npm run lint` (if available)
 - Typecheck: `npm run typecheck` (if available)
