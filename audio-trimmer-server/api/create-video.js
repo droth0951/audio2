@@ -6,10 +6,12 @@ const logger = require('../services/logger');
 const config = require('../config/settings');
 
 module.exports = async (req, res) => {
-  // Big celebratory announcement for new video requests
-  console.log('\n' + '🎉'.repeat(20));
-  console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
-  console.log('🎉'.repeat(20));
+  // Big celebratory announcement for new video requests (development only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n' + '🎉'.repeat(20));
+    console.log('🎉🎉🎉  NEW VIDEO REQUEST INCOMING!  🎉🎉🎉');
+    console.log('🎉'.repeat(20));
+  }
 
   logger.info('🎉🎉 Video creation request received', {
     ip: req.ip,
@@ -39,19 +41,21 @@ module.exports = async (req, res) => {
     const clipStart = requestClipStart ?? audioStartFrom;
     const clipEnd = requestClipEnd ?? audioEndAt;
 
-    // Log the request details prominently
-    console.log(`\n📹 Podcast: ${podcast?.podcastName || 'Unknown'}`);
-    console.log(`📝 Episode: ${podcast?.title?.substring(0, 50) || 'Unknown'}...`);
-    console.log(`⏱️  Duration: ${((clipEnd - clipStart) / 1000).toFixed(1)}s`);
-    console.log(`💬 Captions: ${captionsEnabled ? '✅ ENABLED' : '❌ DISABLED'}`);
-    if (captionsEnabled) {
-      console.log(`🎨 Caption Style: ${captionStyle.toUpperCase()}`);
+    // Log the request details prominently (development only)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`\n📹 Podcast: ${podcast?.podcastName || 'Unknown'}`);
+      console.log(`📝 Episode: ${podcast?.title?.substring(0, 50) || 'Unknown'}...`);
+      console.log(`⏱️  Duration: ${((clipEnd - clipStart) / 1000).toFixed(1)}s`);
+      console.log(`💬 Captions: ${captionsEnabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+      if (captionsEnabled) {
+        console.log(`🎨 Caption Style: ${captionStyle.toUpperCase()}`);
+      }
+      console.log(`📱 Push Notifications: ${deviceToken ? '✅ ENABLED' : '❌ DISABLED'}`);
+      if (deviceToken) {
+        console.log(`🔔 Device Token: ${deviceToken.substring(0, 8)}...`);
+      }
+      console.log('═'.repeat(60) + '\n');
     }
-    console.log(`📱 Push Notifications: ${deviceToken ? '✅ ENABLED' : '❌ DISABLED'}`);
-    if (deviceToken) {
-      console.log(`🔔 Device Token: ${deviceToken.substring(0, 8)}...`);
-    }
-    console.log('═'.repeat(60) + '\n');
 
     // Log which field format was used for debugging
     const fieldFormat = requestClipStart !== undefined ? 'clipStart/clipEnd' : 'audio_start_from/audio_end_at';
