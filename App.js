@@ -4460,6 +4460,7 @@ const styles = StyleSheet.create({
     marginBottom: 20, // Reduced from 30
     marginTop: 10,    // Reduced from 20
     paddingHorizontal: 20,
+    minHeight: 160, // Ensure enough space for logo content
   },
   logo: {
     width: 460,  // Reduced from 552 
@@ -4483,6 +4484,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    top: 0,
+    bottom: 0,
     zIndex: 1,
   },
   notificationBell: {
