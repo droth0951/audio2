@@ -44,10 +44,10 @@ class VideoService {
         throw new Error(`Video is not ready yet. Status: ${metadata.status}`);
       }
 
-      // Request media library permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // Request media library WRITE permissions (required for saving videos)
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
-        throw new Error('Media library permissions required to save video');
+        throw new Error('Photo library write permissions required to save video');
       }
 
       // Download the video file
