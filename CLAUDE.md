@@ -76,6 +76,33 @@ The `/api/create-video` endpoint supports optional caption text styling:
 - **EAS builds** are built from your local git state when you run `eas build`
 - Both must use the same git commit to stay in sync
 
+## Debugging Caption Issues
+
+### DEBUG_CAPTIONS Environment Variable
+For targeted caption debugging without hitting Railway's 500 logs/sec rate limit:
+
+**When to Use**: Caption generation, chunking, or timing issues in production
+
+**How to Enable**:
+1. Go to Railway dashboard → audio-trimmer-service
+2. Add environment variable: `DEBUG_CAPTIONS=true`
+3. Restart the service
+4. Debug caption issues with detailed logs
+5. Remove the variable when done
+
+**What it Shows**:
+- Caption chunk creation details
+- Text length and line break decisions
+- AssemblyAI transcription progress
+- Smart features processing (highlights, entities, sentiment)
+
+**What it Hides** (avoids rate limit):
+- General AssemblyAI upload responses
+- Verbose transcription request details
+- Non-caption debug output
+
+**Alternative**: Temporarily set `NODE_ENV=development` but this enables ALL debug logs (not recommended in production)
+
 ## Common Commands
 - Lint: `npm run lint` (if available)
 - Typecheck: `npm run typecheck` (if available)
