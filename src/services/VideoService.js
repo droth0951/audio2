@@ -64,14 +64,38 @@ class VideoService {
 
       // Save to Photos library
       console.log('💾 Saving video to Photos...');
-      const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+      let asset;
+      let album;
 
-      // Create or get Audio2 album
-      let album = await MediaLibrary.getAlbumAsync('Audio2');
-      if (!album) {
-        album = await MediaLibrary.createAlbumAsync('Audio2', asset, false);
-      } else {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      try {
+        asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+        console.log('✅ Asset created successfully');
+      } catch (assetError) {
+        console.error('❌ Asset creation failed:', assetError);
+        throw new Error(`Failed to save video to Photos: ${assetError.message}`);
+      }
+
+      try {
+        // Create or get Audio2 album
+        album = await MediaLibrary.getAlbumAsync('Audio2');
+        if (!album) {
+          album = await MediaLibrary.createAlbumAsync('Audio2', asset, false);
+          console.log('✅ Audio2 album created');
+        } else {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+          console.log('✅ Video added to Audio2 album');
+        }
+      } catch (albumError) {
+        // PHPhotosErrorDomain 3300 often occurs here but the video is still saved
+        console.warn('⚠️ Album operation warning (video may still be saved):', albumError);
+
+        // Check if it's the specific error 3300 and the asset was created successfully
+        if (albumError.message && albumError.message.includes('3300') && asset) {
+          console.log('🔍 PHPhotosErrorDomain 3300 detected, but asset was created. Video should be in Photos.');
+          // Continue without throwing - the video is likely saved to Photos even if album failed
+        } else {
+          throw albumError;
+        }
       }
 
       // Clean up temporary file

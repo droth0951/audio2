@@ -22,6 +22,7 @@ import captionService from './CaptionService';
 // Voice import - enabled for real speech recognition
 import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 import { Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -841,17 +842,68 @@ export default function App() {
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
       console.log('🔄 App state changed:', nextAppState);
-      
+
       // ONLY cleanup recording state on background, don't touch audio
       if (nextAppState === 'background' && isRecording) {
         console.log('⚠️ App backgrounded during recording - cleanup recording only');
         await emergencyRecordingCleanup();
       }
+
+      // Check for pending notifications when app becomes active
+      if (nextAppState === 'active') {
+        console.log('🔔 App became active - checking for pending notifications...');
+        try {
+          const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+          if (lastNotificationResponse) {
+            const { timestamp } = lastNotificationResponse.notification.date;
+            const notificationTime = new Date(timestamp);
+            const now = new Date();
+
+            // Only process notifications from the last 5 minutes to avoid old ones
+            const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+
+            if (notificationTime > fiveMinutesAgo) {
+              console.log('🔔 Found recent notification, checking if already in history...');
+              const jobId = lastNotificationResponse.notification.request.content.data?.jobId;
+
+              if (jobId) {
+                // Check if this notification is already in our history
+                const exists = notifications.some(n => n.jobId === jobId);
+
+                if (!exists) {
+                  console.log('🔔 Adding missed notification to history:', jobId);
+                  const data = lastNotificationResponse.notification.request.content.data;
+                  const newNotification = {
+                    id: Date.now().toString(),
+                    title: lastNotificationResponse.notification.request.content.title || 'Video Ready',
+                    body: lastNotificationResponse.notification.request.content.body || 'Your video has been processed',
+                    timestamp: notificationTime,
+                    read: false,
+                    jobId: jobId,
+                    podcastName: data?.podcastName,
+                    episodeTitle: data?.episodeTitle,
+                  };
+
+                  setNotifications(prev => {
+                    const updatedNotifications = [newNotification, ...prev].slice(0, 15);
+                    AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                      console.error('Failed to save notifications:', error);
+                    });
+                    return updatedNotifications;
+                  });
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check pending notifications:', error);
+        }
+      }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, [isRecording]); // Only depend on isRecording, not audio states
+  }, [isRecording, notifications]); // Depend on notifications to check for existing ones
 
   // Initialize push notifications (only if enabled)
   useEffect(() => {
@@ -904,7 +956,7 @@ export default function App() {
                   // Check if notification already exists to avoid duplicates
                   const exists = prev.some(n => n.jobId === jobId);
                   if (!exists) {
-                    const updatedNotifications = [newNotification, ...prev];
+                    const updatedNotifications = [newNotification, ...prev].slice(0, 15); // Keep only last 15
                     // Persist notifications to storage
                     AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
                       console.error('Failed to save notifications:', error);
@@ -950,7 +1002,7 @@ export default function App() {
             };
 
             setNotifications(prev => {
-              const updatedNotifications = [newNotification, ...prev];
+              const updatedNotifications = [newNotification, ...prev].slice(0, 15); // Keep only last 15
               // Persist notifications to storage
               AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
                 console.error('Failed to save notifications:', error);
@@ -979,7 +1031,7 @@ export default function App() {
               // Check if notification already exists to avoid duplicates
               const exists = prev.some(n => n.jobId === jobId);
               if (!exists) {
-                const updatedNotifications = [newNotification, ...prev];
+                const updatedNotifications = [newNotification, ...prev].slice(0, 15); // Keep only last 15
                 // Persist notifications to storage
                 AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
                   console.error('Failed to save notifications:', error);
@@ -2148,7 +2200,7 @@ export default function App() {
           textAlign: 'center',
           marginBottom: 16,
         }}>
-          Preparing Your Clip
+          Preparing Captions
         </Text>
         
         <Text style={{
@@ -2167,7 +2219,7 @@ export default function App() {
           textAlign: 'center',
           fontStyle: 'italic',
         }}>
-          Please don't switch apps or lock your phone
+          This will only take a moment
         </Text>
       </View>
     </View>
@@ -4216,37 +4268,38 @@ export default function App() {
                   keyExtractor={(item) => item.id}
                   style={styles.notificationsList}
                   renderItem={({ item }) => (
-                    <TouchableOpacity
+                    <View
                       style={[
                         styles.notificationItem,
                         !item.read && styles.unreadNotification
                       ]}
-                      onPress={() => {
-                        // Mark as read
-                        setNotifications(prev => {
-                          const updatedNotifications = prev.map(n =>
-                            n.id === item.id ? { ...n, read: true } : n
-                          );
-                          // Persist updated notifications
-                          AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
-                            console.error('Failed to save notifications:', error);
-                          });
-                          return updatedNotifications;
-                        });
-
-                        // Show video ready banner if available
-                        if (item.jobId && item.podcastName) {
-                          setVideoReadyBanner({
-                            jobId: item.jobId,
-                            podcastName: item.podcastName,
-                            episodeTitle: item.episodeTitle || 'Unknown Episode'
-                          });
-                        }
-                        setShowNotificationsModal(false);
-                      }}
                     >
-                      <View style={styles.notificationContent}>
-                        <Text style={styles.notificationTitle} numberOfLines={2}>Video Ready</Text>
+                      <TouchableOpacity
+                        style={styles.notificationContent}
+                        onPress={() => {
+                          // Mark as read
+                          setNotifications(prev => {
+                            const updatedNotifications = prev.map(n =>
+                              n.id === item.id ? { ...n, read: true } : n
+                            );
+                            // Persist updated notifications
+                            AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                              console.error('Failed to save notifications:', error);
+                            });
+                            return updatedNotifications;
+                          });
+
+                          // Show video ready banner if available
+                          if (item.jobId && item.podcastName) {
+                            setVideoReadyBanner({
+                              jobId: item.jobId,
+                              podcastName: item.podcastName,
+                              episodeTitle: item.episodeTitle || 'Unknown Episode'
+                            });
+                          }
+                          setShowNotificationsModal(false);
+                        }}
+                      >
                         <Text style={styles.notificationBody} numberOfLines={3}>
                           {item.episodeTitle ?
                             `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
@@ -4259,9 +4312,42 @@ export default function App() {
                         <Text style={styles.notificationTime}>
                           {new Date(item.timestamp).toLocaleString()}
                         </Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.notificationActions}>
+                        <TouchableOpacity
+                          style={styles.saveButton}
+                          onPress={async () => {
+                            try {
+                              if (item.jobId) {
+                                console.log('💾 Saving video from notification modal:', item.jobId);
+                                const result = await VideoService.downloadVideoToPhotos(item.jobId);
+
+                                // Mark as read when saved
+                                setNotifications(prev => {
+                                  const updatedNotifications = prev.map(n =>
+                                    n.id === item.id ? { ...n, read: true } : n
+                                  );
+                                  AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+                                    console.error('Failed to save notifications:', error);
+                                  });
+                                  return updatedNotifications;
+                                });
+
+                                Alert.alert('Success!', 'Video saved to Photos');
+                              }
+                            } catch (error) {
+                              console.error('Save failed:', error);
+                              Alert.alert('Save Failed', error.message || 'Could not save video');
+                            }
+                          }}
+                        >
+                          <MaterialCommunityIcons name="download" size={20} color="#d97706" />
+                          <Text style={styles.saveButtonText}>Save</Text>
+                        </TouchableOpacity>
+                        {!item.read && <View style={styles.unreadDot} />}
                       </View>
-                      {!item.read && <View style={styles.unreadDot} />}
-                    </TouchableOpacity>
+                    </View>
                   )}
                 />
               )}
@@ -4391,16 +4477,20 @@ const styles = StyleSheet.create({
   
   logoContainer: {
     alignItems: 'center',
-    justifyContent: 'flex-start', // Changed from 'center' to align waveform at top
+    justifyContent: 'center',
     marginBottom: 5,
     paddingVertical: 20,
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   notificationBell: {
     padding: 8,
     position: 'relative',
     alignSelf: 'flex-start',
     marginTop: 15, // Align with waveform position
+    zIndex: 2,
   },
   notificationBadge: {
     position: 'absolute',
@@ -6003,6 +6093,26 @@ suggestionTagText: {
     backgroundColor: '#ff4444',
     marginLeft: 8,
     marginTop: 8,
+  },
+  notificationActions: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 12,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d97706',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  saveButtonText: {
+    color: '#f4f4f4',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   notificationsAboutLink: {
     flexDirection: 'row',
