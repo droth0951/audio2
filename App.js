@@ -839,6 +839,21 @@ export default function App() {
   // Calculate unread count from notifications array
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Update app badge when unread count changes
+  useEffect(() => {
+    const updateBadge = async () => {
+      try {
+        // Set the badge to the actual unread count
+        await Notifications.setBadgeCountAsync(unreadCount);
+        console.log('📛 Updated badge count to:', unreadCount);
+      } catch (error) {
+        console.error('Failed to update badge count:', error);
+      }
+    };
+
+    updateBadge();
+  }, [unreadCount]);
+
   // App state listener - ONLY for recording cleanup (not audio position)
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
