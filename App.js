@@ -1248,7 +1248,8 @@ export default function App() {
     loadCachedArtwork();
   }, []);
   
-  const popularBusinessPodcasts = [
+  // Fallback podcast list - used when GitHub is unavailable
+  const FALLBACK_PODCASTS = [
     {
       name: 'The Interview',
       fallbackEmoji: '🎙️',
@@ -1309,34 +1310,40 @@ export default function App() {
     {
       name: 'The Dave Ramsey Show',
       fallbackEmoji: '💰',
-      category: 'Finance' 
+      category: 'Finance'
     },
-    { 
-      name: 'Marketplace', 
+    {
+      name: 'Marketplace',
       fallbackEmoji: '📰',
-      category: 'News' 
+      category: 'News'
     },
-    { 
-      name: 'Freakonomics Radio', 
+    {
+      name: 'Freakonomics Radio',
       fallbackEmoji: '💡',
-      category: 'Ideas' 
+      category: 'Ideas'
     },
-    { 
-      name: 'Planet Money', 
+    {
+      name: 'Planet Money',
       fallbackEmoji: '📊',
-      category: 'Finance' 
+      category: 'Finance'
     },
-    { 
-      name: 'Business Wars', 
+    {
+      name: 'Business Wars',
       fallbackEmoji: '⚔️',
-      category: 'Business' 
+      category: 'Business'
     },
-    { 
-      name: 'Hello Monday', 
+    {
+      name: 'Hello Monday',
       fallbackEmoji: '💡',
-      category: 'Work' 
+      category: 'Work'
     }
   ];
+
+  // GitHub URL for dynamic podcast list
+  const PODCASTS_URL = 'https://raw.githubusercontent.com/droth0951/audio2/main/popular-podcasts.json';
+
+  // State for popular podcasts (now dynamic)
+  const [popularBusinessPodcasts, setPopularBusinessPodcasts] = useState(FALLBACK_PODCASTS);
 
   // Add state for episode notes bottom sheet
   const [showEpisodeNotes, setShowEpisodeNotes] = useState(false);
@@ -1391,8 +1398,62 @@ export default function App() {
       );
       await new Promise(resolve => setTimeout(resolve, 800));
     }
-    
+
     console.log('🖼️ Background preload complete');
+  }, []);
+
+  // Load popular podcasts from GitHub dynamically
+  useEffect(() => {
+    const loadPopularPodcasts = async () => {
+      try {
+        // First, try to load cached podcasts immediately
+        const cached = await AsyncStorage.getItem('popular_podcasts_list');
+        if (cached) {
+          const cachedPodcasts = JSON.parse(cached);
+          console.log('📦 Loading cached podcast list');
+          setPopularBusinessPodcasts(cachedPodcasts);
+        }
+
+        // Then fetch fresh data from GitHub
+        console.log('🌐 Fetching fresh podcast list from GitHub...');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+        const response = await fetch(PODCASTS_URL, {
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const freshPodcasts = await response.json();
+        console.log('✅ Loaded fresh podcast list from GitHub:', freshPodcasts.length, 'podcasts');
+
+        setPopularBusinessPodcasts(freshPodcasts);
+
+        // Cache the fresh data
+        await AsyncStorage.setItem('popular_podcasts_list', JSON.stringify(freshPodcasts));
+        console.log('💾 Cached fresh podcast list');
+
+      } catch (error) {
+        console.log('❌ Failed to load podcasts from GitHub:', error.message);
+
+        // If we don't have cached data, use fallback
+        const cached = await AsyncStorage.getItem('popular_podcasts_list');
+        if (!cached) {
+          console.log('📋 Using fallback podcast list');
+          setPopularBusinessPodcasts(FALLBACK_PODCASTS);
+        }
+      }
+    };
+
+    loadPopularPodcasts();
   }, []);
 
   const fetchPopularPodcastsArtwork = async () => {
