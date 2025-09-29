@@ -1256,6 +1256,12 @@ export default function App() {
       rssUrl: 'https://feeds.simplecast.com/ksGYZ_Z3'
     },
     {
+      name: 'Building One',
+      fallbackEmoji: '🏗️',
+      category: 'Business',
+      rssUrl: 'https://feeds.megaphone.fm/buildingone'
+    },
+    {
       name: 'The Indicator from Planet Money',
       fallbackEmoji: '📊',
       category: 'Finance'
@@ -1342,7 +1348,7 @@ export default function App() {
   const [loadingEpisodeTitle, setLoadingEpisodeTitle] = useState('');
 
   // Caption state
-  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [preparedTranscript, setPreparedTranscript] = useState(null);
   const [showProcessingModal, setShowProcessingModal] = useState(false);
