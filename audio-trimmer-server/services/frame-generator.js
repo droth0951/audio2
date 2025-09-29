@@ -686,7 +686,7 @@ class FrameGenerator {
 
       // Take reasonable chunk size
       const captionWords = wordsInWindow.slice(0, MAX_WORDS_PER_CAPTION);
-      const captionText = captionWords.map(w => w.text).join(' ');
+      const captionText = captionWords.map(w => w.text).join(' ').toUpperCase();
 
       return {
         text: captionText.trim(),
@@ -705,7 +705,7 @@ class FrameGenerator {
 
     if (currentUtterance) {
       return {
-        text: currentUtterance.text,
+        text: currentUtterance.text.toUpperCase(),
         words: [], // No word-level data available
         startMs: currentUtterance.start,
         endMs: currentUtterance.end
@@ -840,7 +840,7 @@ class FrameGenerator {
   }
 
   // Helper to split long captions (respects 2-line max rule for readability)
-  splitCaptionIntoLines(text, maxCharsPerLine = 30) { // Reduced by 2 chars for better line breaks
+  splitCaptionIntoLines(text, maxCharsPerLine = 26) { // Reduced by 6 chars total for ALL CAPS
     if (!text || text.length <= maxCharsPerLine) return [text];
 
     // For SRT captions, lines may already be optimized

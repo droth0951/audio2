@@ -222,7 +222,7 @@ class CaptionProcessor {
   }
 
   // Helper to split long captions (respects 3-line max rule from plan)
-  splitCaptionIntoLines(text, maxCharsPerLine = 40) {
+  splitCaptionIntoLines(text, maxCharsPerLine = 36) { // Reduced for ALL CAPS
     if (!text || text.length <= maxCharsPerLine) return [text];
 
     const words = text.split(' ');
@@ -659,7 +659,7 @@ class CaptionProcessor {
   }
 
   // Optimize line breaks for readability (smart grammatical breaks)
-  optimizeLineBreaks(text, maxCharsPerLine = 35) { // Cap at ~35 chars like "Today we're hearing from Dan Porter,"
+  optimizeLineBreaks(text, maxCharsPerLine = 31) { // Reduced for ALL CAPS
     // Only extremely short phrases stay as single line
     if (!text || text.length <= 15) {
       return [text];

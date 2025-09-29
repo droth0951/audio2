@@ -41,6 +41,7 @@ import SearchBar from './src/components/SearchBar';
 import VideoReadyBanner from './src/components/VideoReadyBanner';
 import PushNotificationService from './src/services/PushNotificationService';
 import VideoService from './src/services/VideoService';
+import JobPollingService from './src/services/JobPollingService';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -1099,6 +1100,39 @@ export default function App() {
     };
 
     initializePushNotifications();
+
+    // Set up JobPollingService callback for video completion
+    JobPollingService.setVideoCompletedCallback((completedVideo) => {
+      console.log('🎥 Video completed via polling:', completedVideo);
+
+      // Create notification for completed video
+      const newNotification = {
+        id: Date.now().toString(),
+        title: 'Video Ready',
+        body: completedVideo.episodeTitle ?
+          `Your "${completedVideo.episodeTitle.length > 40 ? completedVideo.episodeTitle.substring(0, 40) + '...' : completedVideo.episodeTitle}" clip is ready for saving and sharing!` :
+          'Your clip is now ready for saving and sharing!',
+        timestamp: new Date(),
+        read: false,
+        jobId: completedVideo.jobId,
+        podcastName: completedVideo.podcastName,
+        episodeTitle: completedVideo.episodeTitle,
+      };
+
+      setNotifications(prev => {
+        // Check if notification already exists to avoid duplicates
+        const exists = prev.some(n => n.jobId === completedVideo.jobId);
+        if (!exists) {
+          const updatedNotifications = [newNotification, ...prev].slice(0, 15); // Keep only last 15
+          // Persist notifications to storage
+          AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+            console.error('Failed to save notifications:', error);
+          });
+          return updatedNotifications;
+        }
+        return prev;
+      });
+    });
   }, []);
 
   // URL input state
@@ -2995,6 +3029,16 @@ export default function App() {
         captionsEnabled
       );
 
+      // Add job to polling service for failsafe notification delivery
+      if (result.jobId) {
+        await JobPollingService.addJobToTrack(
+          result.jobId,
+          podcast.podcastName,
+          podcast.title
+        );
+        console.log('📊 Added job to polling service:', result.jobId);
+      }
+
       setRecordingStatus(`Video queued! You'll get a notification when it's ready (less than 5 minutes)`);
 
       // Show success message
@@ -4297,16 +4341,22 @@ export default function App() {
                               if (item.jobId) {
                                 console.log('💾 Saving video from notification modal:', item.jobId);
                                 const result = await VideoService.downloadVideoToPhotos(item.jobId);
+
+                                // Remove the notification after successful save
                                 setNotifications(prev => {
-                                  const updatedNotifications = prev.map(n =>
-                                    n.id === item.id ? { ...n, read: true } : n
-                                  );
+                                  const updatedNotifications = prev.filter(n => n.id !== item.id);
                                   AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
                                     console.error('Failed to save notifications:', error);
                                   });
                                   return updatedNotifications;
                                 });
-                                Alert.alert('Success!', 'Video saved to Photos');
+
+                                // Show success feedback
+                                Alert.alert(
+                                  '✅ Saved to Photos',
+                                  `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
+                                  [{ text: 'OK' }]
+                                );
                               }
                             } catch (error) {
                               console.error('Save failed:', error);
