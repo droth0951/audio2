@@ -39,6 +39,12 @@ The `/api/create-video` endpoint supports optional caption text styling:
 
 ## EAS Build & Update Workflow
 
+### Important: TestFlight Channel Configuration
+**TestFlight builds use the `production` channel**, not `staging` as might be expected. When pushing OTA updates for TestFlight users:
+```bash
+eas update --platform ios --branch production --message "Your update message"
+```
+
 ### Ensuring New Builds Include All OTA Updates
 **Problem**: EAS builds and OTA updates can get out of sync, causing new development builds to miss recent updates.
 
