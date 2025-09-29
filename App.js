@@ -1249,53 +1249,59 @@ export default function App() {
   }, []);
   
   const popularBusinessPodcasts = [
-    { 
-      name: 'The Indicator from Planet Money', 
+    {
+      name: 'The Interview',
+      fallbackEmoji: '🎙️',
+      category: 'Society',
+      rssUrl: 'https://feeds.simplecast.com/ksGYZ_Z3'
+    },
+    {
+      name: 'The Indicator from Planet Money',
       fallbackEmoji: '📊',
-      category: 'Finance' 
+      category: 'Finance'
     },
-    { 
-      name: 'How I Built This with Guy Raz', 
+    {
+      name: 'How I Built This with Guy Raz',
       fallbackEmoji: '💡',
-      category: 'Ideas' 
+      category: 'Ideas'
     },
-    { 
-      name: 'This Is Working with Daniel Roth', 
+    {
+      name: 'This Is Working with Daniel Roth',
       fallbackEmoji: '💡',
-      category: 'Work' 
+      category: 'Work'
     },
-    { 
-      name: 'Acquired', 
+    {
+      name: 'Acquired',
       fallbackEmoji: '💰',
-      category: 'Finance' 
+      category: 'Finance'
     },
-    { 
-      name: 'WorkLife with Adam Grant', 
+    {
+      name: 'WorkLife with Adam Grant',
       fallbackEmoji: '💼',
-      category: 'Work' 
+      category: 'Work'
     },
-    { 
-      name: 'Masters of Scale', 
+    {
+      name: 'Masters of Scale',
       fallbackEmoji: '🚀',
-      category: 'Ideas' 
+      category: 'Ideas'
     },
-    { 
-      name: 'The Ed Mylett Show', 
+    {
+      name: 'The Ed Mylett Show',
       fallbackEmoji: '🎯',
-      category: 'Motivation' 
+      category: 'Motivation'
     },
-    { 
-      name: 'The Tony Robbins Podcast', 
+    {
+      name: 'The Tony Robbins Podcast',
       fallbackEmoji: '🎯',
-      category: 'Motivation' 
+      category: 'Motivation'
     },
-    { 
-      name: 'The GaryVee Audio Experience', 
+    {
+      name: 'The GaryVee Audio Experience',
       fallbackEmoji: '💡',
-      category: 'Ideas' 
+      category: 'Ideas'
     },
-    { 
-      name: 'The Dave Ramsey Show', 
+    {
+      name: 'The Dave Ramsey Show',
       fallbackEmoji: '💰',
       category: 'Finance' 
     },
@@ -3897,12 +3903,18 @@ export default function App() {
                               <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
                               <View style={styles.popularPodcastsList}>
                                 {popularBusinessPodcasts.map((podcast, idx) => (
-                                  <TouchableOpacity 
-                                    key={podcast.name + idx} 
+                                  <TouchableOpacity
+                                    key={podcast.name + idx}
                                     onPress={async () => {
-                                      setSearchTerm(podcast.name);
-                                      await handlePodcastSearch(podcast.name);
-                                    }} 
+                                      if (podcast.rssUrl) {
+                                        // If podcast has a direct RSS URL, load it directly
+                                        await loadPodcastFeed(podcast.rssUrl);
+                                      } else {
+                                        // Otherwise search by name as usual
+                                        setSearchTerm(podcast.name);
+                                        await handlePodcastSearch(podcast.name);
+                                      }
+                                    }}
                                     style={styles.popularPodcastItem}
                                   >
                                     {popularPodcastsArtwork[podcast.name] ? (
