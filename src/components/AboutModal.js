@@ -82,6 +82,7 @@ const AboutModal = ({ visible, onClose }) => {
             <Text style={styles.appName}>Audio2</Text>
             <Text style={styles.tagline}>Turn audio insights into social conversations</Text>
                             <Text style={styles.version}>Version 2.0</Text>
+                            <Text style={styles.updateDate}>Updated: September 29, 2025</Text>
           </View>
 
           {/* Main Description */}
@@ -380,6 +381,11 @@ const styles = StyleSheet.create({
   version: {
     fontSize: 14,
     color: '#b4b4b4',
+  },
+  updateDate: {
+    fontSize: 12,
+    color: '#888888',
+    marginTop: 4,
   },
   section: {
     marginBottom: 30,
