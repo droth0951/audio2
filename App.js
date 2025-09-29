@@ -3648,6 +3648,7 @@ export default function App() {
       setAllEpisodes([]);
       setSearchResults([]);
       setCurrentRssFeed('');
+      setShowLoadMore(false);
     }
   };
 
@@ -3993,8 +3994,8 @@ export default function App() {
                         </>
                       )}
                       ListFooterComponent={() => {
-                        console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore);
-                        return showLoadMore ? (
+                        console.log('🔍 ListFooterComponent - showLoadMore:', showLoadMore, 'episodes.length:', episodes.length);
+                        return showLoadMore && episodes.length > 0 ? (
                           <TouchableOpacity
                             style={styles.submitButton}
                             onPress={loadMoreEpisodes}
