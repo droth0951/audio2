@@ -686,7 +686,7 @@ class FrameGenerator {
 
       // Take reasonable chunk size
       const captionWords = wordsInWindow.slice(0, MAX_WORDS_PER_CAPTION);
-      const captionText = captionWords.map(w => w.text).join(' ').toUpperCase();
+      const captionText = captionWords.map(w => w.text).join(' ');
 
       return {
         text: captionText.trim(),
@@ -705,7 +705,7 @@ class FrameGenerator {
 
     if (currentUtterance) {
       return {
-        text: currentUtterance.text.toUpperCase(),
+        text: currentUtterance.text,
         words: [], // No word-level data available
         startMs: currentUtterance.start,
         endMs: currentUtterance.end

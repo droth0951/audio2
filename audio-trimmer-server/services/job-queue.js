@@ -392,7 +392,7 @@ class JobQueue {
             request.clipEnd,
             jobId,
             request.enableSmartFeatures,
-            request.captionStyle || 'normal'
+            request.captionStyle || 'uppercase'
           );
 
           if (transcript) {
