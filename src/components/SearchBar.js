@@ -24,11 +24,13 @@ const SearchBar = ({
       clearTimeout(debounceTimerRef.current);
     }
 
-    // Don't search for very short queries (less than 2 characters) unless it's a URL
+    // Don't search for very short queries (less than 2 characters)
     const query = searchText.trim();
     const isUrl = /^https?:\/\//i.test(query);
 
-    if (query && (query.length >= 2 || isUrl)) {
+    // Only auto-search for non-URL queries
+    // URLs should only be submitted explicitly via Enter key
+    if (query && query.length >= 2 && !isUrl) {
       // Set new timer for search
       debounceTimerRef.current = setTimeout(() => {
         if (onSearch) {
