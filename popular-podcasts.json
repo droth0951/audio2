@@ -1,89 +1,119 @@
-[
-  {
-    "name": "The Interview",
-    "fallbackEmoji": "🎙️",
-    "category": "Society",
-    "rssUrl": "https://feeds.simplecast.com/ksGYZ_Z3"
-  },
-  {
-    "name": "Building One",
-    "fallbackEmoji": "🏗️",
-    "category": "Business",
-    "rssUrl": "https://feeds.megaphone.fm/buildingone"
-  },
-  {
-    "name": "The Indicator from Planet Money",
-    "fallbackEmoji": "📊",
-    "category": "Finance"
-  },
-  {
-    "name": "How I Built This with Guy Raz",
-    "fallbackEmoji": "💡",
-    "category": "Ideas"
-  },
-  {
-    "name": "This Is Working with Daniel Roth",
-    "fallbackEmoji": "💡",
-    "category": "Work"
-  },
-  {
-    "name": "Acquired",
-    "fallbackEmoji": "💰",
-    "category": "Finance"
-  },
-  {
-    "name": "WorkLife with Adam Grant",
-    "fallbackEmoji": "💼",
-    "category": "Work"
-  },
-  {
-    "name": "Masters of Scale",
-    "fallbackEmoji": "🚀",
-    "category": "Ideas"
-  },
-  {
-    "name": "The Ed Mylett Show",
-    "fallbackEmoji": "🎯",
-    "category": "Motivation"
-  },
-  {
-    "name": "The Tony Robbins Podcast",
-    "fallbackEmoji": "🎯",
-    "category": "Motivation"
-  },
-  {
-    "name": "The GaryVee Audio Experience",
-    "fallbackEmoji": "💡",
-    "category": "Ideas"
-  },
-  {
-    "name": "The Dave Ramsey Show",
-    "fallbackEmoji": "💰",
-    "category": "Finance"
-  },
-  {
-    "name": "Marketplace",
-    "fallbackEmoji": "📰",
-    "category": "News"
-  },
-  {
-    "name": "Freakonomics Radio",
-    "fallbackEmoji": "💡",
-    "category": "Ideas"
-  },
-  {
-    "name": "Planet Money",
-    "fallbackEmoji": "📊",
-    "category": "Finance"
-  },
-  {
-    "name": "Business Wars",
-    "fallbackEmoji": "⚔️",
-    "category": "Business"
-  },
-  {
-    "name": "Hello Monday",
-    "fallbackEmoji": "💡",
-    "category": "Work"
-  }
-]
+{
+  "categories": [
+    {
+      "id": "audio2_favorites",
+      "name": "Audio2 Favorites",
+      "emoji": "⭐",
+      "podcasts": [
+        {
+          "name": "The Interview",
+          "fallbackEmoji": "🎙️",
+          "category": "Society",
+          "rssUrl": "https://feeds.simplecast.com/ksGYZ_Z3"
+        },
+        {
+          "name": "Building One",
+          "fallbackEmoji": "🏗️",
+          "category": "Business",
+          "rssUrl": "https://feeds.megaphone.fm/buildingone"
+        },
+        {
+          "name": "How I Built This with Guy Raz",
+          "fallbackEmoji": "💡",
+          "category": "Ideas"
+        },
+        {
+          "name": "Masters of Scale",
+          "fallbackEmoji": "🚀",
+          "category": "Ideas"
+        },
+        {
+          "name": "Acquired",
+          "fallbackEmoji": "💰",
+          "category": "Finance"
+        }
+      ]
+    },
+    {
+      "id": "business",
+      "name": "Business",
+      "emoji": "📈",
+      "podcasts": [
+        {
+          "name": "The Indicator from Planet Money",
+          "fallbackEmoji": "📊",
+          "category": "Finance"
+        },
+        {
+          "name": "Planet Money",
+          "fallbackEmoji": "📊",
+          "category": "Finance"
+        },
+        {
+          "name": "The Dave Ramsey Show",
+          "fallbackEmoji": "💰",
+          "category": "Finance"
+        },
+        {
+          "name": "Business Wars",
+          "fallbackEmoji": "⚔️",
+          "category": "Business"
+        },
+        {
+          "name": "Marketplace",
+          "fallbackEmoji": "📰",
+          "category": "News"
+        },
+        {
+          "name": "Freakonomics Radio",
+          "fallbackEmoji": "💡",
+          "category": "Ideas"
+        }
+      ]
+    },
+    {
+      "id": "career",
+      "name": "Career & Growth",
+      "emoji": "💼",
+      "podcasts": [
+        {
+          "name": "This Is Working with Daniel Roth",
+          "fallbackEmoji": "💡",
+          "category": "Work"
+        },
+        {
+          "name": "WorkLife with Adam Grant",
+          "fallbackEmoji": "💼",
+          "category": "Work"
+        },
+        {
+          "name": "Hello Monday",
+          "fallbackEmoji": "💡",
+          "category": "Work"
+        }
+      ]
+    },
+    {
+      "id": "motivation",
+      "name": "Motivation",
+      "emoji": "🎯",
+      "podcasts": [
+        {
+          "name": "The Ed Mylett Show",
+          "fallbackEmoji": "🎯",
+          "category": "Motivation"
+        },
+        {
+          "name": "The Tony Robbins Podcast",
+          "fallbackEmoji": "🎯",
+          "category": "Motivation"
+        },
+        {
+          "name": "The GaryVee Audio Experience",
+          "fallbackEmoji": "💡",
+          "category": "Ideas"
+        }
+      ]
+    }
+  ]
+}

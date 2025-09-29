@@ -1248,102 +1248,63 @@ export default function App() {
     loadCachedArtwork();
   }, []);
   
-  // Fallback podcast list - used when GitHub is unavailable
-  const FALLBACK_PODCASTS = [
+  // Fallback categories - used when GitHub is unavailable
+  const FALLBACK_CATEGORIES = [
     {
-      name: 'The Interview',
-      fallbackEmoji: '🎙️',
-      category: 'Society',
-      rssUrl: 'https://feeds.simplecast.com/ksGYZ_Z3'
+      id: 'audio2_favorites',
+      name: 'Audio2 Favorites',
+      emoji: '⭐',
+      podcasts: [
+        {
+          name: 'The Interview',
+          fallbackEmoji: '🎙️',
+          category: 'Society',
+          rssUrl: 'https://feeds.simplecast.com/ksGYZ_Z3'
+        },
+        {
+          name: 'Building One',
+          fallbackEmoji: '🏗️',
+          category: 'Business',
+          rssUrl: 'https://feeds.megaphone.fm/buildingone'
+        },
+        {
+          name: 'How I Built This with Guy Raz',
+          fallbackEmoji: '💡',
+          category: 'Ideas'
+        }
+      ]
     },
     {
-      name: 'Building One',
-      fallbackEmoji: '🏗️',
-      category: 'Business',
-      rssUrl: 'https://feeds.megaphone.fm/buildingone'
-    },
-    {
-      name: 'The Indicator from Planet Money',
-      fallbackEmoji: '📊',
-      category: 'Finance'
-    },
-    {
-      name: 'How I Built This with Guy Raz',
-      fallbackEmoji: '💡',
-      category: 'Ideas'
-    },
-    {
-      name: 'This Is Working with Daniel Roth',
-      fallbackEmoji: '💡',
-      category: 'Work'
-    },
-    {
-      name: 'Acquired',
-      fallbackEmoji: '💰',
-      category: 'Finance'
-    },
-    {
-      name: 'WorkLife with Adam Grant',
-      fallbackEmoji: '💼',
-      category: 'Work'
-    },
-    {
-      name: 'Masters of Scale',
-      fallbackEmoji: '🚀',
-      category: 'Ideas'
-    },
-    {
-      name: 'The Ed Mylett Show',
-      fallbackEmoji: '🎯',
-      category: 'Motivation'
-    },
-    {
-      name: 'The Tony Robbins Podcast',
-      fallbackEmoji: '🎯',
-      category: 'Motivation'
-    },
-    {
-      name: 'The GaryVee Audio Experience',
-      fallbackEmoji: '💡',
-      category: 'Ideas'
-    },
-    {
-      name: 'The Dave Ramsey Show',
-      fallbackEmoji: '💰',
-      category: 'Finance'
-    },
-    {
-      name: 'Marketplace',
-      fallbackEmoji: '📰',
-      category: 'News'
-    },
-    {
-      name: 'Freakonomics Radio',
-      fallbackEmoji: '💡',
-      category: 'Ideas'
-    },
-    {
-      name: 'Planet Money',
-      fallbackEmoji: '📊',
-      category: 'Finance'
-    },
-    {
-      name: 'Business Wars',
-      fallbackEmoji: '⚔️',
-      category: 'Business'
-    },
-    {
-      name: 'Hello Monday',
-      fallbackEmoji: '💡',
-      category: 'Work'
+      id: 'business',
+      name: 'Business',
+      emoji: '📈',
+      podcasts: [
+        {
+          name: 'The Indicator from Planet Money',
+          fallbackEmoji: '📊',
+          category: 'Finance'
+        },
+        {
+          name: 'Acquired',
+          fallbackEmoji: '💰',
+          category: 'Finance'
+        },
+        {
+          name: 'Masters of Scale',
+          fallbackEmoji: '🚀',
+          category: 'Ideas'
+        }
+      ]
     }
   ];
 
-  // GitHub URL for dynamic podcast list
+  // GitHub URL for dynamic podcast categories
   const PODCASTS_URL = 'https://raw.githubusercontent.com/droth0951/audio2/main/popular-podcasts.json';
 
-  // State for popular podcasts (now dynamic)
-  const [popularBusinessPodcasts, setPopularBusinessPodcasts] = useState(FALLBACK_PODCASTS);
+  // State for podcast categories and navigation
+  const [podcastCategories, setPodcastCategories] = useState(FALLBACK_CATEGORIES);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('audio2_favorites');
+  const [allCategories, setAllCategories] = useState(FALLBACK_CATEGORIES);
 
   // Add state for episode notes bottom sheet
   const [showEpisodeNotes, setShowEpisodeNotes] = useState(false);
@@ -1402,20 +1363,21 @@ export default function App() {
     console.log('🖼️ Background preload complete');
   }, []);
 
-  // Load popular podcasts from GitHub dynamically
+  // Load podcast categories from GitHub dynamically
   useEffect(() => {
-    const loadPopularPodcasts = async () => {
+    const loadPodcastCategories = async () => {
       try {
-        // First, try to load cached podcasts immediately
-        const cached = await AsyncStorage.getItem('popular_podcasts_list');
+        // First, try to load cached categories immediately
+        const cached = await AsyncStorage.getItem('podcast_categories');
         if (cached) {
-          const cachedPodcasts = JSON.parse(cached);
-          console.log('📦 Loading cached podcast list');
-          setPopularBusinessPodcasts(cachedPodcasts);
+          const cachedCategories = JSON.parse(cached);
+          console.log('📦 Loading cached podcast categories');
+          setPodcastCategories(cachedCategories.categories || cachedCategories);
+          setAllCategories(cachedCategories.categories || cachedCategories);
         }
 
         // Then fetch fresh data from GitHub
-        console.log('🌐 Fetching fresh podcast list from GitHub...');
+        console.log('🌐 Fetching fresh podcast categories from GitHub...');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
@@ -1432,36 +1394,70 @@ export default function App() {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const freshPodcasts = await response.json();
-        console.log('✅ Loaded fresh podcast list from GitHub:', freshPodcasts.length, 'podcasts');
+        const freshData = await response.json();
+        const categories = freshData.categories || freshData;
+        console.log('✅ Loaded fresh podcast categories from GitHub:', categories.length, 'categories');
 
-        setPopularBusinessPodcasts(freshPodcasts);
+        setPodcastCategories(categories);
+        setAllCategories(categories);
 
         // Cache the fresh data
-        await AsyncStorage.setItem('popular_podcasts_list', JSON.stringify(freshPodcasts));
-        console.log('💾 Cached fresh podcast list');
+        await AsyncStorage.setItem('podcast_categories', JSON.stringify(freshData));
+        console.log('💾 Cached fresh podcast categories');
 
       } catch (error) {
-        console.log('❌ Failed to load podcasts from GitHub:', error.message);
+        console.log('❌ Failed to load categories from GitHub:', error.message);
 
         // If we don't have cached data, use fallback
-        const cached = await AsyncStorage.getItem('popular_podcasts_list');
+        const cached = await AsyncStorage.getItem('podcast_categories');
         if (!cached) {
-          console.log('📋 Using fallback podcast list');
-          setPopularBusinessPodcasts(FALLBACK_PODCASTS);
+          console.log('📋 Using fallback podcast categories');
+          setPodcastCategories(FALLBACK_CATEGORIES);
+          setAllCategories(FALLBACK_CATEGORIES);
         }
       }
     };
 
-    loadPopularPodcasts();
+    loadPodcastCategories();
   }, []);
+
+  // Get current category's podcasts (including dynamic Recent category)
+  const getCurrentCategoryPodcasts = () => {
+    if (selectedCategoryId === 'recent') {
+      return recentPodcasts.slice(0, 5); // Show last 5 recent podcasts
+    }
+
+    const category = allCategories.find(cat => cat.id === selectedCategoryId);
+    return category ? category.podcasts : [];
+  };
+
+  // Get all categories including Recent (if user has recent podcasts)
+  const getAllCategoriesWithRecent = () => {
+    const categories = [...allCategories];
+
+    // Add Recent category at the beginning if user has recent podcasts
+    if (recentPodcasts && recentPodcasts.length > 0) {
+      const recentCategory = {
+        id: 'recent',
+        name: 'Recent',
+        emoji: '🕒',
+        podcasts: recentPodcasts.slice(0, 5)
+      };
+      categories.unshift(recentCategory);
+    }
+
+    return categories;
+  };
 
   const fetchPopularPodcastsArtwork = async () => {
     console.log('🎨 Fetching artwork for popular podcasts...');
     const artworkCache = {};
-    
+
     try {
-      for (const podcast of popularBusinessPodcasts) {
+      // Get all podcasts from all categories
+      const allPodcasts = allCategories.flatMap(category => category.podcasts);
+
+      for (const podcast of allPodcasts) {
         try {
           const searchResults = await handlePodcastSearch(podcast.name, true); // silent search
           if (searchResults && searchResults.length > 0) {
@@ -3936,41 +3932,40 @@ export default function App() {
                             containerStyle={styles.inputSection}
                           />
 
-                          {/* Recent Podcasts */}
-                          {recentPodcasts.length > 0 && episodes.length === 0 && !loading && !isSearching && (
+
+                          {/* Podcast Categories with Pills */}
+                          {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
                             <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
-                              <Text style={styles.sectionTitle}>Recent Podcasts</Text>
-                              <ScrollView 
-                                horizontal 
+                              {/* Category Pills */}
+                              <ScrollView
+                                horizontal
                                 showsHorizontalScrollIndicator={false}
-                                style={styles.recentScrollView}
+                                style={styles.categoryPillsContainer}
+                                contentContainerStyle={styles.categoryPillsContent}
                               >
-                                {recentPodcasts.map((podcast) => (
+                                {getAllCategoriesWithRecent().map((category) => (
                                   <TouchableOpacity
-                                    key={podcast.id}
-                                    style={styles.recentPodcastItem}
-                                    onPress={() => handleSelectPodcast(podcast)}
+                                    key={category.id}
+                                    onPress={() => setSelectedCategoryId(category.id)}
+                                    style={[
+                                      styles.categoryPill,
+                                      selectedCategoryId === category.id && styles.categoryPillActive
+                                    ]}
                                   >
-                                    <Image 
-                                      source={{ uri: podcast.artwork }} 
-                                      style={styles.recentPodcastArtwork}
-                                      defaultSource={require('./assets/logo1.png')}
-                                    />
-                                    <Text style={styles.recentPodcastName} numberOfLines={2}>
-                                      {podcast.name}
+                                    <Text style={styles.categoryPillEmoji}>{category.emoji}</Text>
+                                    <Text style={[
+                                      styles.categoryPillText,
+                                      selectedCategoryId === category.id && styles.categoryPillTextActive
+                                    ]}>
+                                      {category.name}
                                     </Text>
                                   </TouchableOpacity>
                                 ))}
                               </ScrollView>
-                            </View>
-                          )}
 
-                          {/* Popular Business Podcasts */}
-                          {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
-                            <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
-                              <Text style={styles.sectionTitle}>Popular Business Podcasts</Text>
+                              {/* Current Category Podcasts */}
                               <View style={styles.popularPodcastsList}>
-                                {popularBusinessPodcasts.map((podcast, idx) => (
+                                {getCurrentCategoryPodcasts().map((podcast, idx) => (
                                   <TouchableOpacity
                                     key={podcast.name + idx}
                                     onPress={async () => {
@@ -3986,8 +3981,8 @@ export default function App() {
                                     style={styles.popularPodcastItem}
                                   >
                                     {popularPodcastsArtwork[podcast.name] ? (
-                                      <Image 
-                                        source={{ uri: popularPodcastsArtwork[podcast.name] }} 
+                                      <Image
+                                        source={{ uri: popularPodcastsArtwork[podcast.name] }}
                                         style={styles.popularPodcastArtwork}
                                         defaultSource={require('./assets/logo1.png')}
                                       />
@@ -5733,16 +5728,44 @@ suggestionTagText: {
     color: '#f4f4f4',
     fontWeight: '600',
   },
-  // Popular Business Podcasts styles
-  popularPodcastItem: {
+  // Category Pills styles
+  categoryPillsContainer: {
+    marginBottom: 20,
+  },
+  categoryPillsContent: {
+    paddingRight: 20,
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2d2d2d',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  categoryPillActive: {
+    backgroundColor: '#d97706',
+    borderColor: '#d97706',
+  },
+  categoryPillEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  categoryPillText: {
     color: '#f4f4f4',
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 10,
-    textDecorationLine: 'underline',
   },
+  categoryPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  // Popular Podcasts styles
   popularPodcastsList: {
-    paddingBottom: 20, // Add bottom padding to ensure content is visible
+    paddingBottom: 20,
   },
   popularPodcastItem: {
     flexDirection: 'row',
