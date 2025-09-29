@@ -100,11 +100,11 @@ class CaptionProcessor {
 
         // 4. Fetch SRT subtitles with 32-character chunking for optimal mobile readability
         try {
-          logger.info('📝 Fetching SRT subtitles with 28-char chunking for ALL CAPS', { jobId, transcriptId: completedTranscript.id });
+          logger.info('📝 Fetching SRT subtitles with 25-char chunking for ALL CAPS', { jobId, transcriptId: completedTranscript.id });
           const srtSubtitles = await this.assemblyai.transcripts.subtitles(
             completedTranscript.id,
             'srt',
-            28  // chars_per_caption - Reduced for ALL CAPS text visual density
+            25  // chars_per_caption - Further reduced to prevent visual cutoff
           );
 
           // Create better captions from utterances instead of using awkward SRT chunks
@@ -222,7 +222,7 @@ class CaptionProcessor {
   }
 
   // Helper to split long captions (respects 3-line max rule from plan)
-  splitCaptionIntoLines(text, maxCharsPerLine = 32) { // Aligned with AssemblyAI chars_per_caption
+  splitCaptionIntoLines(text, maxCharsPerLine = 25) { // Aligned with AssemblyAI chars_per_caption
     if (!text || text.length <= maxCharsPerLine) return [text];
 
     const words = text.split(' ');
@@ -659,7 +659,7 @@ class CaptionProcessor {
   }
 
   // Optimize line breaks for readability (smart grammatical breaks)
-  optimizeLineBreaks(text, maxCharsPerLine = 28) { // Aligned with AssemblyAI chars_per_caption
+  optimizeLineBreaks(text, maxCharsPerLine = 25) { // Aligned with AssemblyAI chars_per_caption
     // Only extremely short phrases stay as single line
     if (!text || text.length <= 15) {
       return [text];

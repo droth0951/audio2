@@ -840,7 +840,7 @@ class FrameGenerator {
   }
 
   // Helper to split long captions (respects 2-line max rule for readability)
-  splitCaptionIntoLines(text, maxCharsPerLine = 26) { // Reduced by 6 chars total for ALL CAPS
+  splitCaptionIntoLines(text, maxCharsPerLine = 23) { // Further reduced to prevent visual cutoff
     if (!text || text.length <= maxCharsPerLine) return [text];
 
     // For SRT captions, lines may already be optimized
