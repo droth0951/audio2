@@ -20,17 +20,20 @@
         {
           "name": "How I Built This with Guy Raz",
           "fallbackEmoji": "💡",
-          "category": "Ideas"
+          "category": "Ideas",
+          "rssUrl": "https://feeds.npr.org/510313/podcast.xml"
         },
         {
           "name": "Masters of Scale",
           "fallbackEmoji": "🚀",
-          "category": "Ideas"
+          "category": "Ideas",
+          "rssUrl": "https://rss.art19.com/masters-of-scale"
         },
         {
           "name": "Acquired",
           "fallbackEmoji": "💰",
-          "category": "Finance"
+          "category": "Finance",
+          "rssUrl": "https://feeds.libsyn.com/106552/rss"
         }
       ]
     },
@@ -42,32 +45,38 @@
         {
           "name": "The Indicator from Planet Money",
           "fallbackEmoji": "📊",
-          "category": "Finance"
+          "category": "Finance",
+          "rssUrl": "https://feeds.npr.org/510325/podcast.xml"
         },
         {
           "name": "Planet Money",
           "fallbackEmoji": "📊",
-          "category": "Finance"
+          "category": "Finance",
+          "rssUrl": "https://feeds.npr.org/510289/podcast.xml"
         },
         {
           "name": "The Dave Ramsey Show",
           "fallbackEmoji": "💰",
-          "category": "Finance"
+          "category": "Finance",
+          "rssUrl": "https://feeds.ramseysolutions.com/TheRamseyShow"
         },
         {
           "name": "Business Wars",
           "fallbackEmoji": "⚔️",
-          "category": "Business"
+          "category": "Business",
+          "rssUrl": "https://rss.art19.com/business-wars"
         },
         {
           "name": "Marketplace",
           "fallbackEmoji": "📰",
-          "category": "News"
+          "category": "News",
+          "rssUrl": "https://feeds.publicradio.org/public_feeds/marketplace-pm/itunes/rss"
         },
         {
           "name": "Freakonomics Radio",
           "fallbackEmoji": "💡",
-          "category": "Ideas"
+          "category": "Ideas",
+          "rssUrl": "https://feeds.simplecast.com/Y8lFbOT4"
         }
       ]
     },
@@ -79,17 +88,20 @@
         {
           "name": "This Is Working with Daniel Roth",
           "fallbackEmoji": "💡",
-          "category": "Work"
+          "category": "Work",
+          "rssUrl": "https://thisisworking.simplecast.com/rss"
         },
         {
           "name": "WorkLife with Adam Grant",
           "fallbackEmoji": "💼",
-          "category": "Work"
+          "category": "Work",
+          "rssUrl": "https://feeds.simplecast.com/4T39_jAj"
         },
         {
           "name": "Hello Monday",
           "fallbackEmoji": "💡",
-          "category": "Work"
+          "category": "Work",
+          "rssUrl": "https://feeds.simplecast.com/RRx58AHb"
         }
       ]
     },
@@ -101,17 +113,20 @@
         {
           "name": "The Ed Mylett Show",
           "fallbackEmoji": "🎯",
-          "category": "Motivation"
+          "category": "Motivation",
+          "rssUrl": "https://cms.megaphone.fm/channel/CUM8388046596"
         },
         {
           "name": "The Tony Robbins Podcast",
           "fallbackEmoji": "🎯",
-          "category": "Motivation"
+          "category": "Motivation",
+          "rssUrl": "https://anchor.fm/s/4170150/podcast/rss"
         },
         {
           "name": "The GaryVee Audio Experience",
           "fallbackEmoji": "💡",
-          "category": "Ideas"
+          "category": "Ideas",
+          "rssUrl": "https://feeds.simplecast.com/Yo5IDBgF"
         }
       ]
     },
@@ -123,12 +138,14 @@
         {
           "name": "The Tim Ferriss Show",
           "fallbackEmoji": "🧘",
-          "category": "Wellness"
+          "category": "Wellness",
+          "rssUrl": "https://rss.art19.com/tim-ferriss-show"
         },
         {
           "name": "On Purpose with Jay Shetty",
           "fallbackEmoji": "🧘",
-          "category": "Wellness"
+          "category": "Wellness",
+          "rssUrl": "https://feeds.simplecast.com/S8se0npgLH"
         }
       ]
     },
@@ -140,12 +157,14 @@
         {
           "name": "Conan O'Brien Needs a Friend",
           "fallbackEmoji": "🎬",
-          "category": "Comedy"
+          "category": "Comedy",
+          "rssUrl": "https://feeds.simplecast.com/dHoohVNH"
         },
         {
           "name": "WTF with Marc Maron",
           "fallbackEmoji": "🎬",
-          "category": "Comedy"
+          "category": "Comedy",
+          "rssUrl": "https://feeds.acast.com/public/shows/61c85260-19ea-4330-a548-e97d86c50328"
         }
       ]
     }
