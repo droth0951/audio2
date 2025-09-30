@@ -1173,6 +1173,7 @@ export default function App() {
   const textInputRef = useRef(null);
   const searchTextRef = useRef('');
   const [localSearchText, setLocalSearchText] = useState('');
+  const categoryScrollViewRef = useRef(null);
   
   // Check for app updates
   const checkForUpdates = async () => {
@@ -3938,15 +3939,22 @@ export default function App() {
                             <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
                               {/* Category Pills */}
                               <ScrollView
+                                ref={categoryScrollViewRef}
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 style={styles.categoryPillsContainer}
                                 contentContainerStyle={styles.categoryPillsContent}
+                                maintainVisibleContentPosition={{
+                                  minIndexForVisible: 0,
+                                }}
                               >
                                 {getAllCategoriesWithRecent().map((category) => (
                                   <TouchableOpacity
                                     key={category.id}
-                                    onPress={() => setSelectedCategoryId(category.id)}
+                                    onPress={() => {
+                                      // Just update the selected category, don't reset scroll position
+                                      setSelectedCategoryId(category.id);
+                                    }}
                                     style={[
                                       styles.categoryPill,
                                       selectedCategoryId === category.id && styles.categoryPillActive
