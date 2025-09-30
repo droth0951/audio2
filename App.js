@@ -1174,6 +1174,7 @@ export default function App() {
   const searchTextRef = useRef('');
   const [localSearchText, setLocalSearchText] = useState('');
   const categoryScrollViewRef = useRef(null);
+  const [categoryScrollOffset, setCategoryScrollOffset] = useState(0);
   
   // Check for app updates
   const checkForUpdates = async () => {
@@ -3946,6 +3947,21 @@ export default function App() {
                                 contentContainerStyle={styles.categoryPillsContent}
                                 data={getAllCategoriesWithRecent()}
                                 keyExtractor={(item) => item.id}
+                                onScroll={(event) => {
+                                  setCategoryScrollOffset(event.nativeEvent.contentOffset.x);
+                                }}
+                                scrollEventThrottle={16}
+                                onLayout={() => {
+                                  // Restore scroll position after layout
+                                  if (categoryScrollOffset > 0) {
+                                    setTimeout(() => {
+                                      categoryScrollViewRef.current?.scrollToOffset({
+                                        offset: categoryScrollOffset,
+                                        animated: false
+                                      });
+                                    }, 50);
+                                  }
+                                }}
                                 renderItem={({ item: category }) => (
                                   <TouchableOpacity
                                     onPress={() => {
