@@ -8,7 +8,7 @@
         {
   "name": "The Daily",
   "fallbackEmoji": "🎙️",
-  "category": "Audio2 Favorites",
+  "category": "News",
   "rssUrl": "https://feeds.simplecast.com/54nAGcIl"
 },
         {
@@ -30,11 +30,11 @@
           "rssUrl": "https://rss.art19.com/how-i-built-this"
         },
         {
-          "name": "Masters of Scale",
-          "fallbackEmoji": "🚀",
-          "category": "Ideas",
-          "rssUrl": "https://rss.art19.com/masters-of-scale"
-        }, 
+  "name": "The Mel Robbins Podcast",
+  "fallbackEmoji": "💡",
+  "category": "Motivation",
+  "rssUrl": "https://feeds.simplecast.com/UCwaTX1J"
+},
         {
           "name": "The Diary of a CEO",
           "fallbackEmoji": "👔",
@@ -42,11 +42,23 @@
           "rssUrl": "https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn"
         },
         {
+          "name": "Hello Monday",
+          "fallbackEmoji": "💡",
+          "category": "Work",
+          "rssUrl": "https://feeds.simplecast.com/RRx58AHb"
+        },
+        {
           "name": "Latent Space",
           "fallbackEmoji": "🤖",
           "category": "Technology",
           "rssUrl": "https://rss.flightcast.com/vgnxzgiwwzwke85ym53fjnzu.xml"
-        }
+        },
+     {
+          "name": "This Is Working with Daniel Roth",
+          "fallbackEmoji": "💡",
+          "category": "Work",
+          "rssUrl": "https://thisisworking.simplecast.com/rss"
+        },
       ]
     },
     {
@@ -78,6 +90,12 @@
           "category": "News",
           "rssUrl": "https://feeds.publicradio.org/public_feeds/marketplace"
         },
+         {
+          "name": "Masters of Scale",
+          "fallbackEmoji": "🚀",
+          "category": "Ideas",
+          "rssUrl": "https://rss.art19.com/masters-of-scale"
+        }, 
         {
           "name": "Freakonomics Radio",
           "fallbackEmoji": "💡",
