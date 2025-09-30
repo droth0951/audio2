@@ -3938,21 +3938,17 @@ export default function App() {
                           {episodes.length === 0 && searchResults.length === 0 && !loading && !isSearching && (
                             <View style={{ marginBottom: 24, paddingHorizontal: PADDING.horizontal }}>
                               {/* Category Pills */}
-                              <ScrollView
+                              <FlatList
                                 ref={categoryScrollViewRef}
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 style={styles.categoryPillsContainer}
                                 contentContainerStyle={styles.categoryPillsContent}
-                                scrollEventThrottle={16}
-                                directionalLockEnabled={true}
-                                automaticallyAdjustContentInsets={false}
-                              >
-                                {getAllCategoriesWithRecent().map((category) => (
+                                data={getAllCategoriesWithRecent()}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item: category }) => (
                                   <TouchableOpacity
-                                    key={category.id}
                                     onPress={() => {
-                                      // Just update the selected category, don't reset scroll position
                                       setSelectedCategoryId(category.id);
                                     }}
                                     style={[
@@ -3968,8 +3964,8 @@ export default function App() {
                                       {category.name}
                                     </Text>
                                   </TouchableOpacity>
-                                ))}
-                              </ScrollView>
+                                )}
+                              />
 
                               {/* Current Category Podcasts */}
                               <View style={styles.popularPodcastsList}>
