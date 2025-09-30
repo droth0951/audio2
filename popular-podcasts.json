@@ -34,6 +34,18 @@
           "fallbackEmoji": "💰",
           "category": "Finance",
           "rssUrl": "https://feeds.libsyn.com/106552/rss"
+        },
+        {
+          "name": "The Diary of a CEO",
+          "fallbackEmoji": "👔",
+          "category": "Business",
+          "rssUrl": "https://feeds.megaphone.fm/SOZZ1827647178"
+        },
+        {
+          "name": "Latent Space",
+          "fallbackEmoji": "🤖",
+          "category": "Technology",
+          "rssUrl": "https://api.substack.com/feed/podcast/459702.rss"
         }
       ]
     },
@@ -77,6 +89,18 @@
           "fallbackEmoji": "💡",
           "category": "Ideas",
           "rssUrl": "https://feeds.simplecast.com/Y8lFbOT4"
+        },
+        {
+          "name": "The Diary of a CEO",
+          "fallbackEmoji": "👔",
+          "category": "Business",
+          "rssUrl": "https://feeds.megaphone.fm/SOZZ1827647178"
+        },
+        {
+          "name": "Latent Space",
+          "fallbackEmoji": "🤖",
+          "category": "Technology",
+          "rssUrl": "https://api.substack.com/feed/podcast/459702.rss"
         }
       ]
     },
