@@ -45,7 +45,7 @@
           "name": "Hello Monday",
           "fallbackEmoji": "💡",
           "category": "Work",
-          "rssUrl": "https://feeds.simplecast.com/RRx58AHb"
+          "rssUrl": "https://feeds.megaphone.fm/LI2346399949"
         },
         {
           "name": "Latent Space",
@@ -58,7 +58,7 @@
           "fallbackEmoji": "💡",
           "category": "Work",
           "rssUrl": "https://thisisworking.simplecast.com/rss"
-        },
+        }
       ]
     },
     {
@@ -137,7 +137,7 @@
           "name": "Hello Monday",
           "fallbackEmoji": "💡",
           "category": "Work",
-          "rssUrl": "https://feeds.simplecast.com/RRx58AHb"
+          "rssUrl": "https://feeds.megaphone.fm/LI2346399949"
         }
       ]
     },
@@ -156,7 +156,7 @@
           "name": "The GaryVee Audio Experience",
           "fallbackEmoji": "💡",
           "category": "Ideas",
-          "rssUrl": "https://feeds.simplecast.com/Yo5IDBgF"
+          "rssUrl": "https://anchor.fm/s/f39a864/podcast/rss"
         }
       ]
     },
@@ -175,7 +175,7 @@
           "name": "On Purpose with Jay Shetty",
           "fallbackEmoji": "🧘",
           "category": "Wellness",
-          "rssUrl": "https://feeds.simplecast.com/S8se0npgLH"
+          "rssUrl": "https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/32f1779e-bc01-4d36-89e6-afcb01070c82/e0c8382f-48d4-42bb-89d5-afcb01075cb4/podcast.rss"
         }
       ]
     },
