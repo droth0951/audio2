@@ -189,6 +189,18 @@
           "fallbackEmoji": "🎬",
           "category": "Comedy",
           "rssUrl": "https://feeds.acast.com/public/shows/61c85260-19ea-4330-a548-e97d86c50328"
+        },
+        {
+          "name": "Making It with Amy Poehler and Nick Offerman",
+          "fallbackEmoji": "🎬",
+          "category": "Comedy",
+          "rssUrl": "https://feeds.simplecast.com/KOjKnU4f"
+        },
+        {
+          "name": "The Lonely Island and Seth Meyers Podcast",
+          "fallbackEmoji": "🎬",
+          "category": "Comedy",
+          "rssUrl": "https://feeds.simplecast.com/x_agpwVu"
         }
       ]
     }
