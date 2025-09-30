@@ -6,11 +6,11 @@
       "emoji": "⭐",
       "podcasts": [
         {
-          "name": "The Interview",
-          "fallbackEmoji": "🎙️",
-          "category": "Society",
-          "rssUrl": "https://feeds.simplecast.com/ksGYZ_Z3"
-        },
+  "name": "The Daily",
+  "fallbackEmoji": "🎙️",
+  "category": "Audio2 Favorites",
+  "rssUrl": "https://feeds.simplecast.com/54nAGcIl"
+}
         {
           "name": "Acquired",
           "fallbackEmoji": "💰",
