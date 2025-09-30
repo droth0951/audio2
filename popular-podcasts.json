@@ -6,10 +6,10 @@
       "emoji": "⭐",
       "podcasts": [
         {
-          "name": "The Interview",
-          "fallbackEmoji": "🎙️",
-          "category": "Society",
-          "rssUrl": "https://feeds.simplecast.com/ksGYZ_Z3"
+          "name": "Acquired",
+          "fallbackEmoji": "💰",
+          "category": "Finance",
+          "rssUrl": "https://feeds.libsyn.com/106552/rss"
         },
         {
           "name": "Building One",
@@ -28,24 +28,18 @@
           "fallbackEmoji": "🚀",
           "category": "Ideas",
           "rssUrl": "https://rss.art19.com/masters-of-scale"
-        },
-        {
-          "name": "Acquired",
-          "fallbackEmoji": "💰",
-          "category": "Finance",
-          "rssUrl": "https://feeds.libsyn.com/106552/rss"
-        },
+        }, 
         {
           "name": "The Diary of a CEO",
           "fallbackEmoji": "👔",
           "category": "Business",
-          "rssUrl": "https://feeds.megaphone.fm/SOZZ1827647178"
+          "rssUrl": "https://feeds.megaphone.fm/thediaryofaceo"
         },
         {
           "name": "Latent Space",
           "fallbackEmoji": "🤖",
           "category": "Technology",
-          "rssUrl": "https://api.substack.com/feed/podcast/459702.rss"
+          "rssUrl": "https://rss.flightcast.com/vgnxzgiwwzwke85ym53fjnzu.xml"
         }
       ]
     },
