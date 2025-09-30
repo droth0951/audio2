@@ -6,10 +6,16 @@
       "emoji": "⭐",
       "podcasts": [
         {
+          "name": "The Interview",
+          "fallbackEmoji": "🎙️",
+          "category": "Society",
+          "rssUrl": "https://feeds.simplecast.com/ksGYZ_Z3"
+        },
+        {
           "name": "Acquired",
           "fallbackEmoji": "💰",
           "category": "Finance",
-          "rssUrl": "https://feeds.libsyn.com/106552/rss"
+          "rssUrl": "https://feeds.transistor.fm/acquired"
         },
         {
           "name": "Building One",
@@ -21,7 +27,7 @@
           "name": "How I Built This with Guy Raz",
           "fallbackEmoji": "💡",
           "category": "Ideas",
-          "rssUrl": "https://feeds.npr.org/510313/podcast.xml"
+          "rssUrl": "https://rss.art19.com/how-i-built-this"
         },
         {
           "name": "Masters of Scale",
@@ -33,7 +39,7 @@
           "name": "The Diary of a CEO",
           "fallbackEmoji": "👔",
           "category": "Business",
-          "rssUrl": "https://feeds.megaphone.fm/thediaryofaceo"
+          "rssUrl": "https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn"
         },
         {
           "name": "Latent Space",
@@ -61,12 +67,6 @@
           "rssUrl": "https://feeds.npr.org/510289/podcast.xml"
         },
         {
-          "name": "The Dave Ramsey Show",
-          "fallbackEmoji": "💰",
-          "category": "Finance",
-          "rssUrl": "https://feeds.ramseysolutions.com/TheRamseyShow"
-        },
-        {
           "name": "Business Wars",
           "fallbackEmoji": "⚔️",
           "category": "Business",
@@ -76,7 +76,7 @@
           "name": "Marketplace",
           "fallbackEmoji": "📰",
           "category": "News",
-          "rssUrl": "https://feeds.publicradio.org/public_feeds/marketplace-pm/itunes/rss"
+          "rssUrl": "https://feeds.publicradio.org/public_feeds/marketplace"
         },
         {
           "name": "Freakonomics Radio",
@@ -88,13 +88,13 @@
           "name": "The Diary of a CEO",
           "fallbackEmoji": "👔",
           "category": "Business",
-          "rssUrl": "https://feeds.megaphone.fm/SOZZ1827647178"
+          "rssUrl": "https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn"
         },
         {
           "name": "Latent Space",
           "fallbackEmoji": "🤖",
           "category": "Technology",
-          "rssUrl": "https://api.substack.com/feed/podcast/459702.rss"
+          "rssUrl": "https://rss.flightcast.com/vgnxzgiwwzwke85ym53fjnzu.xml"
         }
       ]
     },
@@ -132,13 +132,7 @@
           "name": "The Ed Mylett Show",
           "fallbackEmoji": "🎯",
           "category": "Motivation",
-          "rssUrl": "https://cms.megaphone.fm/channel/CUM8388046596"
-        },
-        {
-          "name": "The Tony Robbins Podcast",
-          "fallbackEmoji": "🎯",
-          "category": "Motivation",
-          "rssUrl": "https://anchor.fm/s/4170150/podcast/rss"
+          "rssUrl": "https://feeds.megaphone.fm/WWO3519750118"
         },
         {
           "name": "The GaryVee Audio Experience",
