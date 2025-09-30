@@ -47,17 +47,11 @@
           "category": "Work",
           "rssUrl": "https://feeds.megaphone.fm/LI2346399949"
         },
-        {
-          "name": "Latent Space",
-          "fallbackEmoji": "🤖",
-          "category": "Technology",
-          "rssUrl": "https://rss.flightcast.com/vgnxzgiwwzwke85ym53fjnzu.xml"
-        },
      {
           "name": "This Is Working with Daniel Roth",
           "fallbackEmoji": "💡",
           "category": "Work",
-          "rssUrl": "https://thisisworking.simplecast.com/rss"
+          "rssUrl": "https://feeds.megaphone.fm/LI4147547493"
         }
       ]
     },
@@ -157,7 +151,13 @@
           "fallbackEmoji": "💡",
           "category": "Ideas",
           "rssUrl": "https://anchor.fm/s/f39a864/podcast/rss"
-        }
+        },
+        {
+  "name": "Everyday Better",
+  "fallbackEmoji": "💼",
+  "category": "Inspiration",
+  "rssUrl": "https://feeds.megaphone.fm/LI1667985020"
+}
       ]
     },
     {
@@ -190,6 +190,18 @@
           "category": "Comedy",
           "rssUrl": "https://feeds.simplecast.com/dHoohVNH"
         },
+        {
+  "name": "Good Hang with Amy Poehler",
+  "fallbackEmoji": "🎬",
+  "category": "Interview",
+  "rssUrl": "https://feeds.megaphone.fm/good-hang-with-amy-poehler"
+},
+        {
+  "name": "The Lonely Island and Seth Meyers Podcast",
+  "fallbackEmoji": "🎬",
+  "category": "Comedy",
+  "rssUrl": "https://feeds.megaphone.fm/RGP4565962324"
+},
         {
           "name": "WTF with Marc Maron",
           "fallbackEmoji": "🎬",
