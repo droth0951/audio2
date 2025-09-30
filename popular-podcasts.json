@@ -114,6 +114,40 @@
           "category": "Ideas"
         }
       ]
+    },
+    {
+      "id": "wellness",
+      "name": "Wellness",
+      "emoji": "🧘",
+      "podcasts": [
+        {
+          "name": "The Tim Ferriss Show",
+          "fallbackEmoji": "🧘",
+          "category": "Wellness"
+        },
+        {
+          "name": "On Purpose with Jay Shetty",
+          "fallbackEmoji": "🧘",
+          "category": "Wellness"
+        }
+      ]
+    },
+    {
+      "id": "entertainment",
+      "name": "Entertainment",
+      "emoji": "🎬",
+      "podcasts": [
+        {
+          "name": "Conan O'Brien Needs a Friend",
+          "fallbackEmoji": "🎬",
+          "category": "Comedy"
+        },
+        {
+          "name": "WTF with Marc Maron",
+          "fallbackEmoji": "🎬",
+          "category": "Comedy"
+        }
+      ]
     }
   ]
 }

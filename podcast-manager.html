@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio2 Podcast Manager</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #f4f4f4;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: #2d2d2d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #404040;
+        }
+        .bookmarklet {
+            background: #d97706;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+            margin: 10px 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #404040;
+            background: #1a1a1a;
+            color: #f4f4f4;
+            font-size: 14px;
+        }
+        button {
+            background: #d97706;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #b45309;
+        }
+        .output {
+            background: #1a1a1a;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .emoji-picker {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+        .emoji-option {
+            background: #404040;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        .emoji-option:hover {
+            background: #d97706;
+        }
+        .instructions {
+            background: #2d4a2d;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎙️ Audio2 Podcast Manager</h1>
+        <p>Easily add podcasts to your categories without editing JSON manually</p>
+    </div>
+
+    <div class="section">
+        <h2>📖 Bookmarklet (Drag to Bookmarks Bar)</h2>
+        <p>Drag this link to your bookmarks bar, then click it on any podcast page to auto-fill the form below:</p>
+        <a href="javascript:(function(){const title=document.title;const url=window.location.href;let rssUrl='';const rssLinks=document.querySelectorAll('link[type*=rss],link[type*=xml],a[href*=rss],a[href*=xml],a[href*=feed]');if(rssLinks.length>0){rssUrl=rssLinks[0].href||rssLinks[0].getAttribute('href');}const podcastData={name:title.replace(/\s*\|\s*.*/,'').replace(/\s*-\s*.*/,'').trim(),currentUrl:url,rssUrl:rssUrl,detectedAt:new Date().toISOString()};window.open('file:///Users/droth/Downloads/Projects/podknowledge/podcast-manager.html?data='+encodeURIComponent(JSON.stringify(podcastData)),'_blank');})();" class="bookmarklet">🎙️ Add to Audio2</a>
+
+        <div class="instructions">
+            <strong>How to use:</strong>
+            <ol>
+                <li>Drag the orange button above to your browser's bookmarks bar</li>
+                <li>Go to any podcast page (Apple Podcasts, Spotify, podcast website)</li>
+                <li>Click the "🎙️ Add to Audio2" bookmark</li>
+                <li>It will open this page with the podcast info pre-filled</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>✏️ Add New Podcast</h2>
+        <div class="form-group">
+            <label for="podcastName">Podcast Name:</label>
+            <input type="text" id="podcastName" placeholder="The Interview">
+        </div>
+
+        <div class="form-group">
+            <label for="category">Category:</label>
+            <select id="category">
+                <option value="audio2_favorites">Audio2 Favorites</option>
+                <option value="business">Business</option>
+                <option value="career">Career & Growth</option>
+                <option value="motivation">Motivation</option>
+                <option value="wellness">Wellness</option>
+                <option value="entertainment">Entertainment</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="emoji">Emoji:</label>
+            <input type="text" id="emoji" placeholder="🎙️" maxlength="2">
+            <div class="emoji-picker">
+                <button type="button" class="emoji-option" onclick="setEmoji('🎙️')">🎙️</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('📈')">📈</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('💡')">💡</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('🚀')">🚀</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('💼')">💼</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('🎯')">🎯</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('🧘')">🧘</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('🎬')">🎬</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('📰')">📰</button>
+                <button type="button" class="emoji-option" onclick="setEmoji('⚔️')">⚔️</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="podcastCategory">Podcast Category (for display):</label>
+            <input type="text" id="podcastCategory" placeholder="Society">
+        </div>
+
+        <div class="form-group">
+            <label for="rssUrl">RSS URL (optional):</label>
+            <input type="url" id="rssUrl" placeholder="https://feeds.example.com/podcast">
+        </div>
+
+        <button onclick="generatePodcastEntry()">Generate JSON Entry</button>
+    </div>
+
+    <div class="section" id="outputSection" style="display: none;">
+        <h2>📋 Copy This to Your JSON</h2>
+        <p>Add this entry to the appropriate category in your <code>popular-podcasts.json</code> file:</p>
+        <div class="output" id="jsonOutput"></div>
+        <button onclick="copyToClipboard()">Copy to Clipboard</button>
+    </div>
+
+    <div class="section">
+        <h2>📝 Current JSON Structure</h2>
+        <p>Your <code>popular-podcasts.json</code> should look like this:</p>
+        <div class="output">
+{
+  "categories": [
+    {
+      "id": "audio2_favorites",
+      "name": "Audio2 Favorites",
+      "emoji": "⭐",
+      "podcasts": [
+        // Add new podcasts here
+      ]
+    },
+    {
+      "id": "business",
+      "name": "Business",
+      "emoji": "📈",
+      "podcasts": [
+        // Add business podcasts here
+      ]
+    }
+    // ... more categories
+  ]
+}
+        </div>
+    </div>
+
+    <script>
+        // Check for bookmarklet data in URL
+        window.addEventListener('load', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const data = urlParams.get('data');
+            if (data) {
+                try {
+                    const podcastData = JSON.parse(decodeURIComponent(data));
+                    document.getElementById('podcastName').value = podcastData.name || '';
+                    document.getElementById('rssUrl').value = podcastData.rssUrl || '';
+                    // Auto-focus on category selection
+                    document.getElementById('category').focus();
+                } catch (e) {
+                    console.log('Error parsing bookmarklet data:', e);
+                }
+            }
+        });
+
+        function setEmoji(emoji) {
+            document.getElementById('emoji').value = emoji;
+        }
+
+        function generatePodcastEntry() {
+            const name = document.getElementById('podcastName').value.trim();
+            const emoji = document.getElementById('emoji').value.trim();
+            const category = document.getElementById('podcastCategory').value.trim();
+            const rssUrl = document.getElementById('rssUrl').value.trim();
+
+            if (!name) {
+                alert('Please enter a podcast name');
+                return;
+            }
+
+            const entry = {
+                name: name,
+                fallbackEmoji: emoji || '🎙️',
+                category: category || 'Podcast'
+            };
+
+            if (rssUrl) {
+                entry.rssUrl = rssUrl;
+            }
+
+            const jsonOutput = JSON.stringify(entry, null, 2);
+            document.getElementById('jsonOutput').textContent = jsonOutput;
+            document.getElementById('outputSection').style.display = 'block';
+            document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyToClipboard() {
+            const output = document.getElementById('jsonOutput');
+            navigator.clipboard.writeText(output.textContent).then(function() {
+                alert('JSON copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
