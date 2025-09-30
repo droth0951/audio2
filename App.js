@@ -3944,9 +3944,9 @@ export default function App() {
                                 showsHorizontalScrollIndicator={false}
                                 style={styles.categoryPillsContainer}
                                 contentContainerStyle={styles.categoryPillsContent}
-                                maintainVisibleContentPosition={{
-                                  minIndexForVisible: 0,
-                                }}
+                                scrollEventThrottle={16}
+                                directionalLockEnabled={true}
+                                automaticallyAdjustContentInsets={false}
                               >
                                 {getAllCategoriesWithRecent().map((category) => (
                                   <TouchableOpacity
