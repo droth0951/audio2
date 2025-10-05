@@ -2167,7 +2167,7 @@ export default function App() {
   const handleClearClip = () => {
     setClipStart(null);
     setClipEnd(null);
-    setCaptionsEnabled(false);
+    setCaptionsEnabled(true);
     captionService.reset(); // Reset CaptionService when clearing clip
   };
 
@@ -2257,7 +2257,7 @@ export default function App() {
     setClipEnd(null);
     setIsSelectionMode(false);
     setSelectionStep('idle');
-    setCaptionsEnabled(false);
+    setCaptionsEnabled(true);
     captionService.reset(); // Reset CaptionService when clearing selection
   };
 
@@ -3947,21 +3947,8 @@ export default function App() {
                                 contentContainerStyle={styles.categoryPillsContent}
                                 data={getAllCategoriesWithRecent()}
                                 keyExtractor={(item) => item.id}
-                                onScroll={(event) => {
-                                  setCategoryScrollOffset(event.nativeEvent.contentOffset.x);
-                                }}
-                                scrollEventThrottle={16}
-                                onLayout={() => {
-                                  // Restore scroll position after layout
-                                  if (categoryScrollOffset > 0) {
-                                    setTimeout(() => {
-                                      categoryScrollViewRef.current?.scrollToOffset({
-                                        offset: categoryScrollOffset,
-                                        animated: false
-                                      });
-                                    }, 50);
-                                  }
-                                }}
+                                nestedScrollEnabled={true}
+                                removeClippedSubviews={false}
                                 renderItem={({ item: category }) => (
                                   <TouchableOpacity
                                     onPress={() => {

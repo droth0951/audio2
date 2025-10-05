@@ -17,35 +17,14 @@ const SearchBar = ({
   const inputRef = useRef(null);
   const debounceTimerRef = useRef(null);
 
-  // Debounced search effect
+  // Cleanup timer on unmount
   useEffect(() => {
-    // Clear existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Don't search for very short queries (less than 2 characters)
-    const query = searchText.trim();
-    const isUrl = /^https?:\/\//i.test(query);
-
-    // Only auto-search for non-URL queries
-    // URLs should only be submitted explicitly via Enter key
-    if (query && query.length >= 2 && !isUrl) {
-      // Set new timer for search
-      debounceTimerRef.current = setTimeout(() => {
-        if (onSearch) {
-          onSearch(query);
-        }
-      }, debounceDelay);
-    }
-
-    // Cleanup timer on unmount
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [searchText, onSearch, debounceDelay]);
+  }, []);
 
   // Memoized handlers to prevent re-renders
   const handleTextChange = useCallback((text) => {
