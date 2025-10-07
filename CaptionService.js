@@ -13,6 +13,7 @@ class BulletproofCaptionService {
     this.utterances = [];
     this.debugMode = false;
     this.previousUtteranceText = ''; // Track previous utterance for smart capitalization
+    this.currentSpeaker = null; // Track current speaker for speaker change detection
   }
 
   setDebugMode(enabled) {
@@ -71,39 +72,60 @@ class BulletproofCaptionService {
     }
     
     // IMPROVEMENT: Combine very short utterances from the same speaker
-    // This helps with AssemblyAI's tendency to fragment sentences
+    // and remove artificial periods from pause-based splits
     const combinedUtterances = [];
     let currentCombined = null;
-    
-    for (const utterance of utterances) {
+
+    for (let i = 0; i < utterances.length; i++) {
+      const utterance = utterances[i];
+      const nextUtterance = utterances[i + 1];
       const utteranceDuration = utterance.endMs - utterance.startMs;
-      
+      const gapToNext = nextUtterance ? (nextUtterance.startMs - utterance.endMs) : Infinity;
+
+      // Detect if this is an artificial split (not a real sentence ending):
+      // 1. Same speaker as next utterance
+      // 2. Gap is small (< 500ms indicates pause-based split, not speaker change)
+      // 3. Current text ends with period
+      const isArtificialSplit = nextUtterance &&
+        utterance.speaker === nextUtterance.speaker &&
+        gapToNext < 500 &&
+        /[.]\s*$/.test(utterance.text);
+
+      // Remove artificial period if detected
+      let cleanedText = utterance.text;
+      if (isArtificialSplit) {
+        cleanedText = utterance.text.replace(/[.]\s*$/, '');
+      }
+
       // Combine if:
       // 1. Same speaker as previous
       // 2. Previous utterance was very short (< 2 seconds) OR current is very short
       // 3. Gap between them is small (< 500ms)
-      if (currentCombined && 
+      if (currentCombined &&
           currentCombined.speaker === utterance.speaker &&
           (utteranceDuration < 2000 || (currentCombined.endMs - currentCombined.startMs) < 2000) &&
           (utterance.startMs - currentCombined.endMs) < 500) {
-        
-        // Combine with previous
-        currentCombined.text += ' ' + utterance.text;
+
+        // Combine with previous - use a space (period was already removed if needed)
+        currentCombined.text += ' ' + cleanedText;
         currentCombined.endMs = utterance.endMs;
       } else {
         // Start new utterance
         if (currentCombined) {
           combinedUtterances.push(currentCombined);
         }
-        currentCombined = { ...utterance };
+        currentCombined = {
+          ...utterance,
+          text: cleanedText
+        };
       }
     }
-    
+
     // Don't forget the last one
     if (currentCombined) {
       combinedUtterances.push(currentCombined);
     }
-    
+
     return combinedUtterances.length > 0 ? combinedUtterances : utterances;
   }
 
@@ -143,23 +165,48 @@ class BulletproofCaptionService {
       }
 
       // IMPROVED: Find the utterance that should be active right now
-      const currentUtterance = this.utterances.find(utterance => 
+      const currentUtterance = this.utterances.find(utterance =>
         relativeTimeMs >= utterance.startMs && relativeTimeMs <= utterance.endMs
       );
-      
+
       if (currentUtterance) {
+        // SPEAKER CHANGE DETECTION: Add buffer at start of new speaker's utterance
+        // This creates a visual break between speakers
+        const SPEAKER_CHANGE_BUFFER_MS = 100; // Clear captions for 100ms when speaker changes
+
+        if (this.currentSpeaker !== null &&
+            this.currentSpeaker !== currentUtterance.speaker) {
+          // Check if we're within the buffer period at the start of this utterance
+          const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
+
+          if (timeIntoUtterance < SPEAKER_CHANGE_BUFFER_MS) {
+            // Still in buffer period - don't show caption yet
+            return {
+              text: '',
+              speaker: currentUtterance.speaker,
+              isActive: false
+            };
+          }
+
+          // Past buffer period - update speaker and continue
+          this.currentSpeaker = currentUtterance.speaker;
+        } else if (this.currentSpeaker === null) {
+          // First utterance - just set the speaker
+          this.currentSpeaker = currentUtterance.speaker;
+        }
+
         let text = currentUtterance.text;
-        
+
         // CORE FIX: Check if this should be capitalized based on the previous utterance
-        const shouldCapitalize = !this.previousUtteranceText || 
+        const shouldCapitalize = !this.previousUtteranceText ||
           /[.!?]\s*$/.test(this.previousUtteranceText);
-        
+
         // Only capitalize if it's truly a new sentence
         if (!shouldCapitalize && /^[A-Z]/.test(text)) {
           // If it starts with a capital but shouldn't, make it lowercase
           text = text.charAt(0).toLowerCase() + text.slice(1);
         }
-        
+
         // Handle long utterances with progressive display
         const utteranceDuration = currentUtterance.endMs - currentUtterance.startMs;
         const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
@@ -171,10 +218,10 @@ class BulletproofCaptionService {
           const chunkIndex = Math.min(Math.floor(progressRatio * chunks.length), chunks.length - 1);
           text = chunks[chunkIndex];
         }
-        
+
         // Store for next iteration
         this.previousUtteranceText = currentUtterance.text;
-        
+
         return {
           text: text,
           speaker: currentUtterance.speaker,
