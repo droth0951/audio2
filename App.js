@@ -68,12 +68,28 @@ const checkProblematicPodcast = (url) => {
   if (!url) return false;
   const problematicDomains = [
     'podtrac.com',
-    'chrt.fm', 
+    'chrt.fm',
     'traffic.megaphone.fm',
     'chtbl.com',
     'pdst.fm'
   ];
   return problematicDomains.some(domain => url.includes(domain));
+};
+
+// Helper function to clean XML text (handle CDATA and decode HTML entities)
+const cleanXmlText = (text) => {
+  if (!text) return '';
+
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 
@@ -446,7 +462,7 @@ const fastParseRSSFeed = (xmlText, limit = 5, feedUrl = null) => {
       // Fast title extraction - handle both CDATA and plain text
       const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
                         item.match(/<title>(.*?)<\/title>/);
-      const title = titleMatch ? titleMatch[1].trim() : `Episode ${count + 1}`;
+      const title = titleMatch ? cleanXmlText(titleMatch[1]) : `Episode ${count + 1}`;
       
       // Fast audio URL extraction with canonical URL resolution
       const audioMatch = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/?>/);
@@ -1568,10 +1584,11 @@ export default function App() {
           console.log('🔍 Cached RSS content exists:', !!cachedRssContent);
           if (cachedRssContent) {
             console.log('🔍 Attempting to extract podcast title from cached RSS content...');
-            const channelTitleMatch = cachedRssContent.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+            const channelTitleMatch = cachedRssContent.match(/<channel[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                                     cachedRssContent.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
             console.log('🔍 Channel title match from cached RSS:', channelTitleMatch);
             if (channelTitleMatch) {
-              const title = channelTitleMatch[1].trim();
+              const title = cleanXmlText(channelTitleMatch[1]);
               console.log('✅ Extracted podcast title from cached RSS:', title);
               setPodcastTitle(title);
               await AsyncStorage.setItem(`podcast_title_${feedUrl}`, title);
@@ -1597,9 +1614,10 @@ export default function App() {
               await AsyncStorage.setItem(`rss_content_${feedUrl}`, xmlText);
               
               // Extract podcast title from fresh RSS
-              const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+              const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                                       xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
               if (channelTitleMatch) {
-                const title = channelTitleMatch[1].trim();
+                const title = cleanXmlText(channelTitleMatch[1]);
                 console.log('✅ Extracted podcast title from fresh RSS:', title);
                 setPodcastTitle(title);
                 await AsyncStorage.setItem(`podcast_title_${feedUrl}`, title);
@@ -1697,25 +1715,27 @@ export default function App() {
       
       // Try multiple patterns for podcast title extraction
       let podcastTitle = null;
-      
-      // Pattern 1: <channel><title>
-      const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+
+      // Pattern 1: <channel><title> with CDATA support
+      const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                               xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
       console.log('🔍 Channel title match:', channelTitleMatch);
-      
+
       if (channelTitleMatch) {
-        podcastTitle = channelTitleMatch[1].trim();
+        podcastTitle = cleanXmlText(channelTitleMatch[1]);
         console.log('✅ Found podcast title (channel):', podcastTitle);
       } else {
-        // Pattern 2: <title> outside of items
-        const titleMatch = xmlText.match(/<title>(.*?)<\/title>/);
+        // Pattern 2: <title> outside of items with CDATA support
+        const titleMatch = xmlText.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                          xmlText.match(/<title>(.*?)<\/title>/);
         console.log('🔍 General title match:', titleMatch);
-        
+
         if (titleMatch) {
-          const title = titleMatch[1].trim();
+          const title = cleanXmlText(titleMatch[1]);
           // Check if this is not an episode title (should be outside <item> tags)
           const beforeTitle = xmlText.substring(0, titleMatch.index);
           const afterTitle = xmlText.substring(titleMatch.index + titleMatch[0].length);
-          
+
           // If there are no <item> tags before this title, it's likely the podcast title
           if (!beforeTitle.includes('<item>')) {
             podcastTitle = title;
@@ -1936,8 +1956,9 @@ export default function App() {
       const channelMatch = xmlText.match(/<channel[\s\S]*?<\/channel>/);
       let channelXml = channelMatch ? channelMatch[0] : xmlText;
       // Extract podcast title from <channel>
-      const channelTitleMatch = channelXml.match(/<title>(.*?)<\/title>/);
-      if (channelTitleMatch) setPodcastTitle(channelTitleMatch[1].trim());
+      const channelTitleMatch = channelXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                               channelXml.match(/<title>(.*?)<\/title>/);
+      if (channelTitleMatch) setPodcastTitle(cleanXmlText(channelTitleMatch[1]));
       
       const episodes = [];
       const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g);
@@ -1954,9 +1975,9 @@ export default function App() {
           // Stop parsing after limit
           if (limit && episodes.length >= limit) return;
           
-          const title = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
-                       item.match(/<title>(.*?)<\/title>/)?.[1] || 
-                       `Episode ${index + 1}`;
+          const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ||
+                            item.match(/<title>(.*?)<\/title>/)?.[1];
+          const title = titleMatch ? cleanXmlText(titleMatch) : `Episode ${index + 1}`;
           const audioUrl = item.match(/<enclosure[^>]*url="([^"]*)"[^>]*\/>/)?.[1];
           const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1];
           
@@ -3475,8 +3496,9 @@ export default function App() {
           const xmlText = await response.text();
           
           // Extract podcast title from RSS
-          const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
-          const podcastTitle = channelTitleMatch ? channelTitleMatch[1].trim() : null;
+          const channelTitleMatch = xmlText.match(/<channel[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+                                   xmlText.match(/<channel[\s\S]*?<title>(.*?)<\/title>/);
+          const podcastTitle = channelTitleMatch ? cleanXmlText(channelTitleMatch[1]) : null;
           
           if (podcastTitle) {
             console.log('🔍 Found podcast title in RSS:', podcastTitle);
