@@ -13,7 +13,6 @@ class BulletproofCaptionService {
     this.utterances = [];
     this.debugMode = false;
     this.previousUtteranceText = ''; // Track previous utterance for smart capitalization
-    this.currentSpeaker = null; // Track current speaker for speaker change detection
   }
 
   setDebugMode(enabled) {
@@ -170,31 +169,6 @@ class BulletproofCaptionService {
       );
 
       if (currentUtterance) {
-        // SPEAKER CHANGE DETECTION: Add buffer at start of new speaker's utterance
-        // This creates a visual break between speakers
-        const SPEAKER_CHANGE_BUFFER_MS = 100; // Clear captions for 100ms when speaker changes
-
-        if (this.currentSpeaker !== null &&
-            this.currentSpeaker !== currentUtterance.speaker) {
-          // Check if we're within the buffer period at the start of this utterance
-          const timeIntoUtterance = relativeTimeMs - currentUtterance.startMs;
-
-          if (timeIntoUtterance < SPEAKER_CHANGE_BUFFER_MS) {
-            // Still in buffer period - don't show caption yet
-            return {
-              text: '',
-              speaker: currentUtterance.speaker,
-              isActive: false
-            };
-          }
-
-          // Past buffer period - update speaker and continue
-          this.currentSpeaker = currentUtterance.speaker;
-        } else if (this.currentSpeaker === null) {
-          // First utterance - just set the speaker
-          this.currentSpeaker = currentUtterance.speaker;
-        }
-
         let text = currentUtterance.text;
 
         // CORE FIX: Check if this should be capitalized based on the previous utterance
