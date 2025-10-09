@@ -65,7 +65,8 @@
         {
           "iosActivationRules": {
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1
-          }
+          },
+          "iosAppGroupIdentifier": "group.com.danroth.podknowledge"
         }
       ]
     ],
