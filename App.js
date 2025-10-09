@@ -42,6 +42,8 @@ import VideoReadyBanner from './src/components/VideoReadyBanner';
 import PushNotificationService from './src/services/PushNotificationService';
 import VideoService from './src/services/VideoService';
 import JobPollingService from './src/services/JobPollingService';
+import { useShareIntent } from 'expo-share-intent';
+import { parsePodcastURL, formatTimestamp, getPlatformDisplayName } from './src/utils/PodcastURLParser';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -826,6 +828,9 @@ export default function App() {
   // Notification history state
   const [notifications, setNotifications] = useState([]);
 
+  // Share Intent state and hook
+  const { hasShareIntent, shareIntent, resetShareIntent, error: shareIntentError } = useShareIntent();
+
   // Load stored notifications on app start
   useEffect(() => {
     const loadStoredNotifications = async () => {
@@ -1165,6 +1170,159 @@ export default function App() {
       });
     });
   }, []);
+
+  // Share Intent Handler
+  useEffect(() => {
+    if (hasShareIntent && shareIntent) {
+      handleSharedURL(shareIntent);
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  const handleSharedURL = async (intent) => {
+    try {
+      console.log('📎 Received share intent:', intent);
+
+      // Extract URL from share intent
+      // expo-share-intent provides: { text, webUrl, files }
+      const sharedURL = intent.webUrl || intent.text;
+
+      if (!sharedURL) {
+        Alert.alert('Error', 'No URL found in shared content');
+        resetShareIntent();
+        return;
+      }
+
+      // Parse podcast URL
+      const parsed = parsePodcastURL(sharedURL);
+
+      if (!parsed) {
+        Alert.alert('Error', 'Could not parse podcast URL');
+        resetShareIntent();
+        return;
+      }
+
+      console.log('🎧 Parsed podcast data:', parsed);
+
+      // Show user a prompt to add podcast
+      showAddPodcastPrompt(parsed);
+
+    } catch (error) {
+      console.error('❌ Failed to handle shared URL:', error);
+      Alert.alert('Error', 'Something went wrong processing the shared podcast');
+      resetShareIntent();
+    }
+  };
+
+  const showAddPodcastPrompt = (podcastData) => {
+    const platform = getPlatformDisplayName(podcastData.platform);
+    const timestamp = podcastData.timestamp ? formatTimestamp(podcastData.timestamp) : null;
+
+    let message = `Add podcast from ${platform}?`;
+    if (timestamp) {
+      message += `\n\nStarting at ${timestamp}`;
+    }
+
+    Alert.alert(
+      'Add Podcast',
+      message,
+      [
+        {
+          text: 'Cancel',
+          onPress: () => resetShareIntent(),
+          style: 'cancel',
+        },
+        {
+          text: 'Add',
+          onPress: () => processPodcastURL(podcastData),
+        },
+      ]
+    );
+  };
+
+  const processPodcastURL = async (podcastData) => {
+    try {
+      console.log('🎯 Processing podcast:', podcastData);
+
+      // TODO: Implement based on platform
+      if (podcastData.platform === 'apple') {
+        await handleApplePodcast(podcastData);
+      } else if (podcastData.platform === 'spotify') {
+        await handleSpotifyPodcast(podcastData);
+      } else if (podcastData.platform === 'rss') {
+        await handleRSSPodcast(podcastData);
+      } else {
+        Alert.alert('Not Supported', 'This podcast platform is not yet supported');
+      }
+
+      // Clear the share intent
+      resetShareIntent();
+
+    } catch (error) {
+      console.error('❌ Failed to process podcast:', error);
+      Alert.alert('Error', 'Could not add podcast');
+      resetShareIntent();
+    }
+  };
+
+  const handleApplePodcast = async (data) => {
+    console.log('🍎 Handling Apple Podcasts URL');
+
+    // Strategy: Get RSS feed from iTunes API
+    try {
+      const response = await fetch(
+        `https://itunes.apple.com/lookup?id=${data.showId}`
+      );
+      const result = await response.json();
+
+      if (result.results && result.results[0]) {
+        const rssFeedURL = result.results[0].feedUrl;
+        console.log('📡 Found RSS feed:', rssFeedURL);
+
+        // TODO: Add this RSS feed to your app's podcast list
+        // TODO: If episodeId provided, navigate to that episode
+        // TODO: If timestamp provided, seek to that position
+
+        Alert.alert('Success', 'Podcast added! (TODO: Implement full flow)');
+      } else {
+        Alert.alert('Error', 'Could not find podcast RSS feed');
+      }
+    } catch (error) {
+      console.error('Failed to fetch Apple Podcasts data:', error);
+      Alert.alert('Error', 'Could not load podcast');
+    }
+  };
+
+  const handleSpotifyPodcast = async (data) => {
+    console.log('🎵 Handling Spotify URL');
+
+    // Strategy: Spotify doesn't provide audio, so prompt user to search
+    Alert.alert(
+      'Spotify Podcast',
+      'Spotify podcasts need to be added via RSS feed. Would you like to search for this podcast?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Search',
+          onPress: () => {
+            // TODO: Open search screen or podcast search flow
+            console.log('TODO: Open search for Spotify podcast');
+            Alert.alert('TODO', 'Search functionality not yet implemented');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRSSPodcast = async (data) => {
+    console.log('📡 Handling RSS feed URL');
+
+    // TODO: Parse RSS feed and add to podcast list
+    // This is your existing RSS parsing logic
+    Alert.alert('Success', 'RSS feed added! (TODO: Implement full flow)');
+  };
 
   // URL input state
   const [urlInput, setUrlInput] = useState('');
