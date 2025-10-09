@@ -64,7 +64,8 @@
         "expo-share-intent",
         {
           "iosActivationRules": {
-            "NSExtensionActivationSupportsWebURLWithMaxCount": 1
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true
           },
           "iosAppGroupIdentifier": "group.com.danroth.podknowledge"
         }

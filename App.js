@@ -1183,11 +1183,10 @@ export default function App() {
       console.log('📎 Received share intent:', intent);
 
       // Extract URL from share intent
-      // expo-share-intent provides: { text, webUrl, files }
       const sharedURL = intent.webUrl || intent.text;
 
       if (!sharedURL) {
-        Alert.alert('Error', 'No URL found in shared content');
+        console.error('❌ No URL found in shared content');
         resetShareIntent();
         return;
       }
@@ -1196,70 +1195,29 @@ export default function App() {
       const parsed = parsePodcastURL(sharedURL);
 
       if (!parsed) {
-        Alert.alert('Error', 'Could not parse podcast URL');
+        console.error('❌ Could not parse podcast URL:', sharedURL);
         resetShareIntent();
         return;
       }
 
       console.log('🎧 Parsed podcast data:', parsed);
 
-      // Show user a prompt to add podcast
-      showAddPodcastPrompt(parsed);
-
-    } catch (error) {
-      console.error('❌ Failed to handle shared URL:', error);
-      Alert.alert('Error', 'Something went wrong processing the shared podcast');
-      resetShareIntent();
-    }
-  };
-
-  const showAddPodcastPrompt = (podcastData) => {
-    const platform = getPlatformDisplayName(podcastData.platform);
-    const timestamp = podcastData.timestamp ? formatTimestamp(podcastData.timestamp) : null;
-
-    let message = `Add podcast from ${platform}?`;
-    if (timestamp) {
-      message += `\n\nStarting at ${timestamp}`;
-    }
-
-    Alert.alert(
-      'Add Podcast',
-      message,
-      [
-        {
-          text: 'Cancel',
-          onPress: () => resetShareIntent(),
-          style: 'cancel',
-        },
-        {
-          text: 'Add',
-          onPress: () => processPodcastURL(podcastData),
-        },
-      ]
-    );
-  };
-
-  const processPodcastURL = async (podcastData) => {
-    try {
-      console.log('🎯 Processing podcast:', podcastData);
-
-      // TODO: Implement based on platform
-      if (podcastData.platform === 'apple') {
-        await handleApplePodcast(podcastData);
-      } else if (podcastData.platform === 'spotify') {
-        await handleSpotifyPodcast(podcastData);
-      } else if (podcastData.platform === 'rss') {
-        await handleRSSPodcast(podcastData);
+      // Process immediately based on platform - no dialogs
+      if (parsed.platform === 'apple') {
+        await handleApplePodcast(parsed);
+      } else if (parsed.platform === 'spotify') {
+        await handleSpotifyPodcast(parsed);
+      } else if (parsed.platform === 'rss') {
+        await handleRSSPodcast(parsed);
       } else {
-        Alert.alert('Not Supported', 'This podcast platform is not yet supported');
+        console.error('❌ Unsupported platform:', parsed.platform);
       }
 
       // Clear the share intent
       resetShareIntent();
 
     } catch (error) {
-      console.error('❌ Failed to process podcast:', error);
-      Alert.alert('Error', 'Could not add podcast');
+      console.error('❌ Failed to handle shared URL:', error);
       resetShareIntent();
     }
   };
@@ -1267,8 +1225,8 @@ export default function App() {
   const handleApplePodcast = async (data) => {
     console.log('🍎 Handling Apple Podcasts URL');
 
-    // Strategy: Get RSS feed from iTunes API
     try {
+      // Get RSS feed from iTunes API
       const response = await fetch(
         `https://itunes.apple.com/lookup?id=${data.showId}`
       );
@@ -1278,50 +1236,60 @@ export default function App() {
         const rssFeedURL = result.results[0].feedUrl;
         console.log('📡 Found RSS feed:', rssFeedURL);
 
-        // TODO: Add this RSS feed to your app's podcast list
-        // TODO: If episodeId provided, navigate to that episode
-        // TODO: If timestamp provided, seek to that position
+        // Load the podcast feed
+        await loadPodcastFeed(rssFeedURL);
 
-        Alert.alert('Success', 'Podcast added! (TODO: Implement full flow)');
+        // If episodeId is provided, find and play that episode
+        if (data.episodeId) {
+          // Wait a bit for episodes to load
+          setTimeout(async () => {
+            const episode = allEpisodes.find(ep =>
+              ep.audioUrl && ep.audioUrl.includes(data.episodeId)
+            );
+
+            if (episode) {
+              console.log('🎯 Found episode to play:', episode.title);
+              await playEpisode(episode);
+
+              // If timestamp provided, seek to it
+              if (data.timestamp && sound) {
+                setTimeout(async () => {
+                  await sound.setPositionAsync(data.timestamp * 1000); // Convert to ms
+                  console.log('⏱️ Seeked to timestamp:', data.timestamp);
+                }, 500);
+              }
+            } else {
+              console.log('❌ Episode not found in loaded episodes');
+            }
+          }, 1000);
+        }
       } else {
-        Alert.alert('Error', 'Could not find podcast RSS feed');
+        console.error('❌ Could not find podcast RSS feed');
       }
     } catch (error) {
-      console.error('Failed to fetch Apple Podcasts data:', error);
-      Alert.alert('Error', 'Could not load podcast');
+      console.error('❌ Failed to fetch Apple Podcasts data:', error);
     }
   };
 
   const handleSpotifyPodcast = async (data) => {
     console.log('🎵 Handling Spotify URL');
 
-    // Strategy: Spotify doesn't provide audio, so prompt user to search
-    Alert.alert(
-      'Spotify Podcast',
-      'Spotify podcasts need to be added via RSS feed. Would you like to search for this podcast?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Search',
-          onPress: () => {
-            // TODO: Open search screen or podcast search flow
-            console.log('TODO: Open search for Spotify podcast');
-            Alert.alert('TODO', 'Search functionality not yet implemented');
-          },
-        },
-      ]
-    );
+    // Spotify doesn't provide direct audio access
+    // For now, just log it - we could implement search in the future
+    console.log('⚠️ Spotify sharing not yet supported - audio not accessible');
+    console.log('💡 Spotify episode/show ID:', data.episodeId || data.showId);
   };
 
   const handleRSSPodcast = async (data) => {
     console.log('📡 Handling RSS feed URL');
 
-    // TODO: Parse RSS feed and add to podcast list
-    // This is your existing RSS parsing logic
-    Alert.alert('Success', 'RSS feed added! (TODO: Implement full flow)');
+    try {
+      // Directly load the RSS feed
+      await loadPodcastFeed(data.url);
+      console.log('✅ RSS feed loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load RSS feed:', error);
+    }
   };
 
   // URL input state
