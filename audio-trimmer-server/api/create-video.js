@@ -39,6 +39,13 @@ module.exports = async (req, res) => {
     const clipStart = requestClipStart ?? audioStartFrom;
     const clipEnd = requestClipEnd ?? audioEndAt;
 
+    // Provide default podcast object if not provided (prevents crashes in frame-generator)
+    const podcastData = podcast || {
+      podcastName: 'Audio2',
+      title: 'Podcast Clip',
+      artwork: null // Will use Audio2 logo/placeholder in frame-generator
+    };
+
     // Log the request details prominently (development only)
     if (process.env.NODE_ENV !== 'production') {
       console.log(`\n📹 Podcast: ${podcast?.podcastName || 'Unknown'}`);
@@ -117,7 +124,11 @@ module.exports = async (req, res) => {
     }
 
     // Create job through queue system (handles all safety checks)
-    const result = jobQueue.createJob(req.body);
+    // Use podcastData which includes defaults if original podcast was undefined
+    const result = jobQueue.createJob({
+      ...req.body,
+      podcast: podcastData
+    });
     
     logger.success('Job created successfully', {
       jobId: result.jobId,
