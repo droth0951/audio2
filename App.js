@@ -1223,7 +1223,7 @@ export default function App() {
   };
 
   const handleApplePodcast = async (data) => {
-    console.log('🍎 Handling Apple Podcasts URL');
+    console.log('🍎 Handling Apple Podcasts URL', data);
 
     try {
       // Get RSS feed from iTunes API
@@ -1241,27 +1241,49 @@ export default function App() {
 
         // If episodeId is provided, find and play that episode
         if (data.episodeId) {
-          // Wait a bit for episodes to load
+          // Get episodes directly from AsyncStorage after load completes
           setTimeout(async () => {
-            const episode = allEpisodes.find(ep =>
-              ep.audioUrl && ep.audioUrl.includes(data.episodeId)
-            );
+            const cached = await AsyncStorage.getItem(`feed_${rssFeedURL}`);
+            if (!cached) {
+              console.log('⚠️ No cached episodes after load');
+              return;
+            }
+
+            const loadedEpisodes = JSON.parse(cached);
+            console.log(`📋 Loaded ${loadedEpisodes.length} episodes, searching for ${data.episodeId}`);
+
+            // Find episode by Apple episode ID - check multiple fields
+            const episode = loadedEpisodes.find(ep => {
+              // Check if episode's enclosure URL or guid contains the episode ID
+              const urlMatch = ep.audioUrl && (
+                ep.audioUrl.includes(`?i=${data.episodeId}`) ||
+                ep.audioUrl.includes(`/${data.episodeId}/`) ||
+                ep.audioUrl.includes(`=${data.episodeId}`)
+              );
+              const guidMatch = ep.guid && ep.guid.includes(data.episodeId);
+
+              return urlMatch || guidMatch;
+            });
 
             if (episode) {
-              console.log('🎯 Found episode to play:', episode.title);
-              await playEpisode(episode);
+              console.log('🎯 Found episode:', episode.title);
+              const playedSound = await playEpisode(episode);
 
-              // If timestamp provided, seek to it
-              if (data.timestamp && sound) {
+              // If timestamp provided, seek after playback initializes
+              if (data.timestamp && playedSound) {
                 setTimeout(async () => {
-                  await sound.setPositionAsync(data.timestamp * 1000); // Convert to ms
-                  console.log('⏱️ Seeked to timestamp:', data.timestamp);
-                }, 500);
+                  try {
+                    await playedSound.setPositionAsync(data.timestamp * 1000);
+                    console.log(`⏱️ Seeked to ${data.timestamp}s`);
+                  } catch (err) {
+                    console.error('❌ Seek failed:', err);
+                  }
+                }, 2000);
               }
             } else {
-              console.log('❌ Episode not found in loaded episodes');
+              console.log('⚠️ Episode not found in feed - showing episode list');
             }
-          }, 1000);
+          }, 1500);
         }
       } else {
         console.error('❌ Could not find podcast RSS feed');
@@ -2207,7 +2229,7 @@ export default function App() {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
-          
+
           // DEBUG: Log why position might not be updating during recording
           if (newSound._isRecording && status.positionMillis % 5000 < 100) { // Log every ~5 seconds
             console.log('🎯 Recording position check:', {
@@ -2218,7 +2240,7 @@ export default function App() {
               isPlaying: status.isPlaying
             });
           }
-          
+
           // Check if we need to stop recording - allow slight buffer for final captions
           if (newSound._isRecording && status.positionMillis >= (newSound._recordingClipEnd + 500)) {
             console.log('🎵 Audio reached clip end + buffer - stopping recording', {
@@ -2227,28 +2249,32 @@ export default function App() {
               buffer: 500,
               isRecording: newSound._isRecording
             });
-            
+
             // IMMEDIATELY clear all recording flags to prevent repeated calls
             newSound._isRecording = false;
             setIsRecording(false);  // Also clear React state immediately
-            
+
             // Clear timer to prevent double stopping
             if (recordingTimerRef.current) {
               clearTimeout(recordingTimerRef.current);
               recordingTimerRef.current = null;
             }
-            
+
             stopVideoRecording();
           }
         }
       });
-      
+
+      // Return the sound object for share intent timestamp seeking
+      return newSound;
+
     } catch (error) {
 
-      
+
       setIsLoading(false);
       setIsEpisodeLoading(false); // Hide loading spinner on error
       Alert.alert('Error', `Failed to load episode: ${error.message}`);
+      return null;
     }
   };
 
