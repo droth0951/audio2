@@ -331,6 +331,7 @@ class CaptionProcessor {
 
     const captions = [];
     let captionIndex = 1;
+    let lastWordIndexUsed = -1; // CRITICAL: Track position in transcript to avoid matching duplicate words
 
     for (const utterance of transcript.utterances) {
       let text = utterance.text.trim();
@@ -355,12 +356,15 @@ class CaptionProcessor {
           captions
         );
 
-        const wordTimings = this.extractWordTimingsForCaption(
+        const { wordTimings, lastIndex } = this.extractWordTimingsForCaption(
           transcript,
           chunk.text,
           chunk.startMs,
-          chunk.endMs
+          chunk.endMs,
+          lastWordIndexUsed // Pass the position where we left off
         );
+
+        lastWordIndexUsed = lastIndex; // Update for next caption
 
         // CRITICAL FIX: Validate chunk timing using word-level data
         // Only adjust if word extraction succeeded and there's a significant timing gap
@@ -370,9 +374,9 @@ class CaptionProcessor {
           const startGap = firstWord.start - chunk.startMs;
 
           // Tunable threshold: only adjust if caption would appear significantly early
-          const TIMING_GAP_THRESHOLD_MS = 500; // 500ms threshold (tunable)
+          const TIMING_GAP_THRESHOLD_MS = 300; // 300ms threshold (lowered since word matching is more robust)
           const LOOKAHEAD_BUFFER_MS = 75;      // Small lookahead for smoothness
-          const LOOKBACK_BUFFER_MS = 200;      // Keep visible briefly after
+          const LOOKBACK_BUFFER_MS = 300;      // Keep visible longer after word ends
 
           if (startGap > TIMING_GAP_THRESHOLD_MS) {
             const oldStart = chunk.startMs;
@@ -575,7 +579,8 @@ class CaptionProcessor {
           const validatedTiming = this.validateCaptionTiming(startMs, endMs, text);
 
           // Extract word-level timing for this caption
-          const wordTimings = this.extractWordTimingsForCaption(transcript, text, validatedTiming.startMs, validatedTiming.endMs);
+          // Note: parseSRT is a backup method, so we don't track lastIndex across captions here
+          const { wordTimings } = this.extractWordTimingsForCaption(transcript, text, validatedTiming.startMs, validatedTiming.endMs, 0);
 
           // MVP: Determine display mode (1 or 2 lines)
           const displayMode = this.determineCaptionDisplayMode(
@@ -645,32 +650,48 @@ class CaptionProcessor {
   }
 
   // Extract word-level timing data for a specific caption from AssemblyAI transcript
-  extractWordTimingsForCaption(transcript, captionText, captionStartMs, captionEndMs) {
-    if (!transcript?.words?.length) return [];
+  extractWordTimingsForCaption(transcript, captionText, captionStartMs, captionEndMs, startSearchIndex = 0) {
+    if (!transcript?.words?.length) return { wordTimings: [], lastIndex: startSearchIndex };
 
-    // Find words that fall within this caption's time range
-    const captionWords = transcript.words.filter(word =>
-      word.start >= captionStartMs && word.end <= captionEndMs
-    );
+    // CRITICAL FIX: Match by TEXT first, not timing
+    // The chunk timings are estimates (proportional division) and wrong for slow speakers
+    // We need to find the actual words by text, then use their real timing
+    const captionWordsArray = captionText.toLowerCase().split(/\s+/);
+    const matchedWords = [];
 
-    // If no exact matches, try fuzzy matching by text content
-    if (captionWords.length === 0) {
-      const captionWordsArray = captionText.toLowerCase().split(/\s+/);
-      const matchedWords = [];
+    // CRITICAL FIX #2: Start searching AFTER the last caption's words to avoid matching duplicates
+    // This prevents matching "the customer" from caption #1 when we're looking for it in caption #2
+    const searchStart = Math.max(0, startSearchIndex + 1);
 
-      for (const word of transcript.words) {
-        const wordText = word.text.toLowerCase().replace(/[^\w]/g, '');
-        if (captionWordsArray.some(captionWord =>
-          captionWord.replace(/[^\w]/g, '') === wordText
-        ) && word.start >= captionStartMs - 500 && word.end <= captionEndMs + 500) {
-          matchedWords.push(word);
-        }
+    // Use a wide window since estimated timing is unreliable for slow speakers
+    const searchWindowStart = Math.max(0, captionStartMs - 5000); // 5 second lookback
+    const searchWindowEnd = captionEndMs + 5000; // 5 second lookahead
+
+    let lastMatchedIndex = startSearchIndex;
+
+    for (let i = searchStart; i < transcript.words.length && matchedWords.length < captionWordsArray.length; i++) {
+      const word = transcript.words[i];
+
+      // Skip words outside the search window
+      if (word.start < searchWindowStart) {
+        continue;
       }
 
-      return matchedWords.slice(0, captionWordsArray.length); // Limit to caption length
+      // Stop if we've gone way past the caption (no point searching further)
+      if (word.start > searchWindowEnd) {
+        break;
+      }
+
+      const wordText = word.text.toLowerCase().replace(/[^\w]/g, '');
+      const captionWord = captionWordsArray[matchedWords.length];
+
+      if (captionWord && captionWord.replace(/[^\w]/g, '') === wordText) {
+        matchedWords.push(word);
+        lastMatchedIndex = i;
+      }
     }
 
-    return captionWords;
+    return { wordTimings: matchedWords, lastIndex: lastMatchedIndex };
   }
 
   // MVP: Determine whether caption should display as 1 or 2 lines
