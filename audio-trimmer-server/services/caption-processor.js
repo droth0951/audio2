@@ -362,7 +362,51 @@ class CaptionProcessor {
           chunk.endMs
         );
 
-        // Debug: log chunk text and line breaks
+        // CRITICAL FIX: Validate chunk timing using word-level data
+        // Only adjust if word extraction succeeded and there's a significant timing gap
+        if (wordTimings.length > 0) {
+          const firstWord = wordTimings[0];
+          const lastWord = wordTimings[wordTimings.length - 1];
+          const startGap = firstWord.start - chunk.startMs;
+
+          // Tunable threshold: only adjust if caption would appear significantly early
+          const TIMING_GAP_THRESHOLD_MS = 500; // 500ms threshold (tunable)
+          const LOOKAHEAD_BUFFER_MS = 75;      // Small lookahead for smoothness
+          const LOOKBACK_BUFFER_MS = 200;      // Keep visible briefly after
+
+          if (startGap > TIMING_GAP_THRESHOLD_MS) {
+            const oldStart = chunk.startMs;
+            const oldEnd = chunk.endMs;
+
+            // Adjust both start AND end times based on word timing
+            chunk.startMs = firstWord.start - LOOKAHEAD_BUFFER_MS;
+            chunk.endMs = lastWord.end + LOOKBACK_BUFFER_MS;
+
+            // DEBUG ONLY: Log timing adjustments (avoids rate limits in production)
+            if (process.env.DEBUG_CAPTIONS === 'true') {
+              logger.info('⏱️ Slow speaker timing adjusted', {
+                chunkText: chunk.text.substring(0, 40) + (chunk.text.length > 40 ? '...' : ''),
+                originalTiming: `${oldStart}-${oldEnd}ms (${Math.round((oldEnd-oldStart)/1000)}s)`,
+                adjustedTiming: `${chunk.startMs}-${chunk.endMs}ms (${Math.round((chunk.endMs-chunk.startMs)/1000)}s)`,
+                startGap: `${startGap}ms`,
+                adjustment: `+${chunk.startMs - oldStart}ms`,
+                wordCount: wordTimings.length
+              });
+            }
+          }
+        } else {
+          // Word extraction failed - log warning (rarely happens, so minimal overhead)
+          if (process.env.DEBUG_CAPTIONS === 'true') {
+            logger.warn('⚠️ Caption word extraction failed, using utterance timing', {
+              chunkText: chunk.text.substring(0, 40) + (chunk.text.length > 40 ? '...' : ''),
+              startMs: chunk.startMs,
+              endMs: chunk.endMs,
+              duration: `${Math.round((chunk.endMs - chunk.startMs)/1000)}s`
+            });
+          }
+        }
+
+        // Standard caption log (minimal, production-safe)
         const lines = this.optimizeLineBreaks(chunk.text, 32);
         logger.info('📝 Caption chunk created', {
           text: chunk.text,
