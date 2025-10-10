@@ -407,7 +407,7 @@ class CaptionProcessor {
         }
 
         // Standard caption log (minimal, production-safe)
-        const lines = this.optimizeLineBreaks(chunk.text, 32);
+        const lines = this.optimizeLineBreaks(chunk.text, 25); // Reduced from 32 to 25 for ALL CAPS at 56px
         logger.info('📝 Caption chunk created', {
           text: chunk.text,
           length: chunk.text.length,
@@ -592,7 +592,7 @@ class CaptionProcessor {
             endMs: validatedTiming.endMs,
             text: text,
             duration: validatedTiming.endMs - validatedTiming.startMs,
-            lines: this.optimizeLineBreaks(text, 32), // Smart line breaking at 32 chars
+            lines: this.optimizeLineBreaks(text, 25), // Reduced from 32 to 25 for ALL CAPS at 56px
             words: wordTimings, // Word-level timing for highlighting
             displayMode: displayMode // MVP: 'one-line', 'two-lines'
           });
