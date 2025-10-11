@@ -410,14 +410,16 @@ class CaptionProcessor {
           }
         }
 
-        // Standard caption log (minimal, production-safe)
+        // Caption creation log (DEBUG ONLY to avoid rate limits)
         const lines = this.optimizeLineBreaks(chunk.text, 25); // Reduced from 32 to 25 for ALL CAPS at 56px
-        logger.info('📝 Caption chunk created', {
-          text: chunk.text,
-          length: chunk.text.length,
-          lines: lines,
-          displayMode: displayMode
-        });
+        if (process.env.DEBUG_CAPTIONS === 'true') {
+          logger.info('📝 Caption chunk created', {
+            text: chunk.text,
+            length: chunk.text.length,
+            lines: lines,
+            displayMode: displayMode
+          });
+        }
 
         captions.push({
           index: captionIndex++,
@@ -537,11 +539,13 @@ class CaptionProcessor {
             toSpeaker: nextSpeaker
           });
 
-          logger.debug('Speaker change detected', {
-            changeTime: transcript.utterances[i].end,
-            from: currentSpeaker,
-            to: nextSpeaker
-          });
+          if (process.env.DEBUG_CAPTIONS === 'true') {
+            logger.debug('Speaker change detected', {
+              changeTime: transcript.utterances[i].end,
+              from: currentSpeaker,
+              to: nextSpeaker
+            });
+          }
         }
       }
     }
@@ -566,11 +570,13 @@ class CaptionProcessor {
             // If speaker change happens right after this caption, end it slightly early
             if (change.changeTime > startMs && change.changeTime < endMs + 500) {
               endMs = Math.min(endMs, change.changeTime - SPEAKER_GAP_MS);
-              logger.debug('Adjusted caption end for speaker change', {
-                originalEnd: endMs,
-                adjustedEnd: change.changeTime - SPEAKER_GAP_MS,
-                text: text.substring(0, 30)
-              });
+              if (process.env.DEBUG_CAPTIONS === 'true') {
+                logger.debug('Adjusted caption end for speaker change', {
+                  originalEnd: endMs,
+                  adjustedEnd: change.changeTime - SPEAKER_GAP_MS,
+                  text: text.substring(0, 30)
+                });
+              }
             }
           }
 
@@ -628,19 +634,23 @@ class CaptionProcessor {
     if (duration < MIN_DURATION) {
       // Extend duration to minimum
       validatedEnd = startMs + MIN_DURATION;
-      logger.debug('Caption duration extended to minimum', {
-        original: `${duration}ms`,
-        adjusted: `${MIN_DURATION}ms`,
-        text: text.substring(0, 30)
-      });
+      if (process.env.DEBUG_CAPTIONS === 'true') {
+        logger.debug('Caption duration extended to minimum', {
+          original: `${duration}ms`,
+          adjusted: `${MIN_DURATION}ms`,
+          text: text.substring(0, 30)
+        });
+      }
     } else if (duration > MAX_DURATION) {
       // Cap duration to maximum
       validatedEnd = startMs + MAX_DURATION;
-      logger.debug('Caption duration capped to maximum', {
-        original: `${duration}ms`,
-        adjusted: `${MAX_DURATION}ms`,
-        text: text.substring(0, 30)
-      });
+      if (process.env.DEBUG_CAPTIONS === 'true') {
+        logger.debug('Caption duration capped to maximum', {
+          original: `${duration}ms`,
+          adjusted: `${MAX_DURATION}ms`,
+          text: text.substring(0, 30)
+        });
+      }
     }
 
     return {
@@ -705,19 +715,23 @@ class CaptionProcessor {
 
     if (isShortPhrase && hasNoCommasOrConjunctions) {
       mode = 'one-line';
-      logger.debug('Caption using one-line mode', {
-        reason: 'short-phrase',
-        textLength: text.length,
-        text: text
-      });
+      if (process.env.DEBUG_CAPTIONS === 'true') {
+        logger.debug('Caption using one-line mode', {
+          reason: 'short-phrase',
+          textLength: text.length,
+          text: text
+        });
+      }
     } else {
       // Everything else uses two lines for engagement
       mode = 'two-lines';
-      logger.debug('Caption using two-line mode', {
-        reason: 'engagement-default',
-        textLength: text.length,
-        text: text.substring(0, 40) + '...'
-      });
+      if (process.env.DEBUG_CAPTIONS === 'true') {
+        logger.debug('Caption using two-line mode', {
+          reason: 'engagement-default',
+          textLength: text.length,
+          text: text.substring(0, 40) + '...'
+        });
+      }
     }
 
     return mode;
