@@ -74,8 +74,7 @@
           },
           "iosAppGroupIdentifier": "group.com.danroth.podknowledge"
         }
-      ],
-      "./plugins/withPodcastShareRules"
+      ]
     ],
     "scheme": "audio2",
     "extra": {
