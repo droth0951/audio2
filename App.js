@@ -1279,29 +1279,55 @@ export default function App() {
         const rssFeedURL = podcast.feedUrl;
         console.log('📡 Found RSS feed:', rssFeedURL);
 
-        // If episodeId is provided, fetch RSS and find just that episode
+        // If episodeId is provided, fetch episode metadata from iTunes and match by title
         if (data.episodeId) {
-          console.log('🎯 Fetching RSS to find specific episode...');
-          const rssResponse = await fetch(rssFeedURL);
-          const rssText = await rssResponse.text();
+          console.log('🎯 Fetching episode metadata from iTunes API...');
 
-          // Parse RSS to find matching episode
-          const parser = require('react-native-rss-parser');
-          const rssFeed = await parser.parse(rssText);
+          let matchedItem = null;
+          let rssFeed = null;
 
-          console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for ID: ${data.episodeId}`);
+          // Get episode details from iTunes API
+          const episodeResponse = await fetch(
+            `https://itunes.apple.com/lookup?id=${data.episodeId}&entity=podcastEpisode`
+          );
+          const episodeResult = await episodeResponse.json();
 
-          // Find episode by Apple episode ID - check multiple fields
-          const matchedItem = rssFeed.items.find(item => {
-            const urlMatch = item.enclosures?.[0]?.url && (
-              item.enclosures[0].url.includes(`?i=${data.episodeId}`) ||
-              item.enclosures[0].url.includes(`/${data.episodeId}/`) ||
-              item.enclosures[0].url.includes(`=${data.episodeId}`)
+          if (episodeResult.results && episodeResult.results.length > 1) {
+            // First result is the podcast, second is the episode
+            const episodeMetadata = episodeResult.results[1];
+            const episodeName = episodeMetadata.trackName;
+
+            console.log('📝 Episode name from iTunes:', episodeName);
+            console.log('🎯 Fetching RSS to find specific episode by title...');
+
+            const rssResponse = await fetch(rssFeedURL);
+            const rssText = await rssResponse.text();
+
+            // Parse RSS to find matching episode
+            const parser = require('react-native-rss-parser');
+            rssFeed = await parser.parse(rssText);
+
+            console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for title: "${episodeName}"`);
+
+            // Find episode by title match (case-insensitive)
+            matchedItem = rssFeed.items.find(item =>
+              item.title && item.title.toLowerCase() === episodeName.toLowerCase()
             );
-            const guidMatch = item.id && item.id.includes(data.episodeId);
+          } else {
+            console.log('⚠️ Could not fetch episode metadata from iTunes - trying direct RSS match');
 
-            return urlMatch || guidMatch;
-          });
+            // Fallback: try RSS matching with episode ID
+            const rssResponse = await fetch(rssFeedURL);
+            const rssText = await rssResponse.text();
+            const parser = require('react-native-rss-parser');
+            rssFeed = await parser.parse(rssText);
+
+            matchedItem = rssFeed.items.find(item => {
+              const urlMatch = item.enclosures?.[0]?.url && item.enclosures[0].url.includes(data.episodeId);
+              const guidMatch = item.id && item.id.includes(data.episodeId);
+              return urlMatch || guidMatch;
+            });
+          }
 
           if (matchedItem) {
             console.log('✅ Found episode in RSS:', matchedItem.title);
