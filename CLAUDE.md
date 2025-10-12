@@ -109,6 +109,64 @@ For targeted caption debugging without hitting Railway's 500 logs/sec rate limit
 
 **Alternative**: Temporarily set `NODE_ENV=development` but this enables ALL debug logs (not recommended in production)
 
+### Caption Timing Issues: Lessons Learned
+
+**Problem**: Captions racing ahead of slow speakers by 2-3 seconds, appearing/disappearing before words were actually spoken.
+
+#### The Smoking Gun Discovery 🎯
+
+When debugging a user's video, we observed the caption "STARTED WITH AN OBSESSION WITH THE CUSTOMER AROUND" highlighted "THE CUSTOMER" from the **FIRST** time the phrase was said, not the **SECOND** time (the actual caption text). This revealed the core issue: **sequential word extraction was matching duplicate phrases from previous captions**.
+
+#### Root Cause Chain
+
+1. **Progressive Text Chunking** (commit 6dcf05b):
+   - Split long utterances into display-sized chunks
+   - Calculated timing by evenly dividing utterance duration (`avgMsPerChar`)
+   - ❌ This proportional timing was **wrong for slow speakers**
+
+2. **Word Extraction Filtering**:
+   - `extractWordTimingsForCaption()` filtered words by estimated timing ranges
+   - For slow speakers, estimated ranges were wrong → returned 0 words
+   - ❌ Timing validation never ran because `wordTimings.length === 0`
+
+3. **Duplicate Word Matching**:
+   - When words were found, sequential search through transcript matched text
+   - Without position tracking, matched **FIRST occurrence** of duplicate phrases
+   - ❌ Caused wrong word highlighting and incorrect timing adjustments
+
+#### The Solution (Commits 9cb48b3, 742c39c)
+
+**Key Insight**: Don't trust estimated timing for word extraction. Match by **text content first**, then use actual word timestamps.
+
+**Implementation**:
+1. **Text-First Matching**: Match words by content within wide time window (±5s), not narrow estimated ranges
+2. **Position Tracking**: Track `lastWordIndexUsed` across all captions to maintain position in transcript
+3. **Sequential Search Prevention**: Start each search AFTER previous caption's last word to avoid duplicates
+4. **Adjusted Thresholds**: Lower to 300ms gap threshold (from 500ms), increase lookback to 300ms
+
+**Code Location**: `audio-trimmer-server/services/caption-processor.js`
+- Line 334: `lastWordIndexUsed` tracking in `createCaptionsFromUtterances()`
+- Line 359-367: Pass position to `extractWordTimingsForCaption()` and update after each caption
+- Line 650-694: Rewritten word extraction with text-first matching
+
+#### Key Lessons for Future Debugging
+
+1. **Look for duplicate content**: When captions contain repeated phrases (names, common words), check if word matching is finding the correct occurrence
+2. **Don't trust proportional timing**: Audio has natural pauses and slow/fast sections - proportional division will be wrong
+3. **Use actual word timestamps**: AssemblyAI provides word-level timing - always prefer actual over estimated
+4. **Track position in transcript**: For sequential processing, maintain position to avoid re-matching earlier content
+5. **Wide search windows**: When dealing with unreliable timing estimates, use generous search windows (±5s)
+
+#### Testing Caption Timing
+
+To verify caption timing is working correctly:
+1. Set `DEBUG_CAPTIONS=true` in Railway
+2. Generate video with slow speaker (look for ⏱️ timing adjustment logs)
+3. Check for duplicate phrases and verify correct word highlighting
+4. Verify captions stay visible until speaker finishes the sentence
+
+**Test Clip Used**: LI5985002440.mp3, 232000-269000ms (slow female speaker)
+
 ## Common Commands
 - Lint: `npm run lint` (if available)
 - Typecheck: `npm run typecheck` (if available)
