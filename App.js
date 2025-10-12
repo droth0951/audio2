@@ -1392,6 +1392,10 @@ export default function App() {
           console.log('📦 Loading cached podcast categories');
           setPodcastCategories(cachedCategories.categories || cachedCategories);
           setAllCategories(cachedCategories.categories || cachedCategories);
+
+          // Fetch artwork for cached podcasts in background (in case offline)
+          console.log('🎨 Starting background artwork fetch for cached podcasts...');
+          setTimeout(() => fetchPopularPodcastsArtwork(), 500); // Delay to not block UI
         }
 
         // Then fetch fresh data from GitHub
@@ -1423,6 +1427,10 @@ export default function App() {
         await AsyncStorage.setItem('podcast_categories', JSON.stringify(freshData));
         console.log('💾 Cached fresh podcast categories');
 
+        // Fetch artwork for all podcasts in categories
+        console.log('🎨 Starting background artwork fetch for category podcasts...');
+        fetchPopularPodcastsArtwork();
+
       } catch (error) {
         console.log('❌ Failed to load categories from GitHub:', error.message);
 
@@ -1432,6 +1440,10 @@ export default function App() {
           console.log('📋 Using fallback podcast categories');
           setPodcastCategories(FALLBACK_CATEGORIES);
           setAllCategories(FALLBACK_CATEGORIES);
+
+          // Fetch artwork for fallback podcasts too
+          console.log('🎨 Starting background artwork fetch for fallback podcasts...');
+          fetchPopularPodcastsArtwork();
         }
       }
     };
