@@ -1173,7 +1173,9 @@ export default function App() {
 
   // Share Intent Handler
   useEffect(() => {
+    console.log('🔍 Share intent effect:', { hasShareIntent, shareIntent });
     if (hasShareIntent && shareIntent) {
+      console.log('✅ Processing share intent...');
       handleSharedURL(shareIntent);
     }
   }, [hasShareIntent, shareIntent]);
@@ -1181,6 +1183,46 @@ export default function App() {
   const handleSharedURL = async (intent) => {
     try {
       console.log('📎 Received share intent:', intent);
+
+      // Comprehensive content type filtering to prevent memory crashes
+      // Our activation rules are permissive (MaxCount: 999) to appear in Apple Podcasts,
+      // but iOS share extensions have strict 120MB memory limits - must reject unsupported types
+
+      if (intent.files && intent.files.length > 0) {
+        const file = intent.files[0];
+        console.log('⚠️ Shared content contains files:', file);
+
+        // Check for video/movie content by extension or MIME type
+        const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.wmv', '.flv', '.webm'];
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.heic', '.heif', '.webp'];
+        const fileName = file.path?.toLowerCase() || '';
+        const mimeType = file.type?.toLowerCase() || '';
+
+        const isVideo = videoExtensions.some(ext => fileName.endsWith(ext)) ||
+                       mimeType.startsWith('video/');
+        const isImage = imageExtensions.some(ext => fileName.endsWith(ext)) ||
+                       mimeType.startsWith('image/');
+
+        if (isVideo) {
+          console.log('⚠️ Video content detected - rejecting to prevent memory crash');
+          Alert.alert('Audio2', 'Audio2 only works with podcast URLs. Please share a link from Apple Podcasts or Spotify instead of a video file.');
+          resetShareIntent();
+          return;
+        }
+
+        if (isImage) {
+          console.log('⚠️ Image content detected - rejecting');
+          Alert.alert('Audio2', 'Audio2 only works with podcast URLs. Please share a link from Apple Podcasts or Spotify instead of an image.');
+          resetShareIntent();
+          return;
+        }
+
+        // Generic file rejection
+        console.log('⚠️ File content detected - Audio2 only processes URLs');
+        Alert.alert('Audio2', 'Please share a podcast URL or link instead of a file.');
+        resetShareIntent();
+        return;
+      }
 
       // Extract URL from share intent
       const sharedURL = intent.webUrl || intent.text;
@@ -1204,17 +1246,17 @@ export default function App() {
 
       // Process immediately based on platform - no dialogs
       if (parsed.platform === 'apple') {
-        await handleApplePodcast(parsed);
+        await handleApplePodcast(parsed, resetShareIntent);
       } else if (parsed.platform === 'spotify') {
-        await handleSpotifyPodcast(parsed);
+        await handleSpotifyPodcast(parsed, resetShareIntent);
       } else if (parsed.platform === 'rss') {
-        await handleRSSPodcast(parsed);
+        await handleRSSPodcast(parsed, resetShareIntent);
       } else {
         console.error('❌ Unsupported platform:', parsed.platform);
+        resetShareIntent();
       }
 
-      // Clear the share intent
-      resetShareIntent();
+      // Don't reset here - each handler will reset after completing
 
     } catch (error) {
       console.error('❌ Failed to handle shared URL:', error);
@@ -1222,7 +1264,7 @@ export default function App() {
     }
   };
 
-  const handleApplePodcast = async (data) => {
+  const handleApplePodcast = async (data, resetShareIntent) => {
     console.log('🍎 Handling Apple Podcasts URL', data);
 
     try {
@@ -1233,84 +1275,246 @@ export default function App() {
       const result = await response.json();
 
       if (result.results && result.results[0]) {
-        const rssFeedURL = result.results[0].feedUrl;
+        const podcast = result.results[0];
+        const rssFeedURL = podcast.feedUrl;
         console.log('📡 Found RSS feed:', rssFeedURL);
 
-        // Load the podcast feed
-        await loadPodcastFeed(rssFeedURL);
-
-        // If episodeId is provided, find and play that episode
+        // If episodeId is provided, fetch RSS and find just that episode
         if (data.episodeId) {
-          // Get episodes directly from AsyncStorage after load completes
-          setTimeout(async () => {
-            const cached = await AsyncStorage.getItem(`feed_${rssFeedURL}`);
-            if (!cached) {
-              console.log('⚠️ No cached episodes after load');
-              return;
+          console.log('🎯 Fetching RSS to find specific episode...');
+          const rssResponse = await fetch(rssFeedURL);
+          const rssText = await rssResponse.text();
+
+          // Parse RSS to find matching episode
+          const parser = require('react-native-rss-parser');
+          const rssFeed = await parser.parse(rssText);
+
+          console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for ID: ${data.episodeId}`);
+
+          // Find episode by Apple episode ID - check multiple fields
+          const matchedItem = rssFeed.items.find(item => {
+            const urlMatch = item.enclosures?.[0]?.url && (
+              item.enclosures[0].url.includes(`?i=${data.episodeId}`) ||
+              item.enclosures[0].url.includes(`/${data.episodeId}/`) ||
+              item.enclosures[0].url.includes(`=${data.episodeId}`)
+            );
+            const guidMatch = item.id && item.id.includes(data.episodeId);
+
+            return urlMatch || guidMatch;
+          });
+
+          if (matchedItem) {
+            console.log('✅ Found episode in RSS:', matchedItem.title);
+
+            // Create episode object with just what we need to play
+            const episode = {
+              title: matchedItem.title,
+              description: matchedItem.description || matchedItem.itunes?.summary || '',
+              audioUrl: matchedItem.enclosures?.[0]?.url || '',
+              artwork: matchedItem.itunes?.image || rssFeed.image?.url || podcast.artworkUrl600,
+              publishedDate: matchedItem.published,
+            };
+
+            console.log('🎧 Playing episode directly:', episode.title);
+            const playedSound = await playEpisode(episode);
+
+            // If timestamp provided, seek after playback initializes
+            if (data.timestamp && playedSound) {
+              setTimeout(async () => {
+                try {
+                  await playedSound.setPositionAsync(data.timestamp * 1000);
+                  console.log(`⏱️ Seeked to ${data.timestamp}s`);
+                } catch (err) {
+                  console.error('❌ Seek failed:', err);
+                }
+              }, 2000);
             }
 
-            const loadedEpisodes = JSON.parse(cached);
-            console.log(`📋 Loaded ${loadedEpisodes.length} episodes, searching for ${data.episodeId}`);
+            // Load full episode list in background for proper back navigation
+            console.log('📡 Loading full episode list in background...');
+            await loadPodcastFeed(rssFeedURL);
 
-            // Find episode by Apple episode ID - check multiple fields
-            const episode = loadedEpisodes.find(ep => {
-              // Check if episode's enclosure URL or guid contains the episode ID
-              const urlMatch = ep.audioUrl && (
-                ep.audioUrl.includes(`?i=${data.episodeId}`) ||
-                ep.audioUrl.includes(`/${data.episodeId}/`) ||
-                ep.audioUrl.includes(`=${data.episodeId}`)
-              );
-              const guidMatch = ep.guid && ep.guid.includes(data.episodeId);
-
-              return urlMatch || guidMatch;
-            });
-
-            if (episode) {
-              console.log('🎯 Found episode:', episode.title);
-              const playedSound = await playEpisode(episode);
-
-              // If timestamp provided, seek after playback initializes
-              if (data.timestamp && playedSound) {
-                setTimeout(async () => {
-                  try {
-                    await playedSound.setPositionAsync(data.timestamp * 1000);
-                    console.log(`⏱️ Seeked to ${data.timestamp}s`);
-                  } catch (err) {
-                    console.error('❌ Seek failed:', err);
-                  }
-                }, 2000);
-              }
-            } else {
-              console.log('⚠️ Episode not found in feed - showing episode list');
-            }
-          }, 1500);
+            resetShareIntent();
+          } else {
+            console.log('⚠️ Episode not found in RSS - loading full feed as fallback');
+            await loadPodcastFeed(rssFeedURL);
+            resetShareIntent();
+          }
+        } else {
+          // No episode ID - just load the feed
+          await loadPodcastFeed(rssFeedURL);
+          resetShareIntent();
         }
       } else {
         console.error('❌ Could not find podcast RSS feed');
+        resetShareIntent();
       }
     } catch (error) {
       console.error('❌ Failed to fetch Apple Podcasts data:', error);
+      resetShareIntent();
     }
   };
 
-  const handleSpotifyPodcast = async (data) => {
-    console.log('🎵 Handling Spotify URL');
+  const handleSpotifyPodcast = async (data, resetShareIntent) => {
+    console.log('🎵 Handling Spotify URL', data);
 
-    // Spotify doesn't provide direct audio access
-    // For now, just log it - we could implement search in the future
-    console.log('⚠️ Spotify sharing not yet supported - audio not accessible');
-    console.log('💡 Spotify episode/show ID:', data.episodeId || data.showId);
+    try {
+      // Extract show ID from URL context
+      let showId = data.showId;
+      if (!showId && data.url) {
+        const contextMatch = data.url.match(/context=spotify%3Ashow%3A([a-zA-Z0-9]+)/);
+        if (contextMatch) {
+          showId = contextMatch[1];
+        }
+      }
+
+      if (!showId) {
+        console.log('⚠️ No show ID found');
+        Alert.alert('Spotify Link', 'Could not identify podcast. Try searching manually in Audio2.');
+        resetShareIntent();
+        return;
+      }
+
+      console.log('📡 Fetching Spotify page to extract show name...');
+      const showUrl = `https://open.spotify.com/show/${showId}`;
+      const response = await fetch(showUrl);
+      const html = await response.text();
+
+      // Extract show name from og:title meta tag
+      const showNameMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+      if (!showNameMatch) {
+        console.log('⚠️ Could not extract show name');
+        Alert.alert('Spotify Link', 'Could not identify podcast. Try searching manually.');
+        resetShareIntent();
+        return;
+      }
+
+      const showName = showNameMatch[1];
+      console.log('📻 Spotify show:', showName);
+
+      // Get episode name if episode was shared
+      let episodeName = null;
+      if (data.episodeId) {
+        console.log('📡 Fetching episode page...');
+        const episodeUrl = `https://open.spotify.com/episode/${data.episodeId}`;
+        const epResponse = await fetch(episodeUrl);
+        const epHtml = await epResponse.text();
+
+        const epNameMatch = epHtml.match(/<meta property="og:title" content="([^"]+)"/);
+        if (epNameMatch) {
+          episodeName = epNameMatch[1];
+          console.log('🎧 Episode:', episodeName);
+        }
+      }
+
+      // Search iTunes for the podcast
+      console.log('🔍 Searching iTunes for:', showName);
+      const searchResponse = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(showName)}&entity=podcast&limit=5`
+      );
+      const searchResult = await searchResponse.json();
+
+      if (!searchResult.results || searchResult.results.length === 0) {
+        console.log('⚠️ Not found on iTunes');
+        Alert.alert(
+          'Podcast Not Available',
+          `"${showName}" not found on Apple Podcasts. May be Spotify-exclusive.`,
+          [{ text: 'OK' }]
+        );
+        resetShareIntent();
+        return;
+      }
+
+      const podcast = searchResult.results[0];
+      const rssFeedURL = podcast.feedUrl;
+      console.log('📡 Found RSS:', rssFeedURL);
+
+      // If we have an episode name, fetch RSS and find just that episode
+      if (episodeName) {
+        console.log('🎯 Fetching RSS to find specific episode...');
+        const rssResponse = await fetch(rssFeedURL);
+        const rssText = await rssResponse.text();
+
+        // Parse RSS to find matching episode
+        const parser = require('react-native-rss-parser');
+        const rssFeed = await parser.parse(rssText);
+
+        console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for: "${episodeName}"`);
+
+        // Try exact match
+        let matchedItem = rssFeed.items.find(item =>
+          item.title && item.title.toLowerCase() === episodeName.toLowerCase()
+        );
+
+        // Try partial match (first 30 chars)
+        if (!matchedItem) {
+          const start = episodeName.toLowerCase().substring(0, 30);
+          matchedItem = rssFeed.items.find(item =>
+            item.title && item.title.toLowerCase().includes(start)
+          );
+        }
+
+        if (matchedItem) {
+          console.log('✅ Found episode in RSS:', matchedItem.title);
+
+          // Create episode object with just what we need to play
+          const episode = {
+            title: matchedItem.title,
+            description: matchedItem.description || matchedItem.itunes?.summary || '',
+            audioUrl: matchedItem.enclosures?.[0]?.url || '',
+            artwork: matchedItem.itunes?.image || rssFeed.image?.url || podcast.artworkUrl600,
+            publishedDate: matchedItem.published,
+          };
+
+          console.log('🎧 Playing episode directly:', episode.title);
+          const playedSound = await playEpisode(episode);
+
+          // If timestamp provided, seek after playback initializes
+          if (data.timestamp && playedSound) {
+            setTimeout(async () => {
+              try {
+                await playedSound.setPositionAsync(data.timestamp * 1000);
+                console.log(`⏱️ Seeked to ${data.timestamp}s`);
+              } catch (err) {
+                console.error('❌ Seek failed:', err);
+              }
+            }, 2000);
+          }
+
+          // Load full episode list in background for proper back navigation
+          console.log('📡 Loading full episode list in background...');
+          await loadPodcastFeed(rssFeedURL);
+
+          resetShareIntent();
+        } else {
+          console.log('⚠️ Episode not found in RSS - loading full feed as fallback');
+          await loadPodcastFeed(rssFeedURL);
+          resetShareIntent();
+        }
+      } else {
+        // No episode name - just load the feed
+        await loadPodcastFeed(rssFeedURL);
+        resetShareIntent();
+      }
+
+    } catch (error) {
+      console.error('❌ Failed:', error);
+      Alert.alert('Error', 'Could not load podcast. Try searching manually.');
+      resetShareIntent();
+    }
   };
 
-  const handleRSSPodcast = async (data) => {
+  const handleRSSPodcast = async (data, resetShareIntent) => {
     console.log('📡 Handling RSS feed URL');
 
     try {
       // Directly load the RSS feed
       await loadPodcastFeed(data.url);
       console.log('✅ RSS feed loaded successfully');
+      resetShareIntent();
     } catch (error) {
       console.error('❌ Failed to load RSS feed:', error);
+      resetShareIntent();
     }
   };
 

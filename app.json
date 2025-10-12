@@ -65,11 +65,17 @@
         {
           "iosActivationRules": {
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
-            "NSExtensionActivationSupportsText": true
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsMovieWithMaxCount": 1,
+            "NSExtensionActivationSupportsFileWithMaxCount": 10,
+            "NSExtensionActivationSupportsAttachmentsWithMaxCount": 10
           },
           "iosAppGroupIdentifier": "group.com.danroth.podknowledge"
         }
-      ]
+      ],
+      "./plugins/withPodcastShareRules"
     ],
     "scheme": "audio2",
     "extra": {

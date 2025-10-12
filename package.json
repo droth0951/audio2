@@ -28,6 +28,7 @@
     "expo-file-system": "~18.1.11",
     "expo-font": "~13.3.2",
     "expo-linear-gradient": "~14.1.5",
+    "expo-linking": "~7.1.7",
     "expo-media-library": "~17.1.7",
     "expo-notifications": "~0.31.4",
     "expo-screen-recorder": "^0.1.8",
@@ -44,7 +45,7 @@
     "react-native-svg": "15.11.2",
     "react-native-view-shot": "4.0.3",
     "react-native-web": "^0.20.0",
-    "expo-linking": "~7.1.7"
+    "spotify-url-info": "^3.2.18"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

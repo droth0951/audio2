@@ -9,9 +9,11 @@ export const parsePodcastURL = (url) => {
   // Spotify Episode Pattern
   if (url.includes('open.spotify.com/episode/')) {
     const episodeId = url.match(/episode\/([a-zA-Z0-9]+)/)?.[1];
+    const timestamp = extractTimestamp(url);
     return {
       platform: 'spotify',
       episodeId,
+      timestamp, // Will be in seconds, or null
       url,
       canExtractAudio: false, // Spotify doesn't provide direct audio
     };
