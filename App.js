@@ -1286,15 +1286,18 @@ export default function App() {
           let matchedItem = null;
           let rssFeed = null;
 
-          // Get episode details from iTunes API
+          // Get episode details from iTunes API using both podcast and episode IDs
           const episodeResponse = await fetch(
-            `https://itunes.apple.com/lookup?id=${data.episodeId}&entity=podcastEpisode`
+            `https://itunes.apple.com/lookup?id=${data.showId},${data.episodeId}&entity=podcastEpisode`
           );
           const episodeResult = await episodeResponse.json();
 
-          if (episodeResult.results && episodeResult.results.length > 1) {
-            // First result is the podcast, second is the episode
-            const episodeMetadata = episodeResult.results[1];
+          // Find the episode in results by matching the episode ID
+          const episodeMetadata = episodeResult.results?.find(
+            item => item.kind === 'podcast-episode' && item.trackId.toString() === data.episodeId
+          );
+
+          if (episodeMetadata) {
             const episodeName = episodeMetadata.trackName;
 
             console.log('📝 Episode name from iTunes:', episodeName);
