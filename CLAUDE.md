@@ -169,16 +169,15 @@ To verify caption timing is working correctly:
 
 ## App Store Submission Process
 
-### Understanding EAS Build Numbers
+### Critical Order of Operations
 
-**IMPORTANT**: EAS automatically manages build numbers (CFBundleVersion). You only need to update the user-facing version in app.json.
+**⚠️ ALWAYS DO THIS IN EXACT ORDER OR YOU WASTE EAS BUILDS ⚠️**
 
-- **expo.version** - User-facing version shown in App Store (e.g., "2.1.0")
-- **Build number** - Auto-incremented by EAS for each build (managed automatically)
+EAS builds from your **git commit**, not your local files. If you build before committing version changes, the build will have the OLD version and submission will fail.
 
-### Submission Steps
+### Submission Steps (DO IN THIS EXACT ORDER)
 
-1. **Update version in app.json** (for new App Store release):
+1. **FIRST: Update version in app.json:**
    ```json
    {
      "expo": {
@@ -187,41 +186,48 @@ To verify caption timing is working correctly:
    }
    ```
 
-2. **Commit and push to main:**
+2. **SECOND: Commit and push to main BEFORE building:**
    ```bash
    git add app.json
-   git commit -m "Bump version to 2.2.0"
+   git commit -m "Bump version to 2.2.0 for App Store submission"
    git push origin main
    ```
 
-3. **Build for production:**
+3. **THIRD: Verify you're on main with latest commit:**
    ```bash
-   eas build --platform ios --profile production
+   git status  # Should say "Your branch is up to date with 'origin/main'"
+   git log --oneline -1  # Should show your version bump commit
    ```
-   - First time with share extension: Run interactively to set up credentials
-   - Subsequent builds: Add `--non-interactive` flag
+
+4. **FOURTH: Now build for production:**
+   ```bash
+   eas build --platform ios --profile production --non-interactive
+   ```
+   - Wait for build to complete (~15-20 minutes)
    - EAS will auto-increment the build number
 
-4. **Submit to App Store:**
+5. **FIFTH: Submit to App Store:**
    ```bash
    eas submit --platform ios --latest
    ```
 
-### Common Submission Errors
+### Why This Order Matters
+
+- **EAS builds from git commits**, not local files
+- If version is 2.1.0 locally but git has 2.0.0, the build will be 2.0.0
+- You can't submit the same build twice to Apple
+- Each failed submission wastes an EAS build
+
+### Common Errors and Fixes
 
 **Error**: "You've already submitted this build of the app"
-- **Cause**: Trying to submit the same build ID twice (rare with auto-increment)
-- **Fix**: Build again - EAS will create a new build number automatically
+- **Cause**: Built before committing version change, so build has old version
+- **Prevention**: ALWAYS commit version changes BEFORE building
+- **Fix**: Update version again (e.g., 2.1.0 → 2.1.1), commit, push, then build
 
-**Error**: "Credentials not set up for ShareExtension"
-- **Cause**: First production build with share extension
-- **Fix**: Run build command without `--non-interactive` to configure credentials interactively
-
-### Version Number Strategy
-
-- **Major releases** (new features): Increment to next major/minor (2.0.0 → 2.1.0)
-- **Bug fixes**: Increment patch version (2.1.0 → 2.1.1)
-- **OTA updates**: Don't change version - use `eas update` instead
+**Error**: Build shows old version number
+- **Cause**: Built before committing changes
+- **Fix**: Check `git log` to confirm version commit is pushed, then build again
 
 ### After App Store Approval
 
