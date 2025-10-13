@@ -24,7 +24,8 @@
       "channel": "production",
       "releaseChannel": "production",
       "ios": {
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "prebuildCommand": "npx expo prebuild --platform ios && bash scripts/fix-share-extension-plist.sh"
       }
     }
   },

@@ -44,6 +44,7 @@ import VideoService from './src/services/VideoService';
 import JobPollingService from './src/services/JobPollingService';
 import { useShareIntent } from 'expo-share-intent';
 import { parsePodcastURL, formatTimestamp, getPlatformDisplayName } from './src/utils/PodcastURLParser';
+import { ANNOUNCEMENTS } from './src/constants/announcements';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -831,23 +832,48 @@ export default function App() {
   // Share Intent state and hook
   const { hasShareIntent, shareIntent, resetShareIntent, error: shareIntentError } = useShareIntent();
 
-  // Load stored notifications on app start
+  // Load stored notifications and merge with system announcements on app start
   useEffect(() => {
     const loadStoredNotifications = async () => {
       try {
         console.log('🔔 Loading stored notifications...');
+
+        // Load dismissed announcements list
+        const dismissedAnnouncementsJson = await AsyncStorage.getItem('dismissedAnnouncements');
+        const dismissedAnnouncements = dismissedAnnouncementsJson ? JSON.parse(dismissedAnnouncementsJson) : [];
+
+        // Load stored video notifications
         const storedNotifications = await AsyncStorage.getItem('notifications');
         console.log('🔔 Raw stored notifications:', storedNotifications);
+
+        let parsedNotifications = [];
         if (storedNotifications) {
-          const parsedNotifications = JSON.parse(storedNotifications).map(n => ({
+          parsedNotifications = JSON.parse(storedNotifications).map(n => ({
             ...n,
             timestamp: new Date(n.timestamp) // Convert timestamp back to Date object
           }));
           console.log('🔔 Parsed notifications:', parsedNotifications.length, 'items');
-          setNotifications(parsedNotifications);
         } else {
           console.log('🔔 No stored notifications found');
         }
+
+        // Add system announcements that haven't been dismissed
+        const activeAnnouncements = ANNOUNCEMENTS
+          .filter(announcement => !dismissedAnnouncements.includes(announcement.id))
+          .map(announcement => ({
+            id: announcement.id,
+            title: announcement.title,
+            body: announcement.body,
+            timestamp: new Date(announcement.date),
+            read: false,
+            type: 'announcement',
+          }));
+
+        console.log('🔔 Active announcements:', activeAnnouncements.length, 'items');
+
+        // Merge announcements with video notifications (announcements first)
+        const allNotifications = [...activeAnnouncements, ...parsedNotifications];
+        setNotifications(allNotifications);
       } catch (error) {
         console.error('Failed to load stored notifications:', error);
       }
@@ -4317,7 +4343,11 @@ export default function App() {
                             {/* Notification Bell */}
                             <TouchableOpacity
                               style={styles.notificationBell}
-                              onPress={() => setShowNotificationsModal(true)}
+                              onPress={() => {
+                                // Mark all notifications as read when modal opens
+                                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                                setShowNotificationsModal(true);
+                              }}
                             >
                               <MaterialCommunityIcons
                                 name="bell-outline"
@@ -4823,62 +4853,101 @@ export default function App() {
                       ]}
                     >
                       <View style={styles.notificationContent}>
-                        <Text style={styles.notificationBody} numberOfLines={3}>
-                          {item.episodeTitle ?
-                            `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
-                            'Your clip is now ready for saving and sharing!'
-                          }
-                        </Text>
-                        {item.podcastName && (
-                          <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
+                        {item.type === 'announcement' ? (
+                          <>
+                            <Text style={styles.notificationBody} numberOfLines={3}>
+                              <Text style={{ fontWeight: '600' }}>{item.title}</Text>
+                              {' '}
+                              {item.body}
+                            </Text>
+                            <Text style={styles.notificationTime}>
+                              {new Date(item.timestamp).toLocaleString()}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.notificationBody} numberOfLines={3}>
+                              {item.episodeTitle ?
+                                `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
+                                'Your clip is now ready for saving and sharing!'
+                              }
+                            </Text>
+                            {item.podcastName && (
+                              <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
+                            )}
+                            <Text style={styles.notificationTime}>
+                              {new Date(item.timestamp).toLocaleString()}
+                            </Text>
+                          </>
                         )}
-                        <Text style={styles.notificationTime}>
-                          {new Date(item.timestamp).toLocaleString()}
-                        </Text>
                       </View>
 
                       <View style={styles.notificationActions}>
+                        {item.type !== 'announcement' && (
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={async () => {
+                              try {
+                                if (item.jobId) {
+                                  console.log('💾 Saving video from notification modal:', item.jobId);
+                                  const result = await VideoService.downloadVideoToPhotos(item.jobId);
+
+                                  // Remove the notification after successful save
+                                  setNotifications(prev => {
+                                    const updatedNotifications = prev.filter(n => n.id !== item.id);
+
+                                    // Only save video notifications to storage
+                                    const videoNotifications = updatedNotifications.filter(n => n.type !== 'announcement');
+                                    AsyncStorage.setItem('notifications', JSON.stringify(videoNotifications)).catch(error => {
+                                      console.error('Failed to save notifications:', error);
+                                    });
+
+                                    return updatedNotifications;
+                                  });
+
+                                  // Show success feedback
+                                  Alert.alert(
+                                    '✅ Saved to Photos',
+                                    `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
+                                    [{ text: 'OK' }]
+                                  );
+                                }
+                              } catch (error) {
+                                console.error('Save failed:', error);
+                                Alert.alert('Save Failed', error.message || 'Could not save video');
+                              }
+                            }}
+                          >
+                            <MaterialCommunityIcons name="download" size={16} color="#d97706" />
+                          </TouchableOpacity>
+                        )}
+
                         <TouchableOpacity
                           style={styles.actionButton}
                           onPress={async () => {
-                            try {
-                              if (item.jobId) {
-                                console.log('💾 Saving video from notification modal:', item.jobId);
-                                const result = await VideoService.downloadVideoToPhotos(item.jobId);
-
-                                // Remove the notification after successful save
-                                setNotifications(prev => {
-                                  const updatedNotifications = prev.filter(n => n.id !== item.id);
-                                  AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
-                                    console.error('Failed to save notifications:', error);
-                                  });
-                                  return updatedNotifications;
-                                });
-
-                                // Show success feedback
-                                Alert.alert(
-                                  '✅ Saved to Photos',
-                                  `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
-                                  [{ text: 'OK' }]
-                                );
+                            // Handle dismissing announcements vs video notifications differently
+                            if (item.type === 'announcement') {
+                              // Add to dismissed list so it doesn't reappear
+                              try {
+                                const dismissedJson = await AsyncStorage.getItem('dismissedAnnouncements');
+                                const dismissed = dismissedJson ? JSON.parse(dismissedJson) : [];
+                                dismissed.push(item.id);
+                                await AsyncStorage.setItem('dismissedAnnouncements', JSON.stringify(dismissed));
+                              } catch (error) {
+                                console.error('Failed to save dismissed announcements:', error);
                               }
-                            } catch (error) {
-                              console.error('Save failed:', error);
-                              Alert.alert('Save Failed', error.message || 'Could not save video');
                             }
-                          }}
-                        >
-                          <MaterialCommunityIcons name="download" size={16} color="#d97706" />
-                        </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => {
+                            // Remove from notifications list
                             setNotifications(prev => {
                               const updatedNotifications = prev.filter(n => n.id !== item.id);
-                              AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+
+                              // Only save video notifications to storage
+                              const videoNotifications = updatedNotifications.filter(n => n.type !== 'announcement');
+                              AsyncStorage.setItem('notifications', JSON.stringify(videoNotifications)).catch(error => {
                                 console.error('Failed to save notifications:', error);
                               });
+
                               return updatedNotifications;
                             });
                           }}
