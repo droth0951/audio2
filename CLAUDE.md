@@ -177,18 +177,25 @@ EAS builds from your **git commit**, not your local files. If you build before c
 
 ### Submission Steps (DO IN THIS EXACT ORDER)
 
-1. **FIRST: Update version in app.json:**
+1. **FIRST: Update version in BOTH app.json AND package.json:**
    ```json
+   // app.json
    {
      "expo": {
        "version": "2.2.0"
      }
    }
+
+   // package.json
+   {
+     "version": "2.2.0"
+   }
    ```
+   **CRITICAL**: Both files must have the SAME version or build will use package.json version!
 
 2. **SECOND: Commit and push to main BEFORE building:**
    ```bash
-   git add app.json
+   git add app.json package.json
    git commit -m "Bump version to 2.2.0 for App Store submission"
    git push origin main
    ```
@@ -226,15 +233,20 @@ EAS builds from your **git commit**, not your local files. If you build before c
 - **Fix**: Update version again (e.g., 2.1.0 → 2.1.1), commit, push, then build
 
 **Error**: Build shows old version number even after updating app.json
-- **Root Cause**: When `eas.json` has `"appVersionSource": "local"` AND production build uses `prebuildCommand`, EAS reads version from the GENERATED native iOS project, not from app.json
-- **The Problem**: `expo prebuild` regenerates the ios/ directory during build, but may use cached or incorrect version
-- **Solution**: Use `"appVersionSource": "remote"` in eas.json to force EAS to use app.json as source of truth
-- **Why This Happens**:
-  1. app.json has correct version (e.g., 2.1.0)
-  2. `prebuildCommand` runs `expo prebuild` which regenerates ios/
-  3. Generated ios/Audio2.xcodeproj/project.pbxproj gets old version (e.g., 2.0.0)
-  4. With `"appVersionSource": "local"`, EAS reads from native project → wrong version
-- **Fix Applied**: Changed eas.json to `"appVersionSource": "remote"` (commit 3009349)
+- **Root Cause #1 (MOST COMMON)**: package.json has different version than app.json
+  - **Solution**: ALWAYS update BOTH app.json AND package.json to the same version
+  - **Why**: `expo prebuild` reads version from package.json, not app.json
+  - **Fix Applied**: Now keep both files in sync (commit 826256f)
+
+- **Root Cause #2**: When `eas.json` has `"appVersionSource": "local"` AND production build uses `prebuildCommand`, EAS reads version from the GENERATED native iOS project, not from app.json
+  - **The Problem**: `expo prebuild` regenerates the ios/ directory during build, but may use cached or incorrect version
+  - **Solution**: Use `"appVersionSource": "remote"` in eas.json to force EAS to use app.json as source of truth
+  - **Why This Happens**:
+    1. app.json has correct version (e.g., 2.1.0)
+    2. `prebuildCommand` runs `expo prebuild` which regenerates ios/
+    3. Generated ios/Audio2.xcodeproj/project.pbxproj gets old version (e.g., 2.0.0)
+    4. With `"appVersionSource": "local"`, EAS reads from native project → wrong version
+  - **Fix Applied**: Changed eas.json to `"appVersionSource": "remote"` (commit 3009349)
 
 **Error**: Build shows old version number (other cases)
 - **Cause**: Built before committing changes
