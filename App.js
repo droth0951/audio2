@@ -1917,6 +1917,29 @@ export default function App() {
 
       for (const podcast of allPodcasts) {
         try {
+          // If podcast has rssUrl, fetch from RSS directly (most reliable)
+          if (podcast.rssUrl) {
+            try {
+              const response = await fetch(podcast.rssUrl);
+              const xmlText = await response.text();
+
+              // Extract podcast artwork from RSS feed
+              const artworkMatch = xmlText.match(/<itunes:image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<image[^>]*href="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<media:content[^>]*url="([^"]*)"[^>]*\/?>/) ||
+                                   xmlText.match(/<media:thumbnail[^>]*url="([^"]*)"[^>]*\/?>/);
+
+              if (artworkMatch && artworkMatch[1]) {
+                artworkCache[podcast.name] = artworkMatch[1];
+                console.log('✅ Found artwork for:', podcast.name);
+                continue; // Skip iTunes search if we found artwork in RSS
+              }
+            } catch (rssError) {
+              console.log('⚠️ RSS fetch failed for', podcast.name, '- trying iTunes search');
+            }
+          }
+
+          // Fallback to iTunes search if no RSS URL or RSS fetch failed
           const searchResults = await handlePodcastSearch(podcast.name, true); // silent search
           if (searchResults && searchResults.length > 0) {
             const podcastData = searchResults[0];
@@ -1929,18 +1952,18 @@ export default function App() {
           console.log('❌ Failed to fetch artwork for:', podcast.name, error.message);
         }
       }
-      
+
       setPopularPodcastsArtwork(artworkCache);
-      
+
       try {
         await AsyncStorage.setItem('popular_podcasts_artwork', JSON.stringify(artworkCache));
         console.log('💾 Cached artwork for future use');
       } catch (error) {
         console.log('❌ Error caching artwork:', error);
       }
-      
+
       console.log('🎨 Updated artwork cache with', Object.keys(artworkCache).length, 'podcasts');
-      
+
     } catch (error) {
       console.log('❌ Error fetching popular podcasts artwork:', error);
     }
