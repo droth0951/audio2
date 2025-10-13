@@ -42,6 +42,9 @@ import VideoReadyBanner from './src/components/VideoReadyBanner';
 import PushNotificationService from './src/services/PushNotificationService';
 import VideoService from './src/services/VideoService';
 import JobPollingService from './src/services/JobPollingService';
+import { useShareIntent } from 'expo-share-intent';
+import { parsePodcastURL, formatTimestamp, getPlatformDisplayName } from './src/utils/PodcastURLParser';
+import { ANNOUNCEMENTS } from './src/constants/announcements';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -826,23 +829,51 @@ export default function App() {
   // Notification history state
   const [notifications, setNotifications] = useState([]);
 
-  // Load stored notifications on app start
+  // Share Intent state and hook
+  const { hasShareIntent, shareIntent, resetShareIntent, error: shareIntentError } = useShareIntent();
+
+  // Load stored notifications and merge with system announcements on app start
   useEffect(() => {
     const loadStoredNotifications = async () => {
       try {
         console.log('🔔 Loading stored notifications...');
+
+        // Load dismissed announcements list
+        const dismissedAnnouncementsJson = await AsyncStorage.getItem('dismissedAnnouncements');
+        const dismissedAnnouncements = dismissedAnnouncementsJson ? JSON.parse(dismissedAnnouncementsJson) : [];
+
+        // Load stored video notifications
         const storedNotifications = await AsyncStorage.getItem('notifications');
         console.log('🔔 Raw stored notifications:', storedNotifications);
+
+        let parsedNotifications = [];
         if (storedNotifications) {
-          const parsedNotifications = JSON.parse(storedNotifications).map(n => ({
+          parsedNotifications = JSON.parse(storedNotifications).map(n => ({
             ...n,
             timestamp: new Date(n.timestamp) // Convert timestamp back to Date object
           }));
           console.log('🔔 Parsed notifications:', parsedNotifications.length, 'items');
-          setNotifications(parsedNotifications);
         } else {
           console.log('🔔 No stored notifications found');
         }
+
+        // Add system announcements that haven't been dismissed
+        const activeAnnouncements = ANNOUNCEMENTS
+          .filter(announcement => !dismissedAnnouncements.includes(announcement.id))
+          .map(announcement => ({
+            id: announcement.id,
+            title: announcement.title,
+            body: announcement.body,
+            timestamp: new Date(announcement.date),
+            read: false,
+            type: 'announcement',
+          }));
+
+        console.log('🔔 Active announcements:', activeAnnouncements.length, 'items');
+
+        // Merge announcements with video notifications (announcements first)
+        const allNotifications = [...activeAnnouncements, ...parsedNotifications];
+        setNotifications(allNotifications);
       } catch (error) {
         console.error('Failed to load stored notifications:', error);
       }
@@ -1165,6 +1196,382 @@ export default function App() {
       });
     });
   }, []);
+
+  // Share Intent Handler
+  useEffect(() => {
+    console.log('🔍 Share intent effect:', { hasShareIntent, shareIntent });
+    if (hasShareIntent && shareIntent) {
+      console.log('✅ Processing share intent...');
+      handleSharedURL(shareIntent);
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  const handleSharedURL = async (intent) => {
+    try {
+      console.log('📎 Received share intent:', intent);
+
+      // Comprehensive content type filtering to prevent memory crashes
+      // Our activation rules are permissive (MaxCount: 999) to appear in Apple Podcasts,
+      // but iOS share extensions have strict 120MB memory limits - must reject unsupported types
+
+      if (intent.files && intent.files.length > 0) {
+        const file = intent.files[0];
+        console.log('⚠️ Shared content contains files:', file);
+
+        // Check for video/movie content by extension or MIME type
+        const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.wmv', '.flv', '.webm'];
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.heic', '.heif', '.webp'];
+        const fileName = file.path?.toLowerCase() || '';
+        const mimeType = file.type?.toLowerCase() || '';
+
+        const isVideo = videoExtensions.some(ext => fileName.endsWith(ext)) ||
+                       mimeType.startsWith('video/');
+        const isImage = imageExtensions.some(ext => fileName.endsWith(ext)) ||
+                       mimeType.startsWith('image/');
+
+        if (isVideo) {
+          console.log('⚠️ Video content detected - rejecting to prevent memory crash');
+          Alert.alert('Audio2', 'Audio2 only works with podcast URLs. Please share a link from Apple Podcasts or Spotify instead of a video file.');
+          resetShareIntent();
+          return;
+        }
+
+        if (isImage) {
+          console.log('⚠️ Image content detected - rejecting');
+          Alert.alert('Audio2', 'Audio2 only works with podcast URLs. Please share a link from Apple Podcasts or Spotify instead of an image.');
+          resetShareIntent();
+          return;
+        }
+
+        // Generic file rejection
+        console.log('⚠️ File content detected - Audio2 only processes URLs');
+        Alert.alert('Audio2', 'Please share a podcast URL or link instead of a file.');
+        resetShareIntent();
+        return;
+      }
+
+      // Extract URL from share intent
+      const sharedURL = intent.webUrl || intent.text;
+
+      if (!sharedURL) {
+        console.error('❌ No URL found in shared content');
+        resetShareIntent();
+        return;
+      }
+
+      // Parse podcast URL
+      const parsed = parsePodcastURL(sharedURL);
+
+      if (!parsed) {
+        console.error('❌ Could not parse podcast URL:', sharedURL);
+        resetShareIntent();
+        return;
+      }
+
+      console.log('🎧 Parsed podcast data:', parsed);
+
+      // Process immediately based on platform - no dialogs
+      if (parsed.platform === 'apple') {
+        await handleApplePodcast(parsed, resetShareIntent);
+      } else if (parsed.platform === 'spotify') {
+        await handleSpotifyPodcast(parsed, resetShareIntent);
+      } else if (parsed.platform === 'rss') {
+        await handleRSSPodcast(parsed, resetShareIntent);
+      } else {
+        console.error('❌ Unsupported platform:', parsed.platform);
+        resetShareIntent();
+      }
+
+      // Don't reset here - each handler will reset after completing
+
+    } catch (error) {
+      console.error('❌ Failed to handle shared URL:', error);
+      resetShareIntent();
+    }
+  };
+
+  const handleApplePodcast = async (data, resetShareIntent) => {
+    console.log('🍎 Handling Apple Podcasts URL', data);
+
+    try {
+      // Get RSS feed from iTunes API
+      const response = await fetch(
+        `https://itunes.apple.com/lookup?id=${data.showId}`
+      );
+      const result = await response.json();
+
+      if (result.results && result.results[0]) {
+        const podcast = result.results[0];
+        const rssFeedURL = podcast.feedUrl;
+        console.log('📡 Found RSS feed:', rssFeedURL);
+
+        // If episodeId is provided, fetch episode metadata from iTunes and match by title
+        if (data.episodeId) {
+          console.log('🎯 Fetching episode metadata from iTunes API...');
+
+          let matchedItem = null;
+          let rssFeed = null;
+
+          // Get episode details from iTunes API using both podcast and episode IDs
+          const episodeResponse = await fetch(
+            `https://itunes.apple.com/lookup?id=${data.showId},${data.episodeId}&entity=podcastEpisode`
+          );
+          const episodeResult = await episodeResponse.json();
+
+          // Find the episode in results by matching the episode ID
+          const episodeMetadata = episodeResult.results?.find(
+            item => item.kind === 'podcast-episode' && item.trackId.toString() === data.episodeId
+          );
+
+          if (episodeMetadata) {
+            const episodeName = episodeMetadata.trackName;
+
+            console.log('📝 Episode name from iTunes:', episodeName);
+            console.log('🎯 Fetching RSS to find specific episode by title...');
+
+            const rssResponse = await fetch(rssFeedURL);
+            const rssText = await rssResponse.text();
+
+            // Parse RSS to find matching episode
+            const parser = require('react-native-rss-parser');
+            rssFeed = await parser.parse(rssText);
+
+            console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for title: "${episodeName}"`);
+
+            // Find episode by title match (case-insensitive)
+            matchedItem = rssFeed.items.find(item =>
+              item.title && item.title.toLowerCase() === episodeName.toLowerCase()
+            );
+          } else {
+            console.log('⚠️ Could not fetch episode metadata from iTunes - trying direct RSS match');
+
+            // Fallback: try RSS matching with episode ID
+            const rssResponse = await fetch(rssFeedURL);
+            const rssText = await rssResponse.text();
+            const parser = require('react-native-rss-parser');
+            rssFeed = await parser.parse(rssText);
+
+            matchedItem = rssFeed.items.find(item => {
+              const urlMatch = item.enclosures?.[0]?.url && item.enclosures[0].url.includes(data.episodeId);
+              const guidMatch = item.id && item.id.includes(data.episodeId);
+              return urlMatch || guidMatch;
+            });
+          }
+
+          if (matchedItem) {
+            console.log('✅ Found episode in RSS:', matchedItem.title);
+
+            // Create episode object with just what we need to play
+            const episode = {
+              title: matchedItem.title,
+              description: matchedItem.description || matchedItem.itunes?.summary || '',
+              audioUrl: matchedItem.enclosures?.[0]?.url || '',
+              artwork: matchedItem.itunes?.image || rssFeed.image?.url || podcast.artworkUrl600,
+              publishedDate: matchedItem.published,
+            };
+
+            console.log('🎧 Playing episode directly:', episode.title);
+            const playedSound = await playEpisode(episode);
+
+            // If timestamp provided, seek after playback initializes
+            if (data.timestamp && playedSound) {
+              setTimeout(async () => {
+                try {
+                  await playedSound.setPositionAsync(data.timestamp * 1000);
+                  console.log(`⏱️ Seeked to ${data.timestamp}s`);
+                } catch (err) {
+                  console.error('❌ Seek failed:', err);
+                }
+              }, 2000);
+            }
+
+            // Load full episode list in background for proper back navigation
+            console.log('📡 Loading full episode list in background...');
+            await loadPodcastFeed(rssFeedURL);
+
+            resetShareIntent();
+          } else {
+            console.log('⚠️ Episode not found in RSS - loading full feed as fallback');
+            await loadPodcastFeed(rssFeedURL);
+            resetShareIntent();
+          }
+        } else {
+          // No episode ID - just load the feed
+          await loadPodcastFeed(rssFeedURL);
+          resetShareIntent();
+        }
+      } else {
+        console.error('❌ Could not find podcast RSS feed');
+        resetShareIntent();
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch Apple Podcasts data:', error);
+      resetShareIntent();
+    }
+  };
+
+  const handleSpotifyPodcast = async (data, resetShareIntent) => {
+    console.log('🎵 Handling Spotify URL', data);
+
+    try {
+      // Extract show ID from URL context
+      let showId = data.showId;
+      if (!showId && data.url) {
+        const contextMatch = data.url.match(/context=spotify%3Ashow%3A([a-zA-Z0-9]+)/);
+        if (contextMatch) {
+          showId = contextMatch[1];
+        }
+      }
+
+      if (!showId) {
+        console.log('⚠️ No show ID found');
+        Alert.alert('Spotify Link', 'Could not identify podcast. Try searching manually in Audio2.');
+        resetShareIntent();
+        return;
+      }
+
+      console.log('📡 Fetching Spotify page to extract show name...');
+      const showUrl = `https://open.spotify.com/show/${showId}`;
+      const response = await fetch(showUrl);
+      const html = await response.text();
+
+      // Extract show name from og:title meta tag
+      const showNameMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+      if (!showNameMatch) {
+        console.log('⚠️ Could not extract show name');
+        Alert.alert('Spotify Link', 'Could not identify podcast. Try searching manually.');
+        resetShareIntent();
+        return;
+      }
+
+      const showName = showNameMatch[1];
+      console.log('📻 Spotify show:', showName);
+
+      // Get episode name if episode was shared
+      let episodeName = null;
+      if (data.episodeId) {
+        console.log('📡 Fetching episode page...');
+        const episodeUrl = `https://open.spotify.com/episode/${data.episodeId}`;
+        const epResponse = await fetch(episodeUrl);
+        const epHtml = await epResponse.text();
+
+        const epNameMatch = epHtml.match(/<meta property="og:title" content="([^"]+)"/);
+        if (epNameMatch) {
+          episodeName = epNameMatch[1];
+          console.log('🎧 Episode:', episodeName);
+        }
+      }
+
+      // Search iTunes for the podcast
+      console.log('🔍 Searching iTunes for:', showName);
+      const searchResponse = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(showName)}&entity=podcast&limit=5`
+      );
+      const searchResult = await searchResponse.json();
+
+      if (!searchResult.results || searchResult.results.length === 0) {
+        console.log('⚠️ Not found on iTunes');
+        Alert.alert(
+          'Podcast Not Available',
+          `"${showName}" not found on Apple Podcasts. May be Spotify-exclusive.`,
+          [{ text: 'OK' }]
+        );
+        resetShareIntent();
+        return;
+      }
+
+      const podcast = searchResult.results[0];
+      const rssFeedURL = podcast.feedUrl;
+      console.log('📡 Found RSS:', rssFeedURL);
+
+      // If we have an episode name, fetch RSS and find just that episode
+      if (episodeName) {
+        console.log('🎯 Fetching RSS to find specific episode...');
+        const rssResponse = await fetch(rssFeedURL);
+        const rssText = await rssResponse.text();
+
+        // Parse RSS to find matching episode
+        const parser = require('react-native-rss-parser');
+        const rssFeed = await parser.parse(rssText);
+
+        console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for: "${episodeName}"`);
+
+        // Try exact match
+        let matchedItem = rssFeed.items.find(item =>
+          item.title && item.title.toLowerCase() === episodeName.toLowerCase()
+        );
+
+        // Try partial match (first 30 chars)
+        if (!matchedItem) {
+          const start = episodeName.toLowerCase().substring(0, 30);
+          matchedItem = rssFeed.items.find(item =>
+            item.title && item.title.toLowerCase().includes(start)
+          );
+        }
+
+        if (matchedItem) {
+          console.log('✅ Found episode in RSS:', matchedItem.title);
+
+          // Create episode object with just what we need to play
+          const episode = {
+            title: matchedItem.title,
+            description: matchedItem.description || matchedItem.itunes?.summary || '',
+            audioUrl: matchedItem.enclosures?.[0]?.url || '',
+            artwork: matchedItem.itunes?.image || rssFeed.image?.url || podcast.artworkUrl600,
+            publishedDate: matchedItem.published,
+          };
+
+          console.log('🎧 Playing episode directly:', episode.title);
+          const playedSound = await playEpisode(episode);
+
+          // If timestamp provided, seek after playback initializes
+          if (data.timestamp && playedSound) {
+            setTimeout(async () => {
+              try {
+                await playedSound.setPositionAsync(data.timestamp * 1000);
+                console.log(`⏱️ Seeked to ${data.timestamp}s`);
+              } catch (err) {
+                console.error('❌ Seek failed:', err);
+              }
+            }, 2000);
+          }
+
+          // Load full episode list in background for proper back navigation
+          console.log('📡 Loading full episode list in background...');
+          await loadPodcastFeed(rssFeedURL);
+
+          resetShareIntent();
+        } else {
+          console.log('⚠️ Episode not found in RSS - loading full feed as fallback');
+          await loadPodcastFeed(rssFeedURL);
+          resetShareIntent();
+        }
+      } else {
+        // No episode name - just load the feed
+        await loadPodcastFeed(rssFeedURL);
+        resetShareIntent();
+      }
+
+    } catch (error) {
+      console.error('❌ Failed:', error);
+      Alert.alert('Error', 'Could not load podcast. Try searching manually.');
+      resetShareIntent();
+    }
+  };
+
+  const handleRSSPodcast = async (data, resetShareIntent) => {
+    console.log('📡 Handling RSS feed URL');
+
+    try {
+      // Directly load the RSS feed
+      await loadPodcastFeed(data.url);
+      console.log('✅ RSS feed loaded successfully');
+      resetShareIntent();
+    } catch (error) {
+      console.error('❌ Failed to load RSS feed:', error);
+      resetShareIntent();
+    }
+  };
 
   // URL input state
   const [urlInput, setUrlInput] = useState('');
@@ -2093,7 +2500,7 @@ export default function App() {
           setPosition(status.positionMillis || 0);
           setDuration(status.durationMillis || 0);
           setIsPlaying(status.isPlaying || false);
-          
+
           // DEBUG: Log why position might not be updating during recording
           if (newSound._isRecording && status.positionMillis % 5000 < 100) { // Log every ~5 seconds
             console.log('🎯 Recording position check:', {
@@ -2104,7 +2511,7 @@ export default function App() {
               isPlaying: status.isPlaying
             });
           }
-          
+
           // Check if we need to stop recording - allow slight buffer for final captions
           if (newSound._isRecording && status.positionMillis >= (newSound._recordingClipEnd + 500)) {
             console.log('🎵 Audio reached clip end + buffer - stopping recording', {
@@ -2113,28 +2520,32 @@ export default function App() {
               buffer: 500,
               isRecording: newSound._isRecording
             });
-            
+
             // IMMEDIATELY clear all recording flags to prevent repeated calls
             newSound._isRecording = false;
             setIsRecording(false);  // Also clear React state immediately
-            
+
             // Clear timer to prevent double stopping
             if (recordingTimerRef.current) {
               clearTimeout(recordingTimerRef.current);
               recordingTimerRef.current = null;
             }
-            
+
             stopVideoRecording();
           }
         }
       });
-      
+
+      // Return the sound object for share intent timestamp seeking
+      return newSound;
+
     } catch (error) {
 
-      
+
       setIsLoading(false);
       setIsEpisodeLoading(false); // Hide loading spinner on error
       Alert.alert('Error', `Failed to load episode: ${error.message}`);
+      return null;
     }
   };
 
@@ -3944,7 +4355,11 @@ export default function App() {
                             {/* Notification Bell */}
                             <TouchableOpacity
                               style={styles.notificationBell}
-                              onPress={() => setShowNotificationsModal(true)}
+                              onPress={() => {
+                                // Mark all notifications as read when modal opens
+                                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                                setShowNotificationsModal(true);
+                              }}
                             >
                               <MaterialCommunityIcons
                                 name="bell-outline"
@@ -4450,62 +4865,101 @@ export default function App() {
                       ]}
                     >
                       <View style={styles.notificationContent}>
-                        <Text style={styles.notificationBody} numberOfLines={3}>
-                          {item.episodeTitle ?
-                            `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
-                            'Your clip is now ready for saving and sharing!'
-                          }
-                        </Text>
-                        {item.podcastName && (
-                          <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
+                        {item.type === 'announcement' ? (
+                          <>
+                            <Text style={styles.notificationBody} numberOfLines={3}>
+                              <Text style={{ fontWeight: '600' }}>{item.title}</Text>
+                              {' '}
+                              {item.body}
+                            </Text>
+                            <Text style={styles.notificationTime}>
+                              {new Date(item.timestamp).toLocaleString()}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.notificationBody} numberOfLines={3}>
+                              {item.episodeTitle ?
+                                `Your "${item.episodeTitle.length > 40 ? item.episodeTitle.substring(0, 40) + '...' : item.episodeTitle}" clip is ready for saving and sharing!` :
+                                'Your clip is now ready for saving and sharing!'
+                              }
+                            </Text>
+                            {item.podcastName && (
+                              <Text style={styles.notificationPodcast} numberOfLines={1}>{item.podcastName}</Text>
+                            )}
+                            <Text style={styles.notificationTime}>
+                              {new Date(item.timestamp).toLocaleString()}
+                            </Text>
+                          </>
                         )}
-                        <Text style={styles.notificationTime}>
-                          {new Date(item.timestamp).toLocaleString()}
-                        </Text>
                       </View>
 
                       <View style={styles.notificationActions}>
+                        {item.type !== 'announcement' && (
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={async () => {
+                              try {
+                                if (item.jobId) {
+                                  console.log('💾 Saving video from notification modal:', item.jobId);
+                                  const result = await VideoService.downloadVideoToPhotos(item.jobId);
+
+                                  // Remove the notification after successful save
+                                  setNotifications(prev => {
+                                    const updatedNotifications = prev.filter(n => n.id !== item.id);
+
+                                    // Only save video notifications to storage
+                                    const videoNotifications = updatedNotifications.filter(n => n.type !== 'announcement');
+                                    AsyncStorage.setItem('notifications', JSON.stringify(videoNotifications)).catch(error => {
+                                      console.error('Failed to save notifications:', error);
+                                    });
+
+                                    return updatedNotifications;
+                                  });
+
+                                  // Show success feedback
+                                  Alert.alert(
+                                    '✅ Saved to Photos',
+                                    `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
+                                    [{ text: 'OK' }]
+                                  );
+                                }
+                              } catch (error) {
+                                console.error('Save failed:', error);
+                                Alert.alert('Save Failed', error.message || 'Could not save video');
+                              }
+                            }}
+                          >
+                            <MaterialCommunityIcons name="download" size={16} color="#d97706" />
+                          </TouchableOpacity>
+                        )}
+
                         <TouchableOpacity
                           style={styles.actionButton}
                           onPress={async () => {
-                            try {
-                              if (item.jobId) {
-                                console.log('💾 Saving video from notification modal:', item.jobId);
-                                const result = await VideoService.downloadVideoToPhotos(item.jobId);
-
-                                // Remove the notification after successful save
-                                setNotifications(prev => {
-                                  const updatedNotifications = prev.filter(n => n.id !== item.id);
-                                  AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
-                                    console.error('Failed to save notifications:', error);
-                                  });
-                                  return updatedNotifications;
-                                });
-
-                                // Show success feedback
-                                Alert.alert(
-                                  '✅ Saved to Photos',
-                                  `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
-                                  [{ text: 'OK' }]
-                                );
+                            // Handle dismissing announcements vs video notifications differently
+                            if (item.type === 'announcement') {
+                              // Add to dismissed list so it doesn't reappear
+                              try {
+                                const dismissedJson = await AsyncStorage.getItem('dismissedAnnouncements');
+                                const dismissed = dismissedJson ? JSON.parse(dismissedJson) : [];
+                                dismissed.push(item.id);
+                                await AsyncStorage.setItem('dismissedAnnouncements', JSON.stringify(dismissed));
+                              } catch (error) {
+                                console.error('Failed to save dismissed announcements:', error);
                               }
-                            } catch (error) {
-                              console.error('Save failed:', error);
-                              Alert.alert('Save Failed', error.message || 'Could not save video');
                             }
-                          }}
-                        >
-                          <MaterialCommunityIcons name="download" size={16} color="#d97706" />
-                        </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => {
+                            // Remove from notifications list
                             setNotifications(prev => {
                               const updatedNotifications = prev.filter(n => n.id !== item.id);
-                              AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications)).catch(error => {
+
+                              // Only save video notifications to storage
+                              const videoNotifications = updatedNotifications.filter(n => n.type !== 'announcement');
+                              AsyncStorage.setItem('notifications', JSON.stringify(videoNotifications)).catch(error => {
                                 console.error('Failed to save notifications:', error);
                               });
+
                               return updatedNotifications;
                             });
                           }}

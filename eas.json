@@ -7,7 +7,10 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "ios": {
+        "prebuildCommand": "npx expo prebuild --platform ios && bash scripts/fix-share-extension-plist.sh"
+      }
     },
     "testflight": {
       "distribution": "internal",
@@ -21,7 +24,8 @@
       "channel": "production",
       "releaseChannel": "production",
       "ios": {
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "prebuildCommand": "npx expo prebuild --platform ios && bash scripts/fix-share-extension-plist.sh"
       }
     }
   },
