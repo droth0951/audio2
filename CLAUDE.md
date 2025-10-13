@@ -167,6 +167,71 @@ To verify caption timing is working correctly:
 
 **Test Clip Used**: LI5985002440.mp3, 232000-269000ms (slow female speaker)
 
+## App Store Submission Process
+
+### Understanding EAS Build Numbers
+
+**IMPORTANT**: EAS automatically manages build numbers (CFBundleVersion). You only need to update the user-facing version in app.json.
+
+- **expo.version** - User-facing version shown in App Store (e.g., "2.1.0")
+- **Build number** - Auto-incremented by EAS for each build (managed automatically)
+
+### Submission Steps
+
+1. **Update version in app.json** (for new App Store release):
+   ```json
+   {
+     "expo": {
+       "version": "2.2.0"
+     }
+   }
+   ```
+
+2. **Commit and push to main:**
+   ```bash
+   git add app.json
+   git commit -m "Bump version to 2.2.0"
+   git push origin main
+   ```
+
+3. **Build for production:**
+   ```bash
+   eas build --platform ios --profile production
+   ```
+   - First time with share extension: Run interactively to set up credentials
+   - Subsequent builds: Add `--non-interactive` flag
+   - EAS will auto-increment the build number
+
+4. **Submit to App Store:**
+   ```bash
+   eas submit --platform ios --latest
+   ```
+
+### Common Submission Errors
+
+**Error**: "You've already submitted this build of the app"
+- **Cause**: Trying to submit the same build ID twice (rare with auto-increment)
+- **Fix**: Build again - EAS will create a new build number automatically
+
+**Error**: "Credentials not set up for ShareExtension"
+- **Cause**: First production build with share extension
+- **Fix**: Run build command without `--non-interactive` to configure credentials interactively
+
+### Version Number Strategy
+
+- **Major releases** (new features): Increment to next major/minor (2.0.0 → 2.1.0)
+- **Bug fixes**: Increment patch version (2.1.0 → 2.1.1)
+- **OTA updates**: Don't change version - use `eas update` instead
+
+### After App Store Approval
+
+For JavaScript-only updates between App Store releases:
+```bash
+eas update --platform ios --branch production --message "Bug fix description"
+```
+
+Remember: Keep `runtimeVersion` at "1.5.0" until native changes are needed.
+
 ## Common Commands
 - Lint: `npm run lint` (if available)
 - Typecheck: `npm run typecheck` (if available)
