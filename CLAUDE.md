@@ -177,7 +177,7 @@ EAS builds from your **git commit**, not your local files. If you build before c
 
 ### Submission Steps (DO IN THIS EXACT ORDER)
 
-1. **FIRST: Update version in BOTH app.json AND package.json:**
+1. **FIRST: Update version in app.json, package.json, AND ios/Audio2/Info.plist:**
    ```json
    // app.json
    {
@@ -191,11 +191,18 @@ EAS builds from your **git commit**, not your local files. If you build before c
      "version": "2.2.0"
    }
    ```
-   **CRITICAL**: Both files must have the SAME version or build will use package.json version!
+
+   ```xml
+   <!-- ios/Audio2/Info.plist -->
+   <key>CFBundleShortVersionString</key>
+   <string>2.2.0</string>
+   ```
+
+   **CRITICAL**: ALL THREE files must have the SAME version! EAS reads from ios/Audio2/Info.plist when building.
 
 2. **SECOND: Commit and push to main BEFORE building:**
    ```bash
-   git add app.json package.json
+   git add app.json package.json ios/Audio2/Info.plist
    git commit -m "Bump version to 2.2.0 for App Store submission"
    git push origin main
    ```
@@ -233,7 +240,12 @@ EAS builds from your **git commit**, not your local files. If you build before c
 - **Fix**: Update version again (e.g., 2.1.0 → 2.1.1), commit, push, then build
 
 **Error**: Build shows old version number even after updating app.json
-- **Root Cause #1 (MOST COMMON)**: package.json has different version than app.json
+- **Root Cause #1 (MOST COMMON)**: ios/Audio2/Info.plist has different version
+  - **Solution**: ALWAYS update ALL THREE files: app.json, package.json, AND ios/Audio2/Info.plist
+  - **Why**: EAS builds read the version from ios/Audio2/Info.plist (CFBundleShortVersionString)
+  - **Fix Applied**: Update Info.plist to match (commit 72ac58a)
+
+- **Root Cause #2**: package.json has different version than app.json
   - **Solution**: ALWAYS update BOTH app.json AND package.json to the same version
   - **Why**: `expo prebuild` reads version from package.json, not app.json
   - **Fix Applied**: Now keep both files in sync (commit 826256f)
@@ -260,6 +272,33 @@ eas update --platform ios --branch production --message "Bug fix description"
 ```
 
 Remember: Keep `runtimeVersion` at "1.5.0" until native changes are needed.
+
+## iOS App Transport Security (ATS) Configuration
+
+### Why We Allow HTTP Connections
+
+**File**: `ios/Audio2/Info.plist`
+**Setting**: `NSAllowsArbitraryLoads: true`
+
+**Why This is Necessary**:
+Audio2 loads podcast RSS feeds from thousands of third-party domains that we don't control. Many older podcasts still use HTTP-only RSS feeds instead of HTTPS. Without allowing HTTP connections, users cannot access these podcasts.
+
+**Apple App Review Justification**:
+> "Audio2 is a podcast app that loads RSS feeds from third-party podcast hosting services. We do not control these domains, and many established podcasts still use HTTP-only feeds. We need to allow HTTP connections to provide users access to the full catalog of available podcasts. All user-generated content and app data is transmitted over HTTPS - only third-party podcast RSS feeds and audio files use HTTP when HTTPS is unavailable."
+
+**Security Considerations**:
+- RSS feeds are public data (no sensitive user information)
+- Audio files are public media content
+- User authentication and app data always use HTTPS
+- This is standard practice for podcast apps (see: Overcast, Pocket Casts, Apple Podcasts)
+
+**Alternative Approaches Considered**:
+1. ❌ `NSAllowsArbitraryLoadsForMedia` - Only covers AVFoundation requests, not `fetch()` calls for RSS feeds
+2. ❌ Individual domain exceptions - Impractical to maintain list of thousands of podcast domains
+3. ❌ HTTPS upgrade with fallback - Adds complexity and latency, doesn't solve the problem
+
+**When This Was Added**: Version 2.1.1 (commit: [TBD])
+**Why It Was Added**: Users reported inability to load certain podcasts shared from Spotify (e.g., "The Memory Palace") due to HTTP-only RSS feeds being blocked by iOS
 
 ## Common Commands
 - Lint: `npm run lint` (if available)

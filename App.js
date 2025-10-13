@@ -1414,12 +1414,27 @@ export default function App() {
     console.log('🎵 Handling Spotify URL', data);
 
     try {
-      // Extract show ID from URL context
+      // Extract show ID from URL context or episode page
       let showId = data.showId;
       if (!showId && data.url) {
         const contextMatch = data.url.match(/context=spotify%3Ashow%3A([a-zA-Z0-9]+)/);
         if (contextMatch) {
           showId = contextMatch[1];
+        }
+      }
+
+      // If no show ID but we have episode ID, fetch episode page to get show ID
+      if (!showId && data.episodeId) {
+        console.log('📡 Fetching episode page to extract show ID...');
+        const episodeUrl = `https://open.spotify.com/episode/${data.episodeId}`;
+        const epResponse = await fetch(episodeUrl);
+        const epHtml = await epResponse.text();
+
+        // Extract show ID from episode page (look for show link)
+        const showLinkMatch = epHtml.match(/href="\/show\/([a-zA-Z0-9]+)"/);
+        if (showLinkMatch) {
+          showId = showLinkMatch[1];
+          console.log('✅ Extracted show ID from episode page:', showId);
         }
       }
 
@@ -1481,18 +1496,19 @@ export default function App() {
       }
 
       const podcast = searchResult.results[0];
-      const rssFeedURL = podcast.feedUrl;
+      let rssFeedURL = podcast.feedUrl;
       console.log('📡 Found RSS:', rssFeedURL);
 
       // If we have an episode name, fetch RSS and find just that episode
       if (episodeName) {
-        console.log('🎯 Fetching RSS to find specific episode...');
-        const rssResponse = await fetch(rssFeedURL);
-        const rssText = await rssResponse.text();
+        try {
+          console.log('🎯 Fetching RSS to find specific episode...');
+          const rssResponse = await fetch(rssFeedURL);
+          const rssText = await rssResponse.text();
 
-        // Parse RSS to find matching episode
-        const parser = require('react-native-rss-parser');
-        const rssFeed = await parser.parse(rssText);
+          // Parse RSS to find matching episode
+          const parser = require('react-native-rss-parser');
+          const rssFeed = await parser.parse(rssText);
 
         console.log(`📋 Searching ${rssFeed.items.length} episodes in RSS for: "${episodeName}"`);
 
@@ -1546,6 +1562,11 @@ export default function App() {
           await loadPodcastFeed(rssFeedURL);
           resetShareIntent();
         }
+        } catch (fetchError) {
+          console.log('⚠️ RSS fetch failed, falling back to full feed load:', fetchError.message);
+          await loadPodcastFeed(rssFeedURL);
+          resetShareIntent();
+        }
       } else {
         // No episode name - just load the feed
         await loadPodcastFeed(rssFeedURL);
@@ -1554,7 +1575,7 @@ export default function App() {
 
     } catch (error) {
       console.error('❌ Failed:', error);
-      Alert.alert('Error', 'Could not load podcast. Try searching manually.');
+      Alert.alert('Error', 'Could not load podcast from Spotify. Try searching manually.');
       resetShareIntent();
     }
   };
