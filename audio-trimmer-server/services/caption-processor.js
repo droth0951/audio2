@@ -829,20 +829,46 @@ class CaptionProcessor {
     // Fallback: Force split if text is too long (never return single line > 35 chars)
     if (text.length > 35) {
       const words = text.split(' ');
+
+      // CRITICAL FIX: More aggressive splitting - MUST keep both lines under 35 chars
+      // Try every possible split point to find one that works
+      for (let i = 1; i < words.length; i++) {
+        const testLine1 = words.slice(0, i).join(' ');
+        const testLine2 = words.slice(i).join(' ');
+
+        // Found a valid split - both lines fit
+        if (testLine1.length <= 35 && testLine2.length <= 35) {
+          return [testLine1, testLine2];
+        }
+      }
+
+      // EMERGENCY FALLBACK: If we still can't find a valid split (very rare),
+      // it means individual words are too long or there are only 2 very long words.
+      // In this case, do a hard character-based split to prevent overflow
       const midPoint = Math.floor(words.length / 2);
       const line1 = words.slice(0, midPoint).join(' ');
       const line2 = words.slice(midPoint).join(' ');
 
-      // If either line is still too long, try a different split
-      if (line1.length > 35 || line2.length > 35) {
-        // More aggressive splitting - find a split that keeps both under 35
-        for (let i = 1; i < words.length - 1; i++) {
-          const testLine1 = words.slice(0, i).join(' ');
-          const testLine2 = words.slice(i).join(' ');
-          if (testLine1.length <= 35 && testLine2.length <= 35) {
-            return [testLine1, testLine2];
-          }
+      // If line1 is still too long, truncate it (very rare edge case)
+      if (line1.length > 35) {
+        // Find the last space before char 35
+        const truncatePoint = line1.lastIndexOf(' ', 35);
+        if (truncatePoint > 0) {
+          const truncatedLine1 = line1.substring(0, truncatePoint);
+          const remainder = line1.substring(truncatePoint + 1) + ' ' + line2;
+          return [truncatedLine1, remainder.substring(0, 35)]; // Also cap line2
         }
+        // No spaces found - hard truncate (should never happen with real speech)
+        return [line1.substring(0, 35), line2.substring(0, 35)];
+      }
+
+      // If line2 is still too long, truncate it
+      if (line2.length > 35) {
+        const truncatePoint = line2.lastIndexOf(' ', 35);
+        if (truncatePoint > 0) {
+          return [line1, line2.substring(0, truncatePoint)];
+        }
+        return [line1, line2.substring(0, 35)];
       }
 
       return [line1, line2];
