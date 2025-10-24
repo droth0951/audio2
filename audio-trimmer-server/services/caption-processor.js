@@ -447,9 +447,9 @@ class CaptionProcessor {
     }
 
     // For very short text, return as is
-    if (text.length <= 35) {
+    if (text.length <= 32) {
       if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_CAPTIONS === 'true') {
-        console.log(`✅ Short text (≤35), returning as single chunk`);
+        console.log(`✅ Short text (≤32), returning as single chunk`);
       }
       return [{ text, startMs, endMs }];
     }
@@ -756,9 +756,9 @@ class CaptionProcessor {
         const line1 = text.substring(0, index).trim();
         const line2 = text.substring(index + 1).trim(); // Skip the space
 
-        // Cap lines at 35 chars max ("Today we're hearing from Dan Porter," length)
-        if (line1.length >= 15 && line2.length >= 10 &&
-            line1.length <= 35 && line2.length <= 35) {
+        // Cap lines at 32 chars max to fit 56px bold caps within screen bounds
+        if (line1.length >= 12 && line2.length >= 10 &&
+            line1.length <= 32 && line2.length <= 32) {
           return [line1, line2];
         }
       }
@@ -773,9 +773,9 @@ class CaptionProcessor {
         const line1 = text.substring(0, index + (breakPoint === ', ' ? 1 : 0)).trim();
         const line2 = text.substring(index + breakPoint.length).trim();
 
-        // Cap at 35 chars per line max
+        // Cap at 32 chars per line max
         if (line1.length >= 8 && line2.length >= 8 &&
-            line1.length <= 35 && line2.length <= 35) {
+            line1.length <= 32 && line2.length <= 32) {
           return [line1, line2];
         }
       }
@@ -826,18 +826,18 @@ class CaptionProcessor {
       return [line1, line2];
     }
 
-    // Fallback: Force split if text is too long (never return single line > 35 chars)
-    if (text.length > 35) {
+    // Fallback: Force split if text is too long (never return single line > 32 chars)
+    if (text.length > 32) {
       const words = text.split(' ');
 
-      // CRITICAL FIX: More aggressive splitting - MUST keep both lines under 35 chars
+      // CRITICAL FIX: More aggressive splitting - MUST keep both lines under 32 chars
       // Try every possible split point to find one that works
       for (let i = 1; i < words.length; i++) {
         const testLine1 = words.slice(0, i).join(' ');
         const testLine2 = words.slice(i).join(' ');
 
         // Found a valid split - both lines fit
-        if (testLine1.length <= 35 && testLine2.length <= 35) {
+        if (testLine1.length <= 32 && testLine2.length <= 32) {
           return [testLine1, testLine2];
         }
       }
@@ -850,25 +850,25 @@ class CaptionProcessor {
       const line2 = words.slice(midPoint).join(' ');
 
       // If line1 is still too long, truncate it (very rare edge case)
-      if (line1.length > 35) {
-        // Find the last space before char 35
-        const truncatePoint = line1.lastIndexOf(' ', 35);
+      if (line1.length > 32) {
+        // Find the last space before char 32
+        const truncatePoint = line1.lastIndexOf(' ', 32);
         if (truncatePoint > 0) {
           const truncatedLine1 = line1.substring(0, truncatePoint);
           const remainder = line1.substring(truncatePoint + 1) + ' ' + line2;
-          return [truncatedLine1, remainder.substring(0, 35)]; // Also cap line2
+          return [truncatedLine1, remainder.substring(0, 32)]; // Also cap line2
         }
         // No spaces found - hard truncate (should never happen with real speech)
-        return [line1.substring(0, 35), line2.substring(0, 35)];
+        return [line1.substring(0, 32), line2.substring(0, 32)];
       }
 
       // If line2 is still too long, truncate it
-      if (line2.length > 35) {
-        const truncatePoint = line2.lastIndexOf(' ', 35);
+      if (line2.length > 32) {
+        const truncatePoint = line2.lastIndexOf(' ', 32);
         if (truncatePoint > 0) {
           return [line1, line2.substring(0, truncatePoint)];
         }
-        return [line1, line2.substring(0, 35)];
+        return [line1, line2.substring(0, 32)];
       }
 
       return [line1, line2];
