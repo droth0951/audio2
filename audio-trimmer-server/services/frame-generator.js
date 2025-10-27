@@ -90,7 +90,7 @@ class FrameGenerator {
   }
 
   // REVIEW-CRITICAL: Generate video frames with Audio2 design using SVG
-  async generateFrames(audioPath, duration, podcast, jobId, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0) {
+  async generateFrames(audioPath, duration, podcast, jobId, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0, orientation = 'vertical') {
     try {
       // REVIEW-CRITICAL: Feature flag check for frame generation
       if (!config.features.ENABLE_SERVER_VIDEO) {
@@ -100,6 +100,9 @@ class FrameGenerator {
       const startTime = Date.now();
       const fps = 12; // 12 frames per second for smooth video playbook
       const frameCount = Math.round(duration * fps); // Use round instead of ceil for exact timing
+
+      // Determine aspect ratio based on orientation
+      const aspectRatio = orientation === 'horizontal' ? '16:9' : '9:16';
 
       // 🔤 Debug: List available fonts
       try {
@@ -120,11 +123,18 @@ class FrameGenerator {
         frameCount,
         duration: `${duration}s`,
         fps,
+        orientation,
+        aspectRatio,
         approach: 'SVG + Sharp'
       });
 
-      // Load cached SVG template
-      const template = await this.getTemplate();
+      // Load appropriate SVG template based on orientation
+      const templatePath = orientation === 'horizontal'
+        ? path.join(__dirname, '../templates/audio2-frame-horizontal.svg')
+        : this.templatePath; // Default vertical template
+
+      const templateContent = await fs.readFile(templatePath, 'utf-8');
+      const template = Handlebars.compile(templateContent);
 
       // MVP: Pre-calculate caption states for all frames to improve performance
       let captionStates = null;
@@ -153,20 +163,22 @@ class FrameGenerator {
           });
 
           // Pre-process artwork once for all frames (resize + rounded corners)
-          const dimensions = this.getAspectRatioDimensions('9:16');
-          const scaleFactor = dimensions.width / 375;
-          const artworkSize = Math.floor(140 * scaleFactor);
+          const dimensions = this.getAspectRatioDimensions(aspectRatio);
+          const artworkSize = orientation === 'horizontal'
+            ? 384 // Inner size for horizontal (400 - 16px border)
+            : Math.floor(140 * (dimensions.width / 375)); // Scaled size for vertical
 
           const resizedArtwork = await getSharp()(artworkBuffer)
             .resize(artworkSize, artworkSize, { fit: 'cover' })
             .png()
             .toBuffer();
 
-          // Add rounded corners using Sharp's built-in method (20px to match app)
+          // Add rounded corners using Sharp's built-in method
+          const cornerRadius = orientation === 'horizontal' ? 12 : 20;
           processedArtwork = await getSharp()(resizedArtwork)
             .composite([{
               input: Buffer.from(
-                `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="20" ry="20"/></svg>`
+                `<svg><rect x="0" y="0" width="${artworkSize}" height="${artworkSize}" rx="${cornerRadius}" ry="${cornerRadius}"/></svg>`
               ),
               blend: 'dest-in'
             }])
@@ -197,7 +209,7 @@ class FrameGenerator {
         const progress = frameTime / duration;
 
         const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates);
+        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates, orientation);
         frames.push(framePath);
 
         const frameRenderTime = Date.now() - frameStartTime;
@@ -265,16 +277,39 @@ class FrameGenerator {
   }
 
   // REVIEW-DESIGN: Single frame generation using SVG template
-  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0, captionStates = null) {
+  async generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, frameIndex = 0, transcript = null, captionsEnabled = false, clipStartMs = 0, clipEndMs = 0, captionStates = null, orientation = 'vertical') {
     const frameStartTime = Date.now();
     const timings = {};
 
     try {
-      // Calculate dimensions for 9:16 aspect ratio
-      const dimensions = this.getAspectRatioDimensions('9:16');
-      
-      // SCALING FIX: Scale from app dimensions (375px width) to video dimensions (1080px width)
-      const scaleFactor = dimensions.width / 375; // ≈ 2.88x
+      // Calculate dimensions based on orientation
+      const aspectRatio = orientation === 'horizontal' ? '16:9' : '9:16';
+      const dimensions = this.getAspectRatioDimensions(aspectRatio);
+
+      // HORIZONTAL vs VERTICAL: Different layout calculations
+      let templateData;
+
+      if (orientation === 'horizontal') {
+        // HORIZONTAL LAYOUT (16:9 - 1920×1080)
+        const layoutElements = this.generateHorizontalLayoutElements(progress, dimensions, 1, frameIndex, podcast);
+
+        // MVP: Use pre-calculated caption state for performance
+        let currentCaptionData = null;
+        if (captionsEnabled && captionStates) {
+          currentCaptionData = captionStates[frameIndex] || null;
+        }
+
+        templateData = {
+          ...layoutElements,
+          captionsEnabled,
+          captionLines: currentCaptionData?.lines || [],
+          captionDisplayMode: currentCaptionData?.displayMode || 'two-lines',
+          captionWords: currentCaptionData?.highlightedWords || [],
+          currentTimeMs: clipStartMs + (progress * (clipEndMs - clipStartMs))
+        };
+      } else {
+        // VERTICAL LAYOUT (9:16 - 1080×1920) - EXISTING CODE
+        const scaleFactor = dimensions.width / 375; // ≈ 2.88x
       
       // EXACT APP LAYOUT CALCULATIONS - SCALED FOR VIDEO
       // App uses 140x140 artwork (matches Recording View exactly) - now scaled
@@ -339,38 +374,39 @@ class FrameGenerator {
       const captionSpacing = Math.floor(60 * scaleFactor); // Space below progress bar
       const captionY = progressBarBottom + captionSpacing;
 
-      const templateData = {
-        width: dimensions.width,
-        height: dimensions.height,
-        marginX: Math.floor(MARGIN), // Left margin at 8%
-        centerX: Math.floor(dimensions.width / 2), // True center of screen
-        // Artwork positioning and size - CENTERED on screen
-        artworkX: Math.floor((dimensions.width - artworkSize) / 2),
-        artworkY: Math.floor(artworkY),
-        artworkSize: artworkSize,
-        // No timeline positioning needed - no time counters displayed
-        // Text positioning - SCALED
-        podcastNameY: Math.floor(podcastNameY),
-        podcastNameSize: Math.floor(26 * scaleFactor), // App size scaled for video
-        episodeTitleY: Math.floor(episodeTitleY),
-        episodeTitleSize: Math.floor(20 * scaleFactor), // App size scaled for video
-        brandingY: Math.floor(brandingY),
-        // Content - wrapped text lines and new progress system
-        podcastNameLines: podcastTitleLines,
-        episodeTitleLines: episodeTitleLines,
-        progressElements: progressElements,
+        templateData = {
+          width: dimensions.width,
+          height: dimensions.height,
+          marginX: Math.floor(MARGIN), // Left margin at 8%
+          centerX: Math.floor(dimensions.width / 2), // True center of screen
+          // Artwork positioning and size - CENTERED on screen
+          artworkX: Math.floor((dimensions.width - artworkSize) / 2),
+          artworkY: Math.floor(artworkY),
+          artworkSize: artworkSize,
+          // No timeline positioning needed - no time counters displayed
+          // Text positioning - SCALED
+          podcastNameY: Math.floor(podcastNameY),
+          podcastNameSize: Math.floor(26 * scaleFactor), // App size scaled for video
+          episodeTitleY: Math.floor(episodeTitleY),
+          episodeTitleSize: Math.floor(20 * scaleFactor), // App size scaled for video
+          brandingY: Math.floor(brandingY),
+          // Content - wrapped text lines and new progress system
+          podcastNameLines: podcastTitleLines,
+          episodeTitleLines: episodeTitleLines,
+          progressElements: progressElements,
 
-        // MVP: Pre-calculated caption data for performance
-        captionText: currentCaption,                    // Caption text for current time
-        captionsEnabled: captionsEnabled,               // Show/hide captions
-        captionLines: currentCaptionData?.lines || [],  // Pre-calculated line breaks
-        captionY: Math.floor(captionY),                 // Precise Y position between progress bar and watermark
-        captionDisplayMode: currentCaptionData?.displayMode || 'two-lines', // MVP: 'one-line' or 'two-lines'
+          // MVP: Pre-calculated caption data for performance
+          captionText: currentCaption,                    // Caption text for current time
+          captionsEnabled: captionsEnabled,               // Show/hide captions
+          captionLines: currentCaptionData?.lines || [],  // Pre-calculated line breaks
+          captionY: Math.floor(captionY),                 // Precise Y position between progress bar and watermark
+          captionDisplayMode: currentCaptionData?.displayMode || 'two-lines', // MVP: 'one-line' or 'two-lines'
 
-        // Pre-calculated word highlighting data (no per-frame processing)
-        captionWords: currentCaptionData?.highlightedWords || [], // Pre-processed word highlighting
-        currentTimeMs: clipStartMs + (progress * (clipEndMs - clipStartMs)) // For template reference only
-      };
+          // Pre-calculated word highlighting data (no per-frame processing)
+          captionWords: currentCaptionData?.highlightedWords || [], // Pre-processed word highlighting
+          currentTimeMs: clipStartMs + (progress * (clipEndMs - clipStartMs)) // For template reference only
+        };
+      } // End of vertical layout
 
       // Time SVG template rendering
       const svgStartTime = Date.now();
@@ -390,11 +426,18 @@ class FrameGenerator {
       if (processedArtwork) {
         const artworkStartTime = Date.now();
         // Composite pre-processed artwork onto frame with correct positioning
+        const artworkLeft = orientation === 'horizontal'
+          ? templateData.artworkInnerX
+          : Math.round((dimensions.width - (orientation === 'horizontal' ? 384 : Math.floor(140 * (dimensions.width / 375)))) / 2);
+        const artworkTop = orientation === 'horizontal'
+          ? templateData.artworkInnerY
+          : templateData.artworkY;
+
         frameBuffer = await getSharp()(frameBuffer)
           .composite([{
             input: processedArtwork,
-            left: Math.round((dimensions.width - artworkSize) / 2),
-            top: Math.round(artworkY),
+            left: artworkLeft,
+            top: artworkTop,
             blend: 'over'
           }])
           .png()
@@ -500,6 +543,125 @@ class FrameGenerator {
         x: Math.floor(textX),
         y: Math.floor(textY),
         fontSize: Math.floor(12 * scaleFactor)
+      }
+    };
+  }
+
+  // HORIZONTAL LAYOUT ELEMENTS (16:9 - 1920×1080)
+  generateHorizontalLayoutElements(progress, dimensions, scaleFactor, frameNumber = 0, podcast) {
+    const margin = dimensions.width * 0.05; // 96px at 1920
+    const centerX = dimensions.width / 2; // 960
+
+    // Artwork specs (LEFT SIDE, vertically centered)
+    const artworkSize = 400;
+    const artworkBorderWidth = 8; // Thick white border
+    const artworkInnerSize = artworkSize - (artworkBorderWidth * 2); // 384
+    const artworkX = margin; // 96
+    const artworkY = 340; // Vertically centered: (1080 - 400) / 2 = 340
+    const artworkInnerX = artworkX + artworkBorderWidth;
+    const artworkInnerY = artworkY + artworkBorderWidth;
+
+    // Watermark (TOP RIGHT)
+    const watermarkRightMargin = 96; // 5% margin
+    const watermarkTopMargin = 60;
+    const watermarkBarX = dimensions.width - watermarkRightMargin - 54; // 1680
+    const watermarkBarY = watermarkTopMargin - 30; // Bars start at Y: 30
+
+    // Dancing bars configuration (same animation as vertical)
+    const barHeights = [32, 40, 37, 44, 34]; // Fixed heights for screenshot
+    const barWidth = 6;
+    const barSpacing = 12;
+
+    const dancingBars = [];
+    let barsX = watermarkBarX;
+    for (let i = 0; i < 5; i++) {
+      const baseHeight = barHeights[i];
+
+      // Animation: bars oscillate with staggered timing
+      const animationPhase = (frameNumber * 0.1) + (i * 0.3);
+      const animationScale = 0.85 + (0.15 * Math.sin(animationPhase));
+      const animatedHeight = baseHeight * animationScale;
+
+      // Position bars to align at bottom (Y: 1022 - height)
+      const barY = 1022 - animatedHeight;
+
+      dancingBars.push({
+        x: Math.floor(barsX),
+        y: Math.floor(barY),
+        width: barWidth,
+        height: Math.floor(animatedHeight)
+      });
+
+      barsX += barWidth + barSpacing;
+    }
+
+    // Audio2 text position (next to bars)
+    const watermarkTextX = barsX + 10; // 1850
+    const watermarkTextY = 1010;
+
+    // Podcast name (TOP CENTER)
+    const podcastNameY = 135;
+    const podcastNameSize = 48;
+    const podcastNameLetterSpacing = 4.8;
+
+    // Episode title (BELOW podcast name)
+    const episodeTitleY = 200; // 32px below podcast name baseline
+    const episodeTitleSize = 32;
+
+    // Captions (RIGHT SIDE, below titles)
+    const captionX = 624; // Left edge of caption area
+    const captionY = 780; // Below artwork, clear of titles
+
+    // Progress bar (BOTTOM, full width)
+    const progressBarWidth = dimensions.width - (margin * 2); // 1728
+    const progressBarX = margin;
+    const progressBarY = 920;
+    const progressBarHeight = 12;
+    const progressFillWidth = progressBarWidth * progress;
+
+    return {
+      width: dimensions.width,
+      height: dimensions.height,
+      centerX: Math.floor(centerX),
+
+      // Artwork
+      artworkX: Math.floor(artworkX),
+      artworkY: Math.floor(artworkY),
+      artworkSize: artworkSize,
+      artworkInnerX: Math.floor(artworkInnerX),
+      artworkInnerY: Math.floor(artworkInnerY),
+      artworkInnerSize: artworkInnerSize,
+
+      // Watermark
+      watermarkBars: dancingBars,
+      watermarkText: {
+        x: Math.floor(watermarkTextX),
+        y: Math.floor(watermarkTextY),
+        fontSize: 20
+      },
+
+      // Podcast name
+      podcastNameY: Math.floor(podcastNameY),
+      podcastNameSize: podcastNameSize,
+      podcastNameLetterSpacing: podcastNameLetterSpacing,
+      podcastNameLines: this.wrapText((podcast.podcastName || 'Podcast').toUpperCase(), 50),
+
+      // Episode title
+      episodeTitleY: Math.floor(episodeTitleY),
+      episodeTitleSize: episodeTitleSize,
+      episodeTitleLines: this.wrapText(podcast.title || 'Episode', 40),
+
+      // Captions
+      captionX: Math.floor(captionX),
+      captionY: Math.floor(captionY),
+
+      // Progress bar
+      progressBar: {
+        x: Math.floor(progressBarX),
+        y: Math.floor(progressBarY),
+        width: Math.floor(progressBarWidth),
+        height: progressBarHeight,
+        fillWidth: Math.floor(progressFillWidth)
       }
     };
   }
