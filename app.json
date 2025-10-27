@@ -3,7 +3,7 @@
     "name": "Audio2",
     "icon": "./assets/appicon.png",
     "slug": "podknowledge",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
