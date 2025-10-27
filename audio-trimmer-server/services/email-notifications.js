@@ -72,8 +72,16 @@ class EmailNotificationService {
     if (status === 'completed') {
       subject = `🎬 Video Created: ${podcast.title || 'Podcast'}`;
 
-      // Generate video download URL
-      const videoUrl = this.generateVideoUrl(job.jobId);
+      // Generate video download URLs for both orientations
+      const verticalVideoUrl = this.generateVideoUrl(job.jobId, 'vertical');
+      const horizontalVideoUrl = this.generateVideoUrl(job.jobId, 'horizontal');
+
+      // Check if horizontal video was generated
+      const hasHorizontal = result.videos?.horizontal?.url;
+
+      // Format file sizes
+      const verticalSize = result.videos?.vertical?.fileSize || result.fileSize;
+      const horizontalSize = result.videos?.horizontal?.fileSize;
 
       body = `
 📹 **Video Generation Complete**
@@ -82,15 +90,22 @@ class EmailNotificationService {
 **Episode**: ${podcast.episode || 'Unknown'}
 **Clip**: ${clipStart} - ${clipEnd} (${duration}s)
 
-🔗 **Download Your Video**:
-${videoUrl}
+🔗 **Download Your Videos**:
+
+📱 **Vertical (9:16)** - Instagram, TikTok, Stories
+${verticalVideoUrl}
+Size: ${this.formatFileSize(verticalSize)}
+
+${hasHorizontal ? `🖥️ **Horizontal (16:9)** - YouTube, LinkedIn, Twitter
+${horizontalVideoUrl}
+Size: ${this.formatFileSize(horizontalSize)}
+` : '⚠️ Horizontal video generation failed - vertical only available'}
 
 **Processing Details**:
 • Job ID: ${job.jobId}
 • Status: ✅ Completed
 • Processing Time: ${processingTime}
 • Cost: $${cost.toFixed(4)}
-• Video Size: ${this.formatFileSize(result.fileSize)}
 • Captions: ${request.captionsEnabled ? '✅ Enabled' : '❌ Disabled'}
 
 **Audio Source**: ${this.sanitizeUrl(request.audioUrl)}
@@ -223,7 +238,7 @@ Failed at ${this.formatTimestamp(new Date())}
   }
 
   // Helper: Generate video download URL for Railway deployment
-  generateVideoUrl(jobId) {
+  generateVideoUrl(jobId, orientation = 'vertical') {
     // Use Railway deployment URL
     const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
       || process.env.RAILWAY_STATIC_URL
@@ -232,8 +247,11 @@ Failed at ${this.formatTimestamp(new Date())}
     // Ensure https:// protocol
     const url = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
 
+    // Use separate job ID for horizontal videos
+    const actualJobId = orientation === 'horizontal' ? `${jobId}_horizontal` : jobId;
+
     // Return direct download link for the video
-    return `${url}/api/download-video/${jobId}`;
+    return `${url}/api/download-video/${actualJobId}`;
   }
 
   // Helper: Determine failure stage for debugging
