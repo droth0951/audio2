@@ -422,97 +422,215 @@ class JobQueue {
         }
       }
 
-      // Step 2: Generate video frames using SVG + Sharp (now with transcript data)
-      const frameResult = await getFrameGenerator().generateFrames(
+      // Step 2: Generate video frames for BOTH orientations using SVG + Sharp
+      // VERTICAL (9:16 - primary, must succeed)
+      logger.info('🎨 Generating vertical (9:16) frames...', { jobId });
+      const verticalFrameResult = await getFrameGenerator().generateFrames(
         audioResult.tempPath,
         audioResult.duration,
         request.podcast,
         jobId,
-        transcript, // NEW: Pass transcript for captions
-        request.captionsEnabled, // NEW: Pass caption toggle
-        request.clipStart, // NEW: Pass clip timing for caption sync
-        request.clipEnd
+        transcript,
+        request.captionsEnabled,
+        request.clipStart,
+        request.clipEnd,
+        'vertical' // Explicit orientation
       );
 
-      logger.success('Frame generation completed', {
+      logger.success('✅ Vertical frame generation completed', {
         jobId,
-        frameCount: frameResult.frameCount,
-        generationTime: frameResult.generationTime
+        frameCount: verticalFrameResult.frameCount,
+        generationTime: verticalFrameResult.generationTime
       });
 
-      // Step 3: Combine audio + frames with FFmpeg
-      const videoResult = await getVideoComposer().composeVideo(
+      // HORIZONTAL (16:9 - bonus, can fail gracefully)
+      let horizontalFrameResult = null;
+      try {
+        logger.info('🎨 Generating horizontal (16:9) frames...', { jobId });
+        horizontalFrameResult = await getFrameGenerator().generateFrames(
+          audioResult.tempPath,
+          audioResult.duration,
+          request.podcast,
+          jobId + '_horizontal', // Separate job ID to avoid conflicts
+          transcript,
+          request.captionsEnabled,
+          request.clipStart,
+          request.clipEnd,
+          'horizontal' // Explicit orientation
+        );
+
+        logger.success('✅ Horizontal frame generation completed', {
+          jobId,
+          frameCount: horizontalFrameResult.frameCount,
+          generationTime: horizontalFrameResult.generationTime
+        });
+      } catch (error) {
+        logger.warn('⚠️ Horizontal frame generation failed - continuing with vertical only', {
+          jobId,
+          error: error.message
+        });
+        // horizontalFrameResult stays null - graceful degradation
+      }
+
+      // Step 3: Compose VERTICAL video (must succeed)
+      logger.info('🎬 Composing vertical (9:16) video...', { jobId });
+      const verticalVideoResult = await getVideoComposer().composeVideo(
         audioResult.tempPath,
-        frameResult,
+        verticalFrameResult,
         jobId,
         audioResult.duration
       );
 
-      logger.success('Video composition completed', {
+      logger.success('✅ Vertical video composition completed', {
         jobId,
-        fileSize: `${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
-        duration: `${videoResult.duration}s`,
-        compositionTime: videoResult.compositionTime
+        fileSize: `${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
+        duration: `${verticalVideoResult.duration}s`,
+        compositionTime: verticalVideoResult.compositionTime
       });
 
-      // Validate video output
-      await getVideoComposer().validateVideoOutput(videoResult.videoPath, jobId);
+      // Validate vertical video output
+      await getVideoComposer().validateVideoOutput(verticalVideoResult.videoPath, jobId);
 
-      // Step 4: Generate video URL and complete job
-      const videoUrl = getVideoComposer().generateVideoUrl(videoResult.videoPath, jobId);
+      const verticalVideoUrl = getVideoComposer().generateVideoUrl(verticalVideoResult.videoPath, jobId);
 
-      // 🎉 Big celebratory video completion announcement with URL! 🎉
+      // Step 3b: Compose HORIZONTAL video (can fail gracefully)
+      let horizontalVideoResult = null;
+      let horizontalVideoUrl = null;
+
+      if (horizontalFrameResult) {
+        try {
+          logger.info('🎬 Composing horizontal (16:9) video...', { jobId });
+          horizontalVideoResult = await getVideoComposer().composeVideo(
+            audioResult.tempPath,
+            horizontalFrameResult,
+            jobId + '_horizontal', // Separate job ID
+            audioResult.duration
+          );
+
+          logger.success('✅ Horizontal video composition completed', {
+            jobId,
+            fileSize: `${Math.round(horizontalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
+            duration: `${horizontalVideoResult.duration}s`,
+            compositionTime: horizontalVideoResult.compositionTime
+          });
+
+          // Validate horizontal video output
+          await getVideoComposer().validateVideoOutput(horizontalVideoResult.videoPath, jobId + '_horizontal');
+
+          horizontalVideoUrl = getVideoComposer().generateVideoUrl(horizontalVideoResult.videoPath, jobId + '_horizontal');
+        } catch (error) {
+          logger.warn('⚠️ Horizontal video composition failed - continuing with vertical only', {
+            jobId,
+            error: error.message
+          });
+          // Clean up horizontal frames if video composition failed
+          if (horizontalFrameResult) {
+            await getFrameGenerator().cleanupFrames(horizontalFrameResult.frameDir, jobId + '_horizontal').catch(err => {
+              logger.warn('Failed to cleanup horizontal frames after composition failure', { jobId, error: err.message });
+            });
+          }
+        }
+      }
+
+      // 🎉 Big celebratory video completion announcement with URL(s)! 🎉
       console.log('\n' + '🎬'.repeat(30));
       console.log('🎬🎬🎬  VIDEO READY! DOWNLOAD NOW!  🎬🎬🎬');
       console.log('🎬'.repeat(30));
-      console.log(`\n🔗 VIDEO URL: ${videoUrl}`);
+      console.log(`\n🔗 VERTICAL VIDEO (9:16): ${verticalVideoUrl}`);
+      if (horizontalVideoUrl) {
+        console.log(`🔗 HORIZONTAL VIDEO (16:9): ${horizontalVideoUrl}`);
+      }
       console.log(`📹 JOB ID: ${jobId}`);
-      console.log(`💾 FILE SIZE: ${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
-      console.log(`⏱️ DURATION: ${videoResult.duration}s`);
+      console.log(`💾 VERTICAL SIZE: ${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
+      if (horizontalVideoResult) {
+        console.log(`💾 HORIZONTAL SIZE: ${Math.round(horizontalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
+      }
+      console.log(`⏱️ DURATION: ${verticalVideoResult.duration}s`);
       console.log('═'.repeat(60) + '\n');
 
-      logger.success('🎬 VIDEO READY FOR DOWNLOAD! 🎬', {
+      logger.success('🎬 VIDEO(S) READY FOR DOWNLOAD! 🎬', {
         jobId,
-        videoUrl,
+        verticalVideoUrl,
+        horizontalVideoUrl: horizontalVideoUrl || 'N/A',
         downloadUrl: generateDownloadUrl(jobId),
-        fileSize: `${Math.round(videoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
-        duration: `${videoResult.duration}s`
+        verticalFileSize: `${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
+        horizontalFileSize: horizontalVideoResult ? `${Math.round(horizontalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB` : 'N/A',
+        duration: `${verticalVideoResult.duration}s`
       });
 
-      // Step 5: Cleanup temp files (keep video for now - cleanup after download)
+      // Step 5: Cleanup temp files (keep videos for now - cleanup after download)
       await audioDownload.cleanupTempFile(audioResult.tempPath, jobId);
-      await getFrameGenerator().cleanupFrames(frameResult.frameDir, jobId);
+      await getFrameGenerator().cleanupFrames(verticalFrameResult.frameDir, jobId);
+      if (horizontalFrameResult && horizontalVideoResult) {
+        // Only cleanup horizontal frames if video was successfully created
+        await getFrameGenerator().cleanupFrames(horizontalFrameResult.frameDir, jobId + '_horizontal');
+      }
 
       // Calculate detailed cost breakdown
       const durationInMinutes = (request.clipEnd - request.clipStart) / 60000;
       const processingTimeMs = Date.now() - new Date(job.startedAt).getTime();
+
+      // Cost breakdown includes both orientations
+      const verticalFrameCount = verticalFrameResult.frameCount;
+      const horizontalFrameCount = horizontalFrameResult ? horizontalFrameResult.frameCount : 0;
+      const totalFrameCount = verticalFrameCount + horizontalFrameCount;
+
+      const verticalFileSize = verticalVideoResult.fileSize;
+      const horizontalFileSize = horizontalVideoResult ? horizontalVideoResult.fileSize : 0;
+      const totalFileSize = verticalFileSize + horizontalFileSize;
+
       const costBreakdown = {
         audioDownload: durationInMinutes * 0.002, // $0.002 per minute for download/processing
-        frameGeneration: frameResult.frameCount * 0.0001, // $0.0001 per frame
-        videoComposition: durationInMinutes * 0.003, // $0.003 per minute for FFmpeg
-        storage: Math.max(0.0005, videoResult.fileSize * 0.00000001), // $0.0005 base + size
+        frameGeneration: totalFrameCount * 0.0001, // $0.0001 per frame (both orientations)
+        videoComposition: durationInMinutes * 0.003 * (horizontalVideoResult ? 2 : 1), // Double if both orientations
+        storage: Math.max(0.0005, totalFileSize * 0.00000001), // $0.0005 base + size (both videos)
         processing: Math.max(0.001, processingTimeMs * 0.000001), // $0.001 base + time
         processingTimeMs: processingTimeMs // Keep as metadata, not part of cost calculation
       };
 
-      const totalCost = costBreakdown.audioDownload + 
-                        costBreakdown.frameGeneration + 
-                        costBreakdown.videoComposition + 
-                        costBreakdown.storage + 
+      const totalCost = costBreakdown.audioDownload +
+                        costBreakdown.frameGeneration +
+                        costBreakdown.videoComposition +
+                        costBreakdown.storage +
                         costBreakdown.processing;
 
-      // Complete job successfully
+      // Complete job successfully with BOTH video URLs
       await this.completeJob(jobId, {
-        videoUrl,
+        // Primary video URL (backward compatibility)
+        videoUrl: verticalVideoUrl,
+
+        // New structure with both orientations
+        videos: {
+          vertical: {
+            url: verticalVideoUrl,
+            path: verticalVideoResult.videoPath,
+            fileSize: verticalVideoResult.fileSize,
+            duration: verticalVideoResult.duration,
+            compositionTime: verticalVideoResult.compositionTime,
+            frameCount: verticalFrameResult.frameCount,
+            aspectRatio: '9:16'
+          },
+          horizontal: horizontalVideoUrl ? {
+            url: horizontalVideoUrl,
+            path: horizontalVideoResult.videoPath,
+            fileSize: horizontalVideoResult.fileSize,
+            duration: horizontalVideoResult.duration,
+            compositionTime: horizontalVideoResult.compositionTime,
+            frameCount: horizontalFrameResult.frameCount,
+            aspectRatio: '16:9'
+          } : null
+        },
+
+        // Legacy fields for backward compatibility
         cost: totalCost,
         costBreakdown,
         processingTime: Date.now() - new Date(job.startedAt).getTime(),
         audioDownloadTime: audioResult.downloadTime,
-        frameGenerationTime: frameResult.generationTime,
-        videoCompositionTime: videoResult.compositionTime,
-        fileSize: videoResult.fileSize,
-        duration: videoResult.duration,
-        videoPath: videoResult.videoPath // Keep for cleanup later
+        frameGenerationTime: verticalFrameResult.generationTime,
+        videoCompositionTime: verticalVideoResult.compositionTime,
+        fileSize: verticalVideoResult.fileSize, // Primary vertical file size
+        duration: verticalVideoResult.duration,
+        videoPath: verticalVideoResult.videoPath // Keep for cleanup later
       });
 
     } catch (error) {
