@@ -175,6 +175,36 @@ To verify caption timing is working correctly:
 
 EAS builds from your **git commit**, not your local files. If you build before committing version changes, the build will have the OLD version and submission will fail.
 
+### CRITICAL: Verify All Changes Are Included Before Version Bump
+
+**⚠️ LESSON LEARNED: Version 2.1.0 missed 4 critical bug fixes because they were committed AFTER the version was bumped! ⚠️**
+
+Before bumping version numbers, **ALWAYS verify your working directory includes ALL changes you want in the release**:
+
+```bash
+# 1. Review what commits have been made since last release
+git log --oneline v2.0.0..HEAD  # or use the last version tag/commit
+
+# 2. Review uncommitted changes
+git status
+git diff
+
+# 3. If there are uncommitted changes you want in the release, commit them FIRST
+git add .
+git commit -m "Your bug fix description"
+
+# 4. ONLY THEN bump the version numbers
+```
+
+**What Happened with 2.1.0:**
+- Version was bumped to 2.1.0 at 22:07:39 on Oct 12
+- HTTP fix committed at 23:29:31 (1hr 22min AFTER version bump)
+- Artwork fix committed at 23:40:55 (1hr 33min AFTER version bump)
+- Build next day used old commit → fixes missing from App Store build
+- Required emergency 2.1.1 release to include the fixes
+
+**Prevention:** Always commit all changes BEFORE bumping version numbers!
+
 ### Submission Steps (DO IN THIS EXACT ORDER)
 
 1. **FIRST: Update version in app.json, package.json, AND ios/Audio2/Info.plist:**
@@ -272,6 +302,48 @@ eas update --platform ios --branch production --message "Bug fix description"
 ```
 
 Remember: Keep `runtimeVersion` at "1.5.0" until native changes are needed.
+
+### Submitting Bug Fix Releases to Apple
+
+When submitting a bug fix release (e.g., 2.1.1), Apple may ask what changed. Here's how to communicate it's a bug fix:
+
+**Where to Indicate Bug Fix in App Store Connect:**
+
+1. **Version Information Section** - "What's New in This Version":
+   ```
+   Bug Fixes:
+   • Fixed podcast artwork not displaying on homepage
+   • Fixed support for HTTP-only RSS feeds
+   • Fixed caption text overflow issues
+   • Improved caption display on small screens
+   ```
+
+2. **App Review Information** - "Notes" field:
+   ```
+   This is a bug fix release (version 2.1.1). The previous release 2.1.0
+   inadvertently missed several bug fixes that were committed to our
+   repository. This update includes those fixes with no new features.
+
+   Changes:
+   - Enable HTTP for podcast RSS feeds (required for older podcasts)
+   - Fix artwork fetching to use RSS feeds directly
+   - Fix caption text overflow and display issues
+
+   This release requires App Store review because it includes a native
+   iOS configuration change (NSAllowsArbitraryLoads) that was intended
+   for 2.1.0 but was missed.
+   ```
+
+**Apple's Review Process for Bug Fixes:**
+- Bug fix releases typically get **faster review** (24-48 hours vs 2-3 days)
+- No need to select "Expedited Review" unless critical crash
+- Clear "What's New" description helps reviewers understand scope
+- Be honest about what changed - reviewers appreciate transparency
+
+**Expedited Review (only if necessary):**
+- Only request if the bug causes crashes or prevents core functionality
+- Provide specific justification (e.g., "Users cannot load 40% of podcasts")
+- Link to user reports or support tickets if available
 
 ## iOS App Transport Security (ATS) Configuration
 
