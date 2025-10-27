@@ -2137,8 +2137,8 @@ export default function App() {
       console.log('🔍 RSS feed contains <image>:', xmlText.includes('<image>'));
       console.log('🔍 RSS feed contains <media:content>:', xmlText.includes('<media:content'));
       
-      // Parse up to 50 episodes to check if there are more available
-      const allEpisodes = fastParseRSSFeed(xmlText, 50);
+      // Parse ALL episodes from RSS feed (no limit)
+      const allEpisodes = fastParseRSSFeed(xmlText, Infinity);
       console.log('🎧 Parsed episodes:', allEpisodes.length);
       
       // Add stored podcast artwork as fallback for episodes without artwork
@@ -2295,7 +2295,7 @@ export default function App() {
         console.log('📊 Fetching more episodes...');
         const response = await fetch(currentRssFeed);
         const xmlText = await response.text();
-        const moreEpisodes = fastParseRSSFeed(xmlText, 100); // Parse up to 100 episodes
+        const moreEpisodes = fastParseRSSFeed(xmlText, Infinity); // Parse ALL episodes
         
         setAllEpisodes(moreEpisodes);
         const finalCount = Math.min(nextCount, moreEpisodes.length);
