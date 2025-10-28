@@ -13,6 +13,35 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 class VideoComposer {
   constructor() {
     this.tempDir = path.join(__dirname, '../temp');
+    this.volumeDir = config.storage.VOLUME_PATH;
+    this.useVolume = config.storage.USE_VOLUME;
+
+    // Initialize volume storage on startup
+    this.initializeVolumeStorage();
+  }
+
+  // Initialize volume storage directory
+  async initializeVolumeStorage() {
+    if (!this.useVolume) {
+      logger.debug('Volume storage disabled, using temp directory');
+      return;
+    }
+
+    try {
+      await fs.mkdir(this.volumeDir, { recursive: true });
+      logger.success(`Volume storage initialized: ${this.volumeDir}`);
+    } catch (error) {
+      logger.warn(`Volume storage initialization failed: ${error.message}`, {
+        volumePath: this.volumeDir,
+        fallbackToTemp: true
+      });
+      this.useVolume = false; // Fallback to temp directory
+    }
+  }
+
+  // Get appropriate storage directory for videos
+  getVideoStorageDir() {
+    return this.useVolume ? this.volumeDir : this.tempDir;
   }
 
   // REVIEW-CRITICAL: Combine frames + audio into MP4 video
@@ -24,7 +53,8 @@ class VideoComposer {
       }
 
       const startTime = Date.now();
-      const outputPath = path.join(this.tempDir, `video_${jobId}.mp4`);
+      const storageDir = this.getVideoStorageDir();
+      const outputPath = path.join(storageDir, `video_${jobId}.mp4`);
       
       logger.debug('Starting video composition', {
         jobId,
@@ -45,6 +75,8 @@ class VideoComposer {
       logger.success('Video composition completed', {
         jobId,
         outputPath: path.basename(outputPath),
+        storageType: this.useVolume ? 'volume' : 'temp',
+        storagePath: storageDir,
         fileSize: `${Math.round(stats.size / 1024 / 1024 * 100) / 100}MB`,
         compositionTime: `${compositionTime}ms`
       });

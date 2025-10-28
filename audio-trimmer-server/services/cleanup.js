@@ -17,8 +17,19 @@ function getJobQueue() {
 class CleanupService {
   constructor() {
     this.tempDir = path.join(__dirname, '../temp');
+    this.volumeDir = config.storage.VOLUME_PATH;
+    this.useVolume = config.storage.USE_VOLUME;
     this.cleanupIntervalMs = 60 * 60 * 1000; // Check every hour
     this.cleanupIntervalId = null;
+  }
+
+  // Get all storage directories to clean
+  getStorageDirectories() {
+    const dirs = [this.tempDir]; // Always check temp for legacy videos
+    if (this.useVolume) {
+      dirs.push(this.volumeDir); // Add volume if enabled
+    }
+    return dirs;
   }
 
   // Start automatic cleanup service
@@ -64,22 +75,35 @@ class CleanupService {
     try {
       const startTime = Date.now();
       const cutoffTime = Date.now() - (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000);
-      
+
       logger.debug('Starting cleanup sweep', {
         cutoffTime: new Date(cutoffTime).toISOString(),
-        retentionHours: config.jobs.CLEANUP_AFTER_HOURS
+        retentionHours: config.jobs.CLEANUP_AFTER_HOURS,
+        retentionDays: config.jobs.CLEANUP_AFTER_HOURS / 24,
+        directories: this.getStorageDirectories()
       });
 
-      // Get all files in temp directory
-      const files = await fs.readdir(this.tempDir);
       let videosFound = 0;
       let videosDeleted = 0;
       let totalSize = 0;
 
-      for (const file of files) {
-        if (file.startsWith('video_') && file.endsWith('.mp4')) {
-          videosFound++;
-          const filePath = path.join(this.tempDir, file);
+      // Clean up videos in all storage directories
+      for (const directory of this.getStorageDirectories()) {
+        try {
+          // Check if directory exists
+          await fs.access(directory);
+        } catch (error) {
+          logger.debug(`Storage directory not found, skipping: ${directory}`);
+          continue;
+        }
+
+        const files = await fs.readdir(directory);
+        logger.debug(`Checking ${files.length} files in ${directory}`);
+
+        for (const file of files) {
+          if (file.startsWith('video_') && file.endsWith('.mp4')) {
+            videosFound++;
+            const filePath = path.join(directory, file);
           
           try {
             const stats = await fs.stat(filePath);
@@ -117,7 +141,9 @@ class CleanupService {
                 logger.debug('Cleaned up old video', {
                   file,
                   jobId,
+                  directory: path.basename(directory),
                   ageHours: Math.round(fileAge / (60 * 60 * 1000)),
+                  ageDays: Math.round(fileAge / (60 * 60 * 1000 * 24)),
                   sizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100
                 });
               }
@@ -125,9 +151,11 @@ class CleanupService {
           } catch (error) {
             logger.warn('Failed to cleanup video file', {
               file,
+              directory: path.basename(directory),
               error: error.message
             });
           }
+        }
         }
       }
 
@@ -172,32 +200,70 @@ class CleanupService {
   // Get cleanup statistics
   async getCleanupStats() {
     try {
-      const files = await fs.readdir(this.tempDir);
       let totalVideos = 0;
       let totalSize = 0;
       let oldVideos = 0;
       let oldSize = 0;
-      
-      const cutoffTime = Date.now() - (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000);
+      let oldestDate = null;
+      let newestDate = null;
 
-      for (const file of files) {
-        if (file.startsWith('video_') && file.endsWith('.mp4')) {
-          totalVideos++;
-          const filePath = path.join(this.tempDir, file);
-          
-          try {
-            const stats = await fs.stat(filePath);
-            totalSize += stats.size;
-            
-            const fileAge = Date.now() - stats.mtime.getTime();
-            if (fileAge > (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000)) {
-              oldVideos++;
-              oldSize += stats.size;
+      const cutoffTime = Date.now() - (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000);
+      const storageStats = {};
+
+      // Get stats for each storage directory
+      for (const directory of this.getStorageDirectories()) {
+        try {
+          await fs.access(directory);
+        } catch (error) {
+          storageStats[directory] = { exists: false };
+          continue;
+        }
+
+        const files = await fs.readdir(directory);
+        let dirVideos = 0;
+        let dirSize = 0;
+        let dirOldVideos = 0;
+        let dirOldSize = 0;
+
+        for (const file of files) {
+          if (file.startsWith('video_') && file.endsWith('.mp4')) {
+            dirVideos++;
+            totalVideos++;
+            const filePath = path.join(directory, file);
+
+            try {
+              const stats = await fs.stat(filePath);
+              dirSize += stats.size;
+              totalSize += stats.size;
+
+              // Track oldest and newest videos
+              if (!oldestDate || stats.mtime < oldestDate) {
+                oldestDate = stats.mtime;
+              }
+              if (!newestDate || stats.mtime > newestDate) {
+                newestDate = stats.mtime;
+              }
+
+              const fileAge = Date.now() - stats.mtime.getTime();
+              if (fileAge > (config.jobs.CLEANUP_AFTER_HOURS * 60 * 60 * 1000)) {
+                dirOldVideos++;
+                dirOldSize += stats.size;
+                oldVideos++;
+                oldSize += stats.size;
+              }
+            } catch (error) {
+              // File may have been deleted, skip
             }
-          } catch (error) {
-            // File may have been deleted, skip
           }
         }
+
+        storageStats[directory] = {
+          exists: true,
+          totalVideos: dirVideos,
+          totalSize: `${Math.round(dirSize / 1024 / 1024 * 100) / 100}MB`,
+          oldVideos: dirOldVideos,
+          oldSize: `${Math.round(dirOldSize / 1024 / 1024 * 100) / 100}MB`
+        };
       }
 
       return {
@@ -206,8 +272,12 @@ class CleanupService {
         oldVideos,
         oldSizeMB: Math.round(oldSize / 1024 / 1024 * 100) / 100,
         retentionHours: config.jobs.CLEANUP_AFTER_HOURS,
-        nextCleanup: this.cleanupIntervalId ? 
-          new Date(Date.now() + this.cleanupIntervalMs).toISOString() : 
+        retentionDays: Math.round(config.jobs.CLEANUP_AFTER_HOURS / 24),
+        oldestVideo: oldestDate ? oldestDate.toISOString() : null,
+        newestVideo: newestDate ? newestDate.toISOString() : null,
+        storageByDirectory: storageStats,
+        nextCleanup: this.cleanupIntervalId ?
+          new Date(Date.now() + this.cleanupIntervalMs).toISOString() :
           'Service not running'
       };
     } catch (error) {

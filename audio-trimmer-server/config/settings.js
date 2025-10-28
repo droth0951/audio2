@@ -8,12 +8,19 @@ module.exports = {
     ENABLE_DETAILED_LOGGING: true
   },
   
+  // Storage paths
+  storage: {
+    VOLUME_PATH: '/data/videos', // Railway Volume (persistent across restarts)
+    TEMP_PATH: require('path').join(__dirname, '../temp'), // Ephemeral storage
+    USE_VOLUME: true // Use persistent volume storage for videos
+  },
+
   // Job processing limits
   jobs: {
     MAX_CONCURRENT: 3,
     MAX_QUEUE_SIZE: 25, // Increased from 10 to handle more users
     JOB_TIMEOUT_MS: 120000, // 2 minutes
-    CLEANUP_AFTER_HOURS: 2160 // 3 months (90 days × 24 hours)
+    CLEANUP_AFTER_HOURS: 168 // 7 days (7 days × 24 hours) - reduced for volume storage limits
   },
   
   // Cost control
