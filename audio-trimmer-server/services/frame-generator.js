@@ -917,19 +917,22 @@ class FrameGenerator {
       );
 
       if (currentCaption) {
+        // TEMPORARILY DISABLED: Word-by-word highlighting for performance testing
         // Pre-process word highlighting for this frame
+        /* COMMENTED OUT FOR PERFORMANCE
         const highlightedWords = this.preprocessWordHighlighting(
           currentCaption.lines,
           currentCaption.words || [],
           currentTimeMs
         );
+        */
 
         captionStates[frameIndex] = {
           text: currentCaption.text,
           lines: currentCaption.lines,
           displayMode: currentCaption.displayMode || 'two-lines', // From caption processor
           words: currentCaption.words,
-          highlightedWords: highlightedWords,
+          highlightedWords: null, // Disabled for performance - show all text in white
           startMs: currentCaption.startMs,
           endMs: currentCaption.endMs
         };
