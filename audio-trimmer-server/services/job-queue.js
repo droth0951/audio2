@@ -444,7 +444,9 @@ class JobQueue {
       });
 
       // HORIZONTAL (16:9 - bonus, can fail gracefully)
+      // TEMPORARILY DISABLED: Performance investigation - horizontal generation doubles wait time
       let horizontalFrameResult = null;
+      /* COMMENTED OUT FOR PERFORMANCE TESTING
       try {
         logger.info('🎨 Generating horizontal (16:9) frames...', { jobId });
         horizontalFrameResult = await getFrameGenerator().generateFrames(
@@ -471,6 +473,7 @@ class JobQueue {
         });
         // horizontalFrameResult stays null - graceful degradation
       }
+      */
 
       // Step 3: Compose VERTICAL video (must succeed)
       logger.info('🎬 Composing vertical (9:16) video...', { jobId });
@@ -494,9 +497,11 @@ class JobQueue {
       const verticalVideoUrl = getVideoComposer().generateVideoUrl(verticalVideoResult.videoPath, jobId);
 
       // Step 3b: Compose HORIZONTAL video (can fail gracefully)
+      // TEMPORARILY DISABLED: Performance investigation
       let horizontalVideoResult = null;
       let horizontalVideoUrl = null;
 
+      /* COMMENTED OUT FOR PERFORMANCE TESTING
       if (horizontalFrameResult) {
         try {
           logger.info('🎬 Composing horizontal (16:9) video...', { jobId });
@@ -531,59 +536,38 @@ class JobQueue {
           }
         }
       }
+      */
 
-      // 🎉 Big celebratory video completion announcement with URL(s)! 🎉
+      // 🎉 Big celebratory video completion announcement with URL! 🎉
       console.log('\n' + '🎬'.repeat(30));
       console.log('🎬🎬🎬  VIDEO READY! DOWNLOAD NOW!  🎬🎬🎬');
       console.log('🎬'.repeat(30));
-      console.log(`\n🔗 VERTICAL VIDEO (9:16): ${verticalVideoUrl}`);
-      if (horizontalVideoUrl) {
-        console.log(`🔗 HORIZONTAL VIDEO (16:9): ${horizontalVideoUrl}`);
-      }
+      console.log(`\n🔗 VIDEO URL: ${verticalVideoUrl}`);
       console.log(`📹 JOB ID: ${jobId}`);
-      console.log(`💾 VERTICAL SIZE: ${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
-      if (horizontalVideoResult) {
-        console.log(`💾 HORIZONTAL SIZE: ${Math.round(horizontalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
-      }
+      console.log(`💾 FILE SIZE: ${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`);
       console.log(`⏱️ DURATION: ${verticalVideoResult.duration}s`);
       console.log('═'.repeat(60) + '\n');
 
-      logger.success('🎬 VIDEO(S) READY FOR DOWNLOAD! 🎬', {
+      logger.success('🎬 VIDEO READY FOR DOWNLOAD! 🎬', {
         jobId,
-        verticalVideoUrl,
-        horizontalVideoUrl: horizontalVideoUrl || 'N/A',
+        videoUrl: verticalVideoUrl,
         downloadUrl: generateDownloadUrl(jobId),
-        verticalFileSize: `${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
-        horizontalFileSize: horizontalVideoResult ? `${Math.round(horizontalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB` : 'N/A',
+        fileSize: `${Math.round(verticalVideoResult.fileSize / 1024 / 1024 * 100) / 100}MB`,
         duration: `${verticalVideoResult.duration}s`
       });
 
-      // Step 5: Cleanup temp files (keep videos for now - cleanup after download)
+      // Step 5: Cleanup temp files (keep video for now - cleanup after download)
       await audioDownload.cleanupTempFile(audioResult.tempPath, jobId);
       await getFrameGenerator().cleanupFrames(verticalFrameResult.frameDir, jobId);
-      if (horizontalFrameResult && horizontalVideoResult) {
-        // Only cleanup horizontal frames if video was successfully created
-        await getFrameGenerator().cleanupFrames(horizontalFrameResult.frameDir, jobId + '_horizontal');
-      }
 
       // Calculate detailed cost breakdown
       const durationInMinutes = (request.clipEnd - request.clipStart) / 60000;
       const processingTimeMs = Date.now() - new Date(job.startedAt).getTime();
-
-      // Cost breakdown includes both orientations
-      const verticalFrameCount = verticalFrameResult.frameCount;
-      const horizontalFrameCount = horizontalFrameResult ? horizontalFrameResult.frameCount : 0;
-      const totalFrameCount = verticalFrameCount + horizontalFrameCount;
-
-      const verticalFileSize = verticalVideoResult.fileSize;
-      const horizontalFileSize = horizontalVideoResult ? horizontalVideoResult.fileSize : 0;
-      const totalFileSize = verticalFileSize + horizontalFileSize;
-
       const costBreakdown = {
         audioDownload: durationInMinutes * 0.002, // $0.002 per minute for download/processing
-        frameGeneration: totalFrameCount * 0.0001, // $0.0001 per frame (both orientations)
-        videoComposition: durationInMinutes * 0.003 * (horizontalVideoResult ? 2 : 1), // Double if both orientations
-        storage: Math.max(0.0005, totalFileSize * 0.00000001), // $0.0005 base + size (both videos)
+        frameGeneration: verticalFrameResult.frameCount * 0.0001, // $0.0001 per frame
+        videoComposition: durationInMinutes * 0.003, // $0.003 per minute for FFmpeg
+        storage: Math.max(0.0005, verticalVideoResult.fileSize * 0.00000001), // $0.0005 base + size
         processing: Math.max(0.001, processingTimeMs * 0.000001), // $0.001 base + time
         processingTimeMs: processingTimeMs // Keep as metadata, not part of cost calculation
       };
@@ -594,41 +578,16 @@ class JobQueue {
                         costBreakdown.storage +
                         costBreakdown.processing;
 
-      // Complete job successfully with BOTH video URLs
+      // Complete job successfully
       await this.completeJob(jobId, {
-        // Primary video URL (backward compatibility)
         videoUrl: verticalVideoUrl,
-
-        // New structure with both orientations
-        videos: {
-          vertical: {
-            url: verticalVideoUrl,
-            path: verticalVideoResult.videoPath,
-            fileSize: verticalVideoResult.fileSize,
-            duration: verticalVideoResult.duration,
-            compositionTime: verticalVideoResult.compositionTime,
-            frameCount: verticalFrameResult.frameCount,
-            aspectRatio: '9:16'
-          },
-          horizontal: horizontalVideoUrl ? {
-            url: horizontalVideoUrl,
-            path: horizontalVideoResult.videoPath,
-            fileSize: horizontalVideoResult.fileSize,
-            duration: horizontalVideoResult.duration,
-            compositionTime: horizontalVideoResult.compositionTime,
-            frameCount: horizontalFrameResult.frameCount,
-            aspectRatio: '16:9'
-          } : null
-        },
-
-        // Legacy fields for backward compatibility
         cost: totalCost,
         costBreakdown,
         processingTime: Date.now() - new Date(job.startedAt).getTime(),
         audioDownloadTime: audioResult.downloadTime,
         frameGenerationTime: verticalFrameResult.generationTime,
         videoCompositionTime: verticalVideoResult.compositionTime,
-        fileSize: verticalVideoResult.fileSize, // Primary vertical file size
+        fileSize: verticalVideoResult.fileSize,
         duration: verticalVideoResult.duration,
         videoPath: verticalVideoResult.videoPath // Keep for cleanup later
       });
