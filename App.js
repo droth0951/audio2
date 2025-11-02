@@ -39,6 +39,7 @@ import * as KeepAwake from 'expo-keep-awake';
 import AboutModal from './src/components/AboutModal';
 import SearchBar from './src/components/SearchBar';
 import VideoReadyBanner from './src/components/VideoReadyBanner';
+import VideoProcessingBanner from './src/components/VideoProcessingBanner';
 import PushNotificationService from './src/services/PushNotificationService';
 import VideoService from './src/services/VideoService';
 import JobPollingService from './src/services/JobPollingService';
@@ -825,6 +826,7 @@ export default function App() {
   // Push notification state
   const [deviceToken, setDeviceToken] = useState(null);
   const [videoReadyBanner, setVideoReadyBanner] = useState(null); // { jobId, podcastName, episodeTitle }
+  const [videoProcessingBanner, setVideoProcessingBanner] = useState(null); // { clipDuration }
 
   // Notification history state
   const [notifications, setNotifications] = useState([]);
@@ -1599,7 +1601,6 @@ export default function App() {
   const [currentRssFeed, setCurrentRssFeed] = useState('');
   const [podcastTitle, setPodcastTitle] = useState('');
 
-  const [showRecordingGuidance, setShowRecordingGuidance] = useState(false);
 
   // Shared values for the scrubber
   const progressSharedValue = useSharedValue(0);
@@ -1677,20 +1678,40 @@ export default function App() {
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
   const [popularPodcastsArtwork, setPopularPodcastsArtwork] = useState({});
   
-  // Load cached artwork on app startup
+  // Load cached artwork on app startup (with version-based cache invalidation)
   useEffect(() => {
     const loadCachedArtwork = async () => {
       try {
+        const ARTWORK_CACHE_VERSION = '2.1.1'; // Bump this when artwork fetching logic changes
+
+        // Check cache version
+        const cachedVersion = await AsyncStorage.getItem('artwork_cache_version');
+
+        // If cache version doesn't match, clear old artwork cache
+        if (cachedVersion !== ARTWORK_CACHE_VERSION) {
+          console.log('🔄 Artwork cache version mismatch - clearing old cache');
+          await AsyncStorage.removeItem('popular_podcasts_artwork');
+          await AsyncStorage.setItem('artwork_cache_version', ARTWORK_CACHE_VERSION);
+          return; // Don't load old cache, let background fetch populate fresh data
+        }
+
+        // Load cached artwork if version matches
         const cached = await AsyncStorage.getItem('popular_podcasts_artwork');
         if (cached) {
-          setPopularPodcastsArtwork(JSON.parse(cached));
-          console.log('🎨 Loaded cached artwork for popular podcasts');
+          const artworkData = JSON.parse(cached);
+          // Only use cache if it has actual data
+          if (Object.keys(artworkData).length > 0) {
+            setPopularPodcastsArtwork(artworkData);
+            console.log('🎨 Loaded cached artwork for popular podcasts');
+          } else {
+            console.log('⚠️ Cached artwork is empty - will refetch');
+          }
         }
       } catch (error) {
         console.log('❌ Error loading cached artwork:', error);
       }
     };
-    
+
     loadCachedArtwork();
   }, []);
   
@@ -3615,21 +3636,15 @@ export default function App() {
 
       setRecordingStatus(`Video queued! You'll get a notification when it's ready (less than 5 minutes)`);
 
-      // Show success message
-      Alert.alert(
-        '🎬 Video Creation Started',
-        `Your video is being generated on our servers. You'll receive a push notification when it's ready!\n\nEstimated time: less than 5 minutes`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setIsRecording(false);
-              setShowRecordingView(false);
-              setRecordingStatus('');
-            }
-          }
-        ]
-      );
+      // Show processing banner on episode detail page
+      setVideoProcessingBanner({
+        clipDuration: clipEnd - clipStart
+      });
+
+      // Close recording view and keep user on episode page
+      setIsRecording(false);
+      setShowRecordingView(false);
+      setRecordingStatus('');
 
     } catch (error) {
       console.error('Server video creation failed:', error);
@@ -4285,6 +4300,14 @@ export default function App() {
           />
         )}
 
+        {/* Video Processing Banner */}
+        {videoProcessingBanner && (
+          <VideoProcessingBanner
+            clipDuration={videoProcessingBanner.clipDuration}
+            onDismiss={() => setVideoProcessingBanner(null)}
+          />
+        )}
+
         <LinearGradient
           colors={['#1c1c1c', '#2d2d2d']}
           style={styles.gradient}
@@ -4863,7 +4886,6 @@ export default function App() {
           </Animated.View>
         </GestureDetector>
       </LinearGradient>
-              {showRecordingGuidance && <RecordingGuidanceModal />}
         {showProcessingModal && <ProcessingModal />}
         {showAboutModal && <AboutModal visible={showAboutModal} onClose={() => setShowAboutModal(false)} />}
 
