@@ -3088,11 +3088,18 @@ export default function App() {
       clipDuration: clipEnd - clipStart
     });
 
-    // Close recording view and keep user on episode page
-    setIsRecording(false);
+    // Close recording view immediately
     setShowRecordingView(false);
 
-    // BULLETPROOF: Reset CaptionService for new clip
+    // Immediately send video job to Railway (don't wait for client-side prep)
+    // Server handles all caption generation, so no need for client-side work
+    // Note: createServerSideVideo() will manage isRecording state itself
+    createServerSideVideo();
+  };
+
+  // Legacy caption generation code (no longer used - server handles captions)
+  // Keeping for reference but not called anymore
+  const legacyClientSideCaptionPrep = async () => {
     if (captionsEnabled) {
       console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
       
