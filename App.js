@@ -3083,6 +3083,15 @@ export default function App() {
       console.log('🎵 No sound object available');
     }
 
+    // Show processing banner immediately for instant user feedback
+    setVideoProcessingBanner({
+      clipDuration: clipEnd - clipStart
+    });
+
+    // Close recording view and keep user on episode page
+    setIsRecording(false);
+    setShowRecordingView(false);
+
     // BULLETPROOF: Reset CaptionService for new clip
     if (captionsEnabled) {
       console.log('🎬 Clip selection - Start:', clipStart, 'End:', clipEnd, 'Duration:', clipEnd - clipStart);
@@ -3621,15 +3630,7 @@ export default function App() {
 
       setRecordingStatus(`Video queued! You'll get a notification when it's ready (less than 5 minutes)`);
 
-      // Show processing banner on episode detail page
-      setVideoProcessingBanner({
-        clipDuration: clipEnd - clipStart
-      });
-
-      // Close recording view and keep user on episode page
-      setIsRecording(false);
-      setShowRecordingView(false);
-      setRecordingStatus('');
+      // Banner and view closing already handled at function start for instant feedback
 
     } catch (error) {
       console.error('Server video creation failed:', error);
