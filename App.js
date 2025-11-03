@@ -1916,9 +1916,12 @@ export default function App() {
 
   const fetchPopularPodcastsArtwork = async () => {
     console.log('🎨 Fetching artwork for popular podcasts...');
-    const artworkCache = {};
 
     try {
+      // Start with bundled artwork to avoid losing it if fetches fail
+      const artworkCache = { ...BUNDLED_ARTWORK };
+      let fetchedCount = 0;
+
       // Get all podcasts from all categories
       const allPodcasts = allCategories.flatMap(category => category.podcasts);
 
@@ -1938,6 +1941,7 @@ export default function App() {
 
               if (artworkMatch && artworkMatch[1]) {
                 artworkCache[podcast.name] = artworkMatch[1];
+                fetchedCount++;
                 console.log('✅ Found artwork for:', podcast.name);
                 continue; // Skip iTunes search if we found artwork in RSS
               }
@@ -1952,6 +1956,7 @@ export default function App() {
             const podcastData = searchResults[0];
             if (podcastData.artwork) {
               artworkCache[podcast.name] = podcastData.artwork;
+              fetchedCount++;
               console.log('✅ Found artwork for:', podcast.name);
             }
           }
@@ -1960,7 +1965,13 @@ export default function App() {
         }
       }
 
-      setPopularPodcastsArtwork(artworkCache);
+      // Only update state if we successfully fetched at least some artwork
+      if (fetchedCount > 0) {
+        setPopularPodcastsArtwork(artworkCache);
+        console.log(`🎨 Updated artwork cache with ${fetchedCount} fresh fetches`);
+      } else {
+        console.log('⚠️ No artwork fetched - keeping bundled artwork');
+      }
 
       try {
         await AsyncStorage.setItem('popular_podcasts_artwork', JSON.stringify(artworkCache));
