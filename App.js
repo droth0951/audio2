@@ -46,6 +46,7 @@ import JobPollingService from './src/services/JobPollingService';
 import { useShareIntent } from 'expo-share-intent';
 import { parsePodcastURL, formatTimestamp, getPlatformDisplayName } from './src/utils/PodcastURLParser';
 import { ANNOUNCEMENTS } from './src/constants/announcements';
+import BUNDLED_ARTWORK from './src/data/bundled-artwork.json';
 // import { useFonts } from 'expo-font';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -1676,35 +1677,20 @@ export default function App() {
 
   const recordingTimerRef = useRef(null);
   const [loadingPodcastId, setLoadingPodcastId] = useState(null);
-  const [popularPodcastsArtwork, setPopularPodcastsArtwork] = useState({});
+  const [popularPodcastsArtwork, setPopularPodcastsArtwork] = useState(BUNDLED_ARTWORK); // Pre-bundled artwork for offline use
   
-  // Load cached artwork on app startup (with version-based cache invalidation)
+  // Load refreshed artwork from cache (bundled artwork loaded by default on app start)
   useEffect(() => {
-    const loadCachedArtwork = async () => {
+    const loadRefreshedArtwork = async () => {
       try {
-        const ARTWORK_CACHE_VERSION = '2.1.1'; // Bump this when artwork fetching logic changes
-
-        // Check cache version
-        const cachedVersion = await AsyncStorage.getItem('artwork_cache_version');
-
-        // If cache version doesn't match, clear old artwork cache
-        if (cachedVersion !== ARTWORK_CACHE_VERSION) {
-          console.log('🔄 Artwork cache version mismatch - clearing old cache');
-          await AsyncStorage.removeItem('popular_podcasts_artwork');
-          await AsyncStorage.setItem('artwork_cache_version', ARTWORK_CACHE_VERSION);
-          return; // Don't load old cache, let background fetch populate fresh data
-        }
-
-        // Load cached artwork if version matches
+        // Check if we have newer artwork from background fetch
         const cached = await AsyncStorage.getItem('popular_podcasts_artwork');
         if (cached) {
           const artworkData = JSON.parse(cached);
-          // Only use cache if it has actual data
-          if (Object.keys(artworkData).length > 0) {
+          // Only use cache if it has more artwork than bundled version
+          if (Object.keys(artworkData).length > Object.keys(BUNDLED_ARTWORK).length) {
             setPopularPodcastsArtwork(artworkData);
-            console.log('🎨 Loaded cached artwork for popular podcasts');
-          } else {
-            console.log('⚠️ Cached artwork is empty - will refetch');
+            console.log('🎨 Updated to refreshed artwork from cache');
           }
         }
       } catch (error) {
@@ -1712,7 +1698,7 @@ export default function App() {
       }
     };
 
-    loadCachedArtwork();
+    loadRefreshedArtwork();
   }, []);
   
   // Fallback categories - used when GitHub is unavailable
