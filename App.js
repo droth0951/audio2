@@ -4976,12 +4976,18 @@ export default function App() {
                                     return updatedNotifications;
                                   });
 
-                                  // Show success feedback
-                                  Alert.alert(
-                                    '✅ Saved to Photos',
-                                    `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
-                                    [{ text: 'OK' }]
-                                  );
+                                  // Open Photos app so user can share their video
+                                  console.log('📸 Opening Photos app...');
+                                  Linking.openURL('photos-redirect://')
+                                    .catch(err => {
+                                      console.error('Failed to open Photos app:', err);
+                                      // Fallback: show success message if Photos won't open
+                                      Alert.alert(
+                                        '✅ Saved to Photos',
+                                        `Your video has been saved to your Photos library${item.episodeTitle ? ` for "${item.episodeTitle}"` : ''}`,
+                                        [{ text: 'OK' }]
+                                      );
+                                    });
                                 }
                               } catch (error) {
                                 console.error('Save failed:', error);
