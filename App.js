@@ -3594,7 +3594,18 @@ export default function App() {
       return;
     }
 
-    if (!deviceToken) {
+    // Try to get device token from state or service
+    let token = deviceToken;
+    if (!token) {
+      // Check if service has the token (might not be in state yet due to race condition)
+      token = PushNotificationService.getDeviceToken();
+      if (token) {
+        console.log('📱 Using device token from service:', token.substring(0, 20) + '...');
+        setDeviceToken(token); // Update state for next time
+      }
+    }
+
+    if (!token) {
       Alert.alert('Push Notifications Required', 'Push notifications must be enabled to use server-side video generation. Please restart the app and allow notifications.');
       return;
     }
@@ -3621,7 +3632,7 @@ export default function App() {
         clipStart,
         clipEnd,
         podcast,
-        deviceToken,
+        token, // Use the token we fetched above (from state or service)
         captionsEnabled
       );
 
