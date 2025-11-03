@@ -3089,8 +3089,6 @@ export default function App() {
       
       // CRITICAL: Reset CaptionService state for new clip
       captionService.reset();
-      
-      setIsGeneratingCaptions(true);
 
       try {
         // Step 1: Get timing info from Railway
@@ -3402,14 +3400,11 @@ export default function App() {
           [{ text: 'OK' }]
         );
       }
-      
-      setIsGeneratingCaptions(false);
     } else {
       // Captions disabled - clear any existing caption data
       console.log('🎬 Captions disabled - proceeding without captions');
       setPreparedTranscript(null);
       captionService.reset(); // Reset CaptionService when captions disabled
-      setIsGeneratingCaptions(false);
     }
 
 
