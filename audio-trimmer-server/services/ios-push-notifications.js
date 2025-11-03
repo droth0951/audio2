@@ -138,8 +138,8 @@ class IOSPushNotificationService {
         episodeTitle: episodeTitle,
         deepLink: `audio2://video-ready?jobId=${jobId}`
       },
-      categoryId: 'VIDEO_READY'
-      // Don't set badge - let client manage based on actual unread count
+      categoryId: 'VIDEO_READY',
+      badge: 1 // Set badge to 1 so iOS shows badge on app icon
     };
 
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -177,7 +177,7 @@ class IOSPushNotificationService {
           title: 'Audio2',
           body: `Your ${podcastName} clip is now ready for saving and sharing!`
         },
-        // Don't set badge - let client manage based on actual unread count
+        badge: 1, // Set badge to 1 so iOS shows badge on app icon
         sound: 'default',
         category: 'VIDEO_READY'
       },
