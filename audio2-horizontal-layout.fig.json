@@ -1,0 +1,537 @@
+{
+  "name": "Audio2 Horizontal Layout",
+  "lastModified": "2025-10-27T19:30:00Z",
+  "version": "1.0",
+  "document": {
+    "id": "0:0",
+    "name": "Audio2 Horizontal Layout",
+    "type": "DOCUMENT",
+    "children": [
+      {
+        "id": "0:1",
+        "name": "16:9 Horizontal Video",
+        "type": "CANVAS",
+        "backgroundColor": {
+          "r": 0.95,
+          "g": 0.95,
+          "b": 0.95,
+          "a": 1
+        },
+        "children": [
+          {
+            "id": "1:1",
+            "name": "Video Frame 1920x1080",
+            "type": "FRAME",
+            "x": 100,
+            "y": 100,
+            "width": 1920,
+            "height": 1080,
+            "fills": [
+              {
+                "type": "GRADIENT_LINEAR",
+                "gradientStops": [
+                  {
+                    "color": { "r": 0.039, "g": 0.039, "b": 0.039, "a": 1 },
+                    "position": 0
+                  },
+                  {
+                    "color": { "r": 0.102, "g": 0.102, "b": 0.102, "a": 1 },
+                    "position": 0.5
+                  },
+                  {
+                    "color": { "r": 0.145, "g": 0.145, "b": 0.145, "a": 1 },
+                    "position": 1
+                  }
+                ],
+                "gradientTransform": [
+                  [0, 1, 0],
+                  [-1, 0, 1]
+                ]
+              }
+            ],
+            "children": [
+              {
+                "id": "2:1",
+                "name": "Podcast Name",
+                "type": "TEXT",
+                "x": 96,
+                "y": 60,
+                "width": 1728,
+                "height": 40,
+                "characters": "THE DAILY",
+                "style": {
+                  "fontFamily": "Roboto",
+                  "fontWeight": 500,
+                  "fontSize": 32,
+                  "textAlignHorizontal": "CENTER",
+                  "textAlignVertical": "TOP",
+                  "letterSpacing": 1.5,
+                  "textCase": "UPPER",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2:2",
+                "name": "Artwork Container",
+                "type": "RECTANGLE",
+                "x": 96,
+                "y": 340,
+                "width": 400,
+                "height": 400,
+                "cornerRadius": 20,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.102, "g": 0.102, "b": 0.102, "a": 1 }
+                  }
+                ],
+                "strokes": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 1, "g": 1, "b": 1, "a": 0.1 }
+                  }
+                ],
+                "strokeWeight": 2,
+                "effects": [
+                  {
+                    "type": "DROP_SHADOW",
+                    "color": { "r": 0, "g": 0, "b": 0, "a": 0.5 },
+                    "offset": { "x": 0, "y": 4 },
+                    "radius": 8,
+                    "visible": true
+                  }
+                ]
+              },
+              {
+                "id": "2:3",
+                "name": "Artwork Placeholder",
+                "type": "TEXT",
+                "x": 146,
+                "y": 510,
+                "width": 300,
+                "height": 60,
+                "characters": "PODCAST\nARTWORK",
+                "style": {
+                  "fontFamily": "Roboto",
+                  "fontWeight": 700,
+                  "fontSize": 24,
+                  "textAlignHorizontal": "CENTER",
+                  "textAlignVertical": "CENTER",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "3:1",
+                "name": "Episode Title",
+                "type": "TEXT",
+                "x": 624,
+                "y": 200,
+                "width": 1200,
+                "height": 150,
+                "characters": "How AI Is Transforming the Way We Create Content and Share Knowledge",
+                "style": {
+                  "fontFamily": "Roboto",
+                  "fontWeight": 400,
+                  "fontSize": 28,
+                  "lineHeight": { "value": 120, "unit": "PERCENT" },
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "4:1",
+                "name": "Caption Line 1",
+                "type": "TEXT",
+                "x": 624,
+                "y": 480,
+                "width": 1200,
+                "height": 80,
+                "characters": "TODAY WE'RE HEARING FROM",
+                "style": {
+                  "fontFamily": "Arial",
+                  "fontWeight": 800,
+                  "fontSize": 64,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+                    }
+                  ],
+                  "effects": [
+                    {
+                      "type": "DROP_SHADOW",
+                      "color": { "r": 0, "g": 0, "b": 0, "a": 0.8 },
+                      "offset": { "x": 0, "y": 2 },
+                      "radius": 3,
+                      "visible": true
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "4:2",
+                "name": "Caption Line 2",
+                "type": "TEXT",
+                "x": 624,
+                "y": 570,
+                "width": 1200,
+                "height": 80,
+                "characters": "DAN PORTER",
+                "style": {
+                  "fontFamily": "Arial",
+                  "fontWeight": 800,
+                  "fontSize": 64,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 0.965, "g": 0.620, "b": 0.024, "a": 1 }
+                    }
+                  ],
+                  "effects": [
+                    {
+                      "type": "DROP_SHADOW",
+                      "color": { "r": 0, "g": 0, "b": 0, "a": 0.8 },
+                      "offset": { "x": 0, "y": 2 },
+                      "radius": 3,
+                      "visible": true
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "5:1",
+                "name": "Progress Bar Background",
+                "type": "RECTANGLE",
+                "x": 96,
+                "y": 920,
+                "width": 1728,
+                "height": 12,
+                "cornerRadius": 6,
+                "fills": [
+                  {
+                    "type": "GRADIENT_LINEAR",
+                    "gradientStops": [
+                      {
+                        "color": { "r": 0.176, "g": 0.176, "b": 0.176, "a": 1 },
+                        "position": 0
+                      },
+                      {
+                        "color": { "r": 0.251, "g": 0.251, "b": 0.251, "a": 1 },
+                        "position": 0.5
+                      },
+                      {
+                        "color": { "r": 0.176, "g": 0.176, "b": 0.176, "a": 1 },
+                        "position": 1
+                      }
+                    ],
+                    "gradientTransform": [
+                      [1, 0, 0],
+                      [0, 1, 0]
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "5:2",
+                "name": "Progress Bar Fill (45%)",
+                "type": "RECTANGLE",
+                "x": 96,
+                "y": 920,
+                "width": 778,
+                "height": 12,
+                "cornerRadius": 6,
+                "fills": [
+                  {
+                    "type": "GRADIENT_LINEAR",
+                    "gradientStops": [
+                      {
+                        "color": { "r": 0.851, "g": 0.467, "b": 0.024, "a": 1 },
+                        "position": 0
+                      },
+                      {
+                        "color": { "r": 0.965, "g": 0.620, "b": 0.043, "a": 1 },
+                        "position": 0.5
+                      },
+                      {
+                        "color": { "r": 0.851, "g": 0.467, "b": 0.024, "a": 1 },
+                        "position": 1
+                      }
+                    ],
+                    "gradientTransform": [
+                      [1, 0, 0],
+                      [0, 1, 0]
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "6:1",
+                "name": "Dancing Bar 1",
+                "type": "RECTANGLE",
+                "x": 1680,
+                "y": 990,
+                "width": 6,
+                "height": 32,
+                "cornerRadius": 1,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                  }
+                ]
+              },
+              {
+                "id": "6:2",
+                "name": "Dancing Bar 2",
+                "type": "RECTANGLE",
+                "x": 1692,
+                "y": 982,
+                "width": 6,
+                "height": 40,
+                "cornerRadius": 1,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                  }
+                ]
+              },
+              {
+                "id": "6:3",
+                "name": "Dancing Bar 3",
+                "type": "RECTANGLE",
+                "x": 1704,
+                "y": 985,
+                "width": 6,
+                "height": 37,
+                "cornerRadius": 1,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                  }
+                ]
+              },
+              {
+                "id": "6:4",
+                "name": "Dancing Bar 4",
+                "type": "RECTANGLE",
+                "x": 1716,
+                "y": 978,
+                "width": 6,
+                "height": 44,
+                "cornerRadius": 1,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                  }
+                ]
+              },
+              {
+                "id": "6:5",
+                "name": "Dancing Bar 5",
+                "type": "RECTANGLE",
+                "x": 1728,
+                "y": 988,
+                "width": 6,
+                "height": 34,
+                "cornerRadius": 1,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                  }
+                ]
+              },
+              {
+                "id": "7:1",
+                "name": "Audio2 Watermark",
+                "type": "TEXT",
+                "x": 1750,
+                "y": 1000,
+                "width": 100,
+                "height": 30,
+                "characters": "Audio2",
+                "style": {
+                  "fontFamily": "Roboto",
+                  "fontWeight": 300,
+                  "fontSize": 20,
+                  "textAlignHorizontal": "RIGHT",
+                  "textAlignVertical": "CENTER",
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "8:1",
+                "name": "Guidelines",
+                "type": "FRAME",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "clipsContent": false,
+                "children": [
+                  {
+                    "id": "8:2",
+                    "name": "Left Column Boundary",
+                    "type": "LINE",
+                    "x": 544,
+                    "y": 0,
+                    "width": 0,
+                    "height": 1080,
+                    "strokes": [
+                      {
+                        "type": "SOLID",
+                        "color": { "r": 1, "g": 0, "b": 0, "a": 0.3 }
+                      }
+                    ],
+                    "strokeWeight": 2,
+                    "strokeDashes": [10, 5]
+                  },
+                  {
+                    "id": "8:3",
+                    "name": "Right Column Start",
+                    "type": "LINE",
+                    "x": 624,
+                    "y": 0,
+                    "width": 0,
+                    "height": 1080,
+                    "strokes": [
+                      {
+                        "type": "SOLID",
+                        "color": { "r": 0, "g": 1, "b": 0, "a": 0.3 }
+                      }
+                    ],
+                    "strokeWeight": 2,
+                    "strokeDashes": [10, 5]
+                  },
+                  {
+                    "id": "8:4",
+                    "name": "Caption Area Top",
+                    "type": "LINE",
+                    "x": 624,
+                    "y": 450,
+                    "width": 1200,
+                    "height": 0,
+                    "strokes": [
+                      {
+                        "type": "SOLID",
+                        "color": { "r": 0.965, "g": 0.620, "b": 0.024, "a": 0.5 }
+                      }
+                    ],
+                    "strokeWeight": 2,
+                    "strokeDashes": [10, 5]
+                  },
+                  {
+                    "id": "8:5",
+                    "name": "Caption Area Bottom",
+                    "type": "LINE",
+                    "x": 624,
+                    "y": 700,
+                    "width": 1200,
+                    "height": 0,
+                    "strokes": [
+                      {
+                        "type": "SOLID",
+                        "color": { "r": 0.965, "g": 0.620, "b": 0.024, "a": 0.5 }
+                      }
+                    ],
+                    "strokeWeight": 2,
+                    "strokeDashes": [10, 5]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "9:1",
+            "name": "Annotations",
+            "type": "FRAME",
+            "x": 2100,
+            "y": 100,
+            "width": 400,
+            "height": 1080,
+            "fills": [
+              {
+                "type": "SOLID",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            ],
+            "children": [
+              {
+                "id": "9:2",
+                "name": "Title",
+                "type": "TEXT",
+                "x": 20,
+                "y": 20,
+                "width": 360,
+                "height": 60,
+                "characters": "Audio2 Horizontal Layout\n16:9 (1920×1080)",
+                "style": {
+                  "fontFamily": "Inter",
+                  "fontWeight": 700,
+                  "fontSize": 24,
+                  "lineHeight": { "value": 120, "unit": "PERCENT" },
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 0, "g": 0, "b": 0, "a": 1 }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "9:3",
+                "name": "Specs",
+                "type": "TEXT",
+                "x": 20,
+                "y": 100,
+                "width": 360,
+                "height": 800,
+                "characters": "Layout Specs:\n\n• Canvas: 1920×1080px\n• Margins: 96px (5%)\n\nLeft Column (30%):\n• Artwork: 400×400px\n• Position: Vertically centered\n• Corner radius: 20px\n\nRight Column (65%):\n• Episode Title: 28px\n• Max width: 1200px\n• 55-60 chars per line\n\nCaptions:\n• Font: 64px Arial Bold\n• Max width: 1200px\n• 40-45 chars per line\n• Highlighted word: #f59e0b\n\nProgress Bar:\n• Height: 12px\n• Width: 90% of screen\n• Y: 920px (160px from bottom)\n\nWatermark:\n• Bottom right\n• Dancing bars + Audio2 text\n• Gray (#666666)\n\nBenefits vs Vertical:\n✓ Larger artwork (400 vs 280)\n✓ Wider captions (45 vs 32 chars)\n✓ Side-by-side layout\n✓ Better for YouTube/LinkedIn",
+                "style": {
+                  "fontFamily": "Inter",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "lineHeight": { "value": 150, "unit": "PERCENT" },
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "color": { "r": 0.2, "g": 0.2, "b": 0.2, "a": 1 }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

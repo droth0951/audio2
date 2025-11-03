@@ -3091,20 +3091,14 @@ export default function App() {
       captionService.reset();
       
       setIsGeneratingCaptions(true);
-      
-      // Show processing modal with step-by-step feedback
-      setShowProcessingModal(true);
-      setProcessingStep('Preparing your audio clip...');
-      
+
       try {
         // Step 1: Get timing info from Railway
-        setProcessingStep('Preparing your audio clip...');
         const trimResponse = await trimAudioToClip(selectedEpisode.audioUrl, clipStart, clipEnd);
         
         // Step 2: Submit job with AssemblyAI's built-in trimming
         // NOTE: We send the full podcast URL but use audio_start_from/audio_end_at
         // AssemblyAI handles the clipping server-side (more efficient than downloading/re-uploading)
-        setProcessingStep('Sending clip to transcription service...');
         
         console.log('🎬 === ASSEMBLYAI SUBMISSION DEBUG ===');
         const assemblyAIPayload = {
@@ -3410,7 +3404,6 @@ export default function App() {
       }
       
       setIsGeneratingCaptions(false);
-      setShowProcessingModal(false); // Close processing modal
     } else {
       // Captions disabled - clear any existing caption data
       console.log('🎬 Captions disabled - proceeding without captions');

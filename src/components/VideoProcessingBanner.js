@@ -7,7 +7,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -42,16 +41,12 @@ const VideoProcessingBanner = ({ clipDuration, onDismiss }) => {
           </Text>
         </View>
 
-        <View style={styles.rightContainer}>
-          <ActivityIndicator color="#ffffff" size="small" style={styles.spinner} />
-
-          <TouchableOpacity
-            style={styles.dismissButton}
-            onPress={onDismiss}
-          >
-            <MaterialCommunityIcons name="close" size={20} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.dismissButton}
+          onPress={onDismiss}
+        >
+          <MaterialCommunityIcons name="close" size={20} color="#ffffff" />
+        </TouchableOpacity>
       </View>
     </LinearGradient>
   );
@@ -89,14 +84,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
     color: '#ffffff',
-  },
-  rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  spinner: {
-    marginRight: 4,
   },
   dismissButton: {
     padding: 8,
