@@ -37,7 +37,7 @@ const VideoProcessingBanner = ({ clipDuration, onDismiss }) => {
 
         <View style={styles.textContainer}>
           <Text style={styles.message}>
-            Your {formatDuration(clipDuration)} clip is processing. Audio2 will notify you when it's ready in &lt;5 mins.
+            Your {formatDuration(clipDuration)} clip is processing. Audio2 will notify you when it's ready in less than 5 minutes.
           </Text>
         </View>
 
