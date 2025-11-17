@@ -65,7 +65,12 @@ class EmailNotificationService {
     
     // Calculate cost info
     const cost = result.cost || job.estimatedCost || 0;
-    const processingTime = result.processingTime ? `${Math.round(result.processingTime / 1000)}s` : 'Unknown';
+
+    // Calculate timing info
+    const startTime = job.createdAt ? new Date(job.createdAt) : null;
+    const endTime = new Date(); // When notification is being sent
+    const processingTimeMs = result.processingTime || 0;
+    const processingTimeSec = Math.round(processingTimeMs / 1000);
 
     let subject, body;
 
@@ -85,17 +90,21 @@ class EmailNotificationService {
 🔗 **Download Your Video**:
 ${videoUrl}
 
-**Processing Details**:
+**Processing Timeline**:
+• Start Time: ${startTime ? this.formatTimestamp(startTime) : 'Unknown'}
+• End Time: ${this.formatTimestamp(endTime)}
+• Total Processing Time: ${processingTimeSec}s (${Math.floor(processingTimeSec / 60)}m ${processingTimeSec % 60}s)
+
+**Job Details**:
 • Job ID: ${job.jobId}
 • Status: ✅ Completed
-• Processing Time: ${processingTime}
 • Cost: $${cost.toFixed(4)}
 • Video Size: ${this.formatFileSize(result.fileSize)}
 • Captions: ${request.captionsEnabled ? '✅ Enabled' : '❌ Disabled'}
 
 **Audio Source**: ${this.sanitizeUrl(request.audioUrl)}
 
-Generated at ${this.formatTimestamp(new Date())}
+Generated at ${this.formatTimestamp(endTime)}
 `.trim();
 
     } else if (status === 'failed') {

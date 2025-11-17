@@ -562,7 +562,8 @@ class JobQueue {
 
       // Calculate detailed cost breakdown
       const durationInMinutes = (request.clipEnd - request.clipStart) / 60000;
-      const processingTimeMs = Date.now() - new Date(job.startedAt).getTime();
+      // IMPORTANT: Measure from user submission (createdAt) not processing start (startedAt)
+      const processingTimeMs = Date.now() - new Date(job.createdAt).getTime();
       const costBreakdown = {
         audioDownload: durationInMinutes * 0.002, // $0.002 per minute for download/processing
         frameGeneration: verticalFrameResult.frameCount * 0.0001, // $0.0001 per frame
@@ -608,7 +609,8 @@ class JobQueue {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    const processingTime = Date.now() - new Date(job.startedAt).getTime();
+    // Calculate total time from user submission to completion
+    const processingTime = Date.now() - new Date(job.createdAt).getTime();
 
     // Update job status using helper method for database sync
     this.updateJobStatus(jobId, 'completed', {
