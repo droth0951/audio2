@@ -339,10 +339,19 @@ class JobQueue {
   async processVideoJob(job) {
     try {
       const { jobId, request } = job;
-      logger.debug('Starting video processing', { 
+      logger.debug('Starting video processing', {
         jobId,
         audioUrl: audioDownload.sanitizeUrl(request.audioUrl),
         duration: `${(request.clipEnd - request.clipStart) / 1000}s`
+      });
+
+      // Send "job started" notification to Telegram
+      const telegramBot = require('./telegram-bot');
+      telegramBot.sendJobNotification(job, 'started').catch(error => {
+        logger.debug('Telegram start notification failed (non-blocking)', {
+          jobId,
+          error: error.message
+        });
       });
 
       // Step 1: Download and extract audio clip
@@ -642,14 +651,23 @@ class JobQueue {
       outputSize: result.fileSize ? `${Math.round(result.fileSize / 1024 / 1024 * 100) / 100}MB` : 'Unknown'
     });
 
-    // Send notifications (both email for admin and push for user)
+    // Send notifications (email, Telegram, and iOS push)
     const notifications = require('./email-notifications');
+    const telegramBot = require('./telegram-bot');
     const iosPush = require('./ios-push-notifications');
 
     // Admin email notification (existing)
     notifications.sendJobNotification(job, 'completed');
 
-    // User iOS push notification (new)
+    // Telegram notification (new)
+    telegramBot.sendJobNotification(job, 'completed').catch(error => {
+      logger.debug('Telegram completion notification failed (non-blocking)', {
+        jobId,
+        error: error.message
+      });
+    });
+
+    // User iOS push notification (existing)
     if (job.request?.deviceToken && job.request?.podcast) {
       await iosPush.sendVideoReadyNotification(
         job.request.deviceToken,
@@ -687,10 +705,19 @@ class JobQueue {
       });
       
       logger.logJobError(jobId, error, 'final_failure');
-      
-      // Send failure notification
+
+      // Send failure notifications (email and Telegram)
       const notifications = require('./email-notifications');
+      const telegramBot = require('./telegram-bot');
+
       notifications.sendJobNotification(job, 'failed');
+
+      telegramBot.sendJobNotification(job, 'failed').catch(error => {
+        logger.debug('Telegram failure notification failed (non-blocking)', {
+          jobId,
+          error: error.message
+        });
+      });
     }
 
     this.activeJobs.delete(jobId);

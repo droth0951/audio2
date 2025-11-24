@@ -72,6 +72,10 @@ app.post('/api/test-email', testEmailHandler);
 const testPushHandler = require('./api/test-push.js');
 app.post('/api/test-push', testPushHandler);
 
+// Test Telegram notification endpoint
+const testTelegramHandler = require('./api/test-telegram.js');
+app.post('/api/test-telegram', testTelegramHandler);
+
 // OPTIONS handlers for CORS preflight
 app.options('/api/transcript', (req, res) => {
   res.status(200).end();

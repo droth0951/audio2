@@ -236,7 +236,7 @@ Failed at ${this.formatTimestamp(new Date())}
     // Use Railway deployment URL
     const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
       || process.env.RAILWAY_STATIC_URL
-      || 'amusing-education-production.up.railway.app';
+      || 'audio-trimmer-service-production.up.railway.app';
 
     // Ensure https:// protocol
     const url = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
