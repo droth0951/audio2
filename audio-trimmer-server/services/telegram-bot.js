@@ -70,6 +70,7 @@ class TelegramBotService {
 
 🎙 *Podcast:* ${this.escape(podcast.title || 'Unknown')}
 📻 *Episode:* ${this.escape(podcast.episode || 'Unknown')}
+🔗 *Audio:* ${this.escape(request.audioUrl || 'Unknown')}
 ⏱ *Clip:* ${this.escape(clipStart)} \\- ${this.escape(clipEnd)} \\(${this.escape(duration)}s\\)
 
 💰 *Estimated Cost:* ${this.escape('$' + cost.toFixed(4))}
@@ -88,6 +89,7 @@ _Processing your video\\.\\.\\._
 
 🎙 *Podcast:* ${this.escape(podcast.title || 'Unknown')}
 📻 *Episode:* ${this.escape(podcast.episode || 'Unknown')}
+🔗 *Audio:* ${this.escape(request.audioUrl || 'Unknown')}
 ⏱ *Clip:* ${this.escape(clipStart)} \\- ${this.escape(clipEnd)} \\(${this.escape(duration)}s\\)
 
 💰 *Cost:* ${this.escape('$' + cost.toFixed(4))}
@@ -95,7 +97,7 @@ _Processing your video\\.\\.\\._
 💾 *Size:* ${this.escape(this.formatFileSize(result.fileSize))}
 🔑 *Job ID:* \`${job.jobId}\`
 
-🔗 [Download Video](${videoUrl})
+🎬 [Download Video](${videoUrl})
 `.trim();
 
     } else if (status === 'failed') {
@@ -104,6 +106,7 @@ _Processing your video\\.\\.\\._
 
 🎙 *Podcast:* ${this.escape(podcast.title || 'Unknown')}
 📻 *Episode:* ${this.escape(podcast.episode || 'Unknown')}
+🔗 *Audio:* ${this.escape(request.audioUrl || 'Unknown')}
 ⏱ *Clip:* ${this.escape(clipStart)} \\- ${this.escape(clipEnd)} \\(${this.escape(duration)}s\\)
 
 ⚠️ *Error:* ${this.escape(job.error || 'Unknown error')}
