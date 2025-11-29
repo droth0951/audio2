@@ -1,5 +1,12 @@
 # Claude Code Configuration
 
+## Homescreen Podcasts
+The homescreen podcast list is **fetched from GitHub at runtime**, not bundled with the app:
+- URL: `https://raw.githubusercontent.com/droth0951/audio2/main/popular-podcasts.json`
+- To update podcasts: edit `popular-podcasts.json`, add artwork to `src/data/bundled-artwork.json`, then **commit and push to GitHub**
+- OTA updates via EAS are NOT needed for podcast list changes
+- Changes appear after force-quitting and reopening the app
+
 ## Important Rules
 - Review CRITICAL_VIDEO_UI_RULES.md before any video-related changes
 - Never modify visual elements in video generation
