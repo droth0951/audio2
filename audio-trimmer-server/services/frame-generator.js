@@ -101,6 +101,18 @@ class FrameGenerator {
       const fps = config.video.FRAME_RATE; // Use centralized config (default 8 fps)
       const frameCount = Math.round(duration * fps); // Use round instead of ceil for exact timing
 
+      // Log system resources once per job (helps determine parallelization potential)
+      const os = require('os');
+      logger.info('🖥️ System resources', {
+        jobId,
+        cpus: os.cpus().length,
+        cpuModel: os.cpus()[0]?.model,
+        freeMemMB: Math.round(os.freemem() / 1024 / 1024),
+        totalMemMB: Math.round(os.totalmem() / 1024 / 1024),
+        frameCount,
+        fps
+      });
+
       // Determine aspect ratio based on orientation
       const aspectRatio = orientation === 'horizontal' ? '16:9' : '9:16';
 
