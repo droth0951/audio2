@@ -98,7 +98,7 @@ class FrameGenerator {
       }
 
       const startTime = Date.now();
-      const fps = 12; // 12 frames per second for smooth video playbook
+      const fps = config.video.FRAME_RATE; // Use centralized config (default 8 fps)
       const frameCount = Math.round(duration * fps); // Use round instead of ceil for exact timing
 
       // Determine aspect ratio based on orientation
@@ -790,7 +790,7 @@ class FrameGenerator {
 
   // REVIEW-COST: Estimate frame generation cost
   estimateFrameGenerationCost(duration) {
-    const fps = 12; // 12 frames per second
+    const fps = config.video.FRAME_RATE; // Use centralized config
     const frameCount = Math.ceil(duration * fps);
     const costPerFrame = 0.0001; // $0.0001 per frame
     return frameCount * costPerFrame;
