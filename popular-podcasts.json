@@ -18,6 +18,12 @@
           "rssUrl": "https://feeds.transistor.fm/acquired"
         },
         {
+          "name": "Masters of Scale",
+          "fallbackEmoji": "🚀",
+          "category": "Ideas",
+          "rssUrl": "https://rss.art19.com/masters-of-scale"
+        },
+        {
           "name": "Building One",
           "fallbackEmoji": "🏗️",
           "category": "Business",
@@ -107,6 +113,12 @@
           "fallbackEmoji": "🤖",
           "category": "Technology",
           "rssUrl": "https://rss.flightcast.com/vgnxzgiwwzwke85ym53fjnzu.xml"
+        },
+        {
+          "name": "Possible",
+          "fallbackEmoji": "🚀",
+          "category": "Technology",
+          "rssUrl": "https://feeds.megaphone.fm/possible"
         }
       ]
     },
