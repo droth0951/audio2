@@ -3646,7 +3646,21 @@ export default function App() {
         console.log('📊 Added job to polling service:', result.jobId);
       }
 
-      setRecordingStatus(`Video queued! You'll get a notification when it's ready (less than 5 minutes)`);
+      // Calculate estimated processing time based on clip duration
+      const clipDurationMs = clipEnd - clipStart;
+      const clipSeconds = clipDurationMs / 1000;
+      const estimatedSeconds = (clipSeconds * 1.7 + 20) * 1.2; // 20% buffer
+      const estimatedMinutes = Math.ceil(estimatedSeconds / 60);
+      let timeEstimate;
+      if (estimatedMinutes <= 1) {
+        timeEstimate = 'about a minute';
+      } else if (estimatedMinutes <= 2) {
+        timeEstimate = '1-2 minutes';
+      } else {
+        timeEstimate = `${estimatedMinutes - 1}-${estimatedMinutes} minutes`;
+      }
+
+      setRecordingStatus(`Video queued! You'll get a notification when it's ready (${timeEstimate})`);
 
       // Banner and view closing already handled at function start for instant feedback
 

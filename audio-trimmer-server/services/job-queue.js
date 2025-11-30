@@ -214,8 +214,8 @@ class JobQueue {
       // Generate job
       const jobId = `vid_${uuidv4().substring(0, 8)}`;
 
-      // Simple realistic estimate: ~5 minutes for Railway deployment
-      const estimatedTime = 300; // 5 minutes in seconds
+      // Estimate based on actual processing time: (clip_seconds * 1.7 + 20) * 1.2 buffer
+      const estimatedTime = Math.ceil((duration * 1.7 + 20) * 1.2);
 
       const job = {
         jobId,

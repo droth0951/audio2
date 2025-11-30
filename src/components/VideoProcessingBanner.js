@@ -23,6 +23,22 @@ const VideoProcessingBanner = ({ clipDuration, onDismiss }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Estimate processing time based on clip duration
+  // Formula: (clip_seconds * 1.7) + 20 seconds overhead, with 20% buffer
+  const estimateProcessingTime = (milliseconds) => {
+    const clipSeconds = milliseconds / 1000;
+    const estimatedSeconds = (clipSeconds * 1.7 + 20) * 1.2; // 20% buffer
+    const minutes = Math.ceil(estimatedSeconds / 60);
+
+    if (minutes <= 1) {
+      return 'about a minute';
+    } else if (minutes <= 2) {
+      return '1-2 minutes';
+    } else {
+      return `${minutes - 1}-${minutes} minutes`;
+    }
+  };
+
   return (
     <LinearGradient
       colors={['#4F46E5', '#7C3AED']}
@@ -37,7 +53,7 @@ const VideoProcessingBanner = ({ clipDuration, onDismiss }) => {
 
         <View style={styles.textContainer}>
           <Text style={styles.message}>
-            Your {formatDuration(clipDuration)} clip is processing. Audio2 will notify you when it's ready in less than 5 minutes.
+            Your {formatDuration(clipDuration)} clip is processing. Audio2 will notify you when it's ready in {estimateProcessingTime(clipDuration)}.
           </Text>
         </View>
 
