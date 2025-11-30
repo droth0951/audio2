@@ -213,42 +213,55 @@ class FrameGenerator {
       }
 
       const frames = [];
-      
-      // Generate frames
-      for (let i = 0; i < frameCount; i++) {
-        const frameStartTime = Date.now();
-        const frameTime = i / fps;
-        const progress = frameTime / duration;
 
-        const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
-        await this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates, orientation);
-        frames.push(framePath);
+      // Parallel frame generation
+      const parallelWorkers = config.video.PARALLEL_FRAME_WORKERS || 8;
+      logger.info('🚀 Starting parallel frame generation', {
+        jobId,
+        frameCount,
+        parallelWorkers,
+        estimatedBatches: Math.ceil(frameCount / parallelWorkers)
+      });
 
-        const frameRenderTime = Date.now() - frameStartTime;
+      // Process frames in parallel batches
+      for (let batchStart = 0; batchStart < frameCount; batchStart += parallelWorkers) {
+        const batchEnd = Math.min(batchStart + parallelWorkers, frameCount);
+        const batchSize = batchEnd - batchStart;
+        const batchStartTime = Date.now();
 
-        // Log slow frames and progress milestones
-        if (frameRenderTime > 1000 || i % 30 === 0 || i === frameCount - 1) {
-          logger.debug('Frame generation progress', {
-            jobId,
-            frame: i + 1,
-            totalFrames: frameCount,
-            progress: `${Math.round(progress * 100)}%`,
-            frameTime: `${frameRenderTime}ms`,
-            avgTime: `${Math.round((Date.now() - startTime) / (i + 1))}ms`,
-            hasCaptions: captionsEnabled && transcript ? 'yes' : 'no'
-          });
+        // Create promises for this batch
+        const batchPromises = [];
+        for (let i = batchStart; i < batchEnd; i++) {
+          const frameTime = i / fps;
+          const progress = frameTime / duration;
+          const framePath = path.join(frameDir, `frame_${i.toString().padStart(6, '0')}.png`);
+
+          batchPromises.push(
+            this.generateSingleFrame(framePath, progress, podcast, processedArtwork, template, duration, jobId, i, transcript, captionsEnabled, clipStartMs, clipEndMs, captionStates, orientation)
+              .then(() => framePath)
+          );
         }
 
-        // Warn on very slow frames
-        if (frameRenderTime > 2000) {
-          logger.warn(`⚠️ Slow frame detected`, {
-            jobId,
-            frame: i + 1,
-            renderTime: `${frameRenderTime}ms`,
-            captionsEnabled,
-            hasTranscript: !!transcript
-          });
-        }
+        // Wait for all frames in this batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        frames.push(...batchResults);
+
+        const batchTime = Date.now() - batchStartTime;
+        const completedFrames = batchEnd;
+        const overallProgress = Math.round((completedFrames / frameCount) * 100);
+
+        // Log batch progress (not every frame to reduce log volume)
+        logger.info('📦 Batch completed', {
+          jobId,
+          batch: Math.floor(batchStart / parallelWorkers) + 1,
+          totalBatches: Math.ceil(frameCount / parallelWorkers),
+          framesInBatch: batchSize,
+          batchTime: `${batchTime}ms`,
+          avgPerFrame: `${Math.round(batchTime / batchSize)}ms`,
+          progress: `${overallProgress}%`,
+          completedFrames,
+          totalFrames: frameCount
+        });
       }
 
       const generationTime = Date.now() - startTime;

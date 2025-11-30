@@ -37,7 +37,8 @@ module.exports = {
     MAX_DURATION_SECONDS: 240, // 4 minutes max (240 seconds)
     DEFAULT_ASPECT_RATIO: '9:16',
     FRAME_RATE: 8, // 8 fps - optimized for caption videos (was 12)
-    VIDEO_QUALITY: 'medium' // low, medium, high
+    VIDEO_QUALITY: 'medium', // low, medium, high
+    PARALLEL_FRAME_WORKERS: 8 // Number of frames to generate in parallel (1 = sequential)
   },
   
   // Logging
