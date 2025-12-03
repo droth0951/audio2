@@ -439,6 +439,13 @@ const extractCanonicalUrl = (trackingUrl) => {
       return match ? `https://${match[1]}` : null;
     }
 
+    // Art19 (Masters of Scale, etc.) - Extract direct URL from tracking chain
+    // Pattern: .../rss.art19.com/episodes/UUID.mp3 embedded in redirect chain
+    if (trackingUrl.includes('art19.com/')) {
+      const match = trackingUrl.match(/(rss\.art19\.com\/episodes\/[^?]+)/);
+      return match ? `https://${match[1]}` : null;
+    }
+
     return null; // No canonical pattern found
 
   } catch (error) {
