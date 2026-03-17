@@ -38,7 +38,7 @@ module.exports = {
     DEFAULT_ASPECT_RATIO: '9:16',
     FRAME_RATE: 8, // 8 fps - optimized for caption videos (was 12)
     VIDEO_QUALITY: 'medium', // low, medium, high
-    PARALLEL_FRAME_WORKERS: 8 // Number of frames to generate in parallel (1 = sequential)
+    PARALLEL_FRAME_WORKERS: 32 // Number of frames to generate in parallel (was: 8, server has 48 CPUs)
   },
   
   // Logging
